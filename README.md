@@ -353,3 +353,16 @@ If a captain/admin presses **Generate Teams** while the current game has unsaved
 - wins/losses and Win/Loss ratings are not updated
 
 This supports rotating teams while still tracking teammate-history pairings.
+
+
+## v4.15 confirmation popup fix
+
+This version replaces the browser's default Cancel/OK confirmation with a custom yes/no popup.
+
+Changes:
+- no more literal `\n` text in the reminder
+- no more browser default Cancel/OK wording
+- popup now shows:
+  - **No, go back**
+  - **Yes, continue**
+- choosing Yes still saves teammate pairings only and generates the next teams without recording results

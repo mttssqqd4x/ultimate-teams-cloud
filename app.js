@@ -852,16 +852,55 @@ function optimizeTeams(initial, repeatWeight = state.settings.repeatWeight){
   return { teams: best, score: bestScore };
 }
 
+
+function confirmContinueWithoutResults(){
+  return new Promise(resolve => {
+    let modal = document.getElementById("continueWithoutResultsModal");
+
+    if(!modal){
+      modal = document.createElement("div");
+      modal.id = "continueWithoutResultsModal";
+      modal.className = "modal-backdrop";
+      modal.innerHTML = `
+        <div class="modal-card" onclick="event.stopPropagation()">
+          <h2 style="margin-top:0">Results not saved</h2>
+          <div class="notice" style="line-height:1.45">
+            Reminder: results have not been saved for the current game.<br><br>
+            Continue without recording the results?<br><br>
+            Choosing <strong>Yes, continue</strong> saves teammate pairings only and generates next teams.<br>
+            Wins/losses and Win/Loss ratings will not be updated.
+          </div>
+          <div class="toolbar" style="margin-top:14px">
+            <button id="continueNoBtn" class="btn-secondary" type="button">No, go back</button>
+            <button id="continueYesBtn" class="btn-warn" type="button">Yes, continue</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    const cleanup = result => {
+      modal.classList.remove("modal-open");
+      modal.style.display = "none";
+      resolve(result);
+    };
+
+    modal.querySelector("#continueNoBtn").onclick = () => cleanup(false);
+    modal.querySelector("#continueYesBtn").onclick = () => cleanup(true);
+    modal.onclick = e => {
+      if(e.target === modal) cleanup(false);
+    };
+
+    modal.classList.add("modal-open");
+    modal.style.display = "flex";
+  });
+}
+
 async function generateTeamsButton(){
   if(!canGenerateTeams()){ alert("Only captains/admins can generate teams."); return; }
 
   if(state.currentGame && !state.resultsSavedForCurrentGame){
-    const continueWithoutResults = confirm(
-      "Reminder: results have not been saved for the current game.\\n\\n" +
-      "Continue without recording the results?\\n\\n" +
-      "Yes = save teammate pairings only and generate next teams.\\n" +
-      "No = go back so you can select a winner and save results."
-    );
+    const continueWithoutResults = await confirmContinueWithoutResults();
 
     if(!continueWithoutResults) return;
 
