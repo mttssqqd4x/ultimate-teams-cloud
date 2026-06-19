@@ -72,6 +72,22 @@ function updateRoleVisibility(){
     el.style.display = showAdmin ? "" : "none";
   });
 
+  document.querySelectorAll(".admin-only-inline").forEach(el => {
+    el.classList.toggle("hidden", !showAdmin);
+    el.style.display = showAdmin ? "" : "none";
+  });
+
+  document.querySelectorAll(".admin-rating-fields").forEach(el => {
+    el.classList.toggle("hidden", !showAdmin);
+    el.style.display = showAdmin ? "" : "none";
+  });
+
+  const captainTools = document.getElementById("captainDataTools");
+  if(captainTools){
+    captainTools.classList.toggle("hidden", !showCaptainAdmin);
+    captainTools.style.display = showCaptainAdmin ? "" : "none";
+  }
+
   ["attendanceTempPlayer","tempPlayerCard","attendancePairRules","pairRulesCard","section-pair-rules"].forEach(id => {
     const el = document.getElementById(id);
     if(!el) return;
@@ -79,6 +95,21 @@ function updateRoleVisibility(){
     el.classList.toggle("hidden", !show);
     el.style.display = show ? "" : "none";
   });
+
+  const sticky = document.getElementById("stickybar");
+  if(sticky && showCaptainAdmin){
+    sticky.classList.remove("hidden");
+    sticky.style.display = "";
+  } else if(sticky){
+    sticky.classList.add("hidden");
+    sticky.style.display = "none";
+  }
+
+  const clearBtn = document.querySelector('button[onclick="clearAttendance()"]');
+  if(clearBtn){
+    clearBtn.classList.toggle("hidden", !showCaptainAdmin);
+    clearBtn.style.display = showCaptainAdmin ? "" : "none";
+  }
 }
 
 function renderAll(){
@@ -91,7 +122,9 @@ function presentPlayers(){return state.players.filter(p=>p.active&&p.attending).
 function renderPresentList(){const box=document.getElementById('presentPlayersList'),cnt=document.getElementById('presentCount'),ps=presentPlayers();cnt.textContent=String(ps.length);box.innerHTML=ps.length?'':'<div class="small">No players marked present.</div>';ps.forEach(p=>{const el=document.createElement('div');el.className='present-row';const meta=canManageGames()?`H ${p.handling.toFixed(1)} · C ${p.cutting.toFixed(1)} · D ${p.defense.toFixed(1)} · ${(p.injuryPct*100).toFixed(0)}% · W/L ${p.winLossRating.toFixed(2)}`:'Present';el.innerHTML=`<span class="present-name">${p.fullName}</span><span class="present-meta">${meta}</span>`;box.appendChild(el)})}
 function renderPlayers(){const list=document.getElementById('playerList'),search=(document.getElementById('playerSearch')?.value||'').toLowerCase().trim();const arr=[...state.players].filter(p=>showInactive||p.active).filter(p=>!search||p.fullName.toLowerCase().includes(search)).sort(comparePlayersByLastName);list.innerHTML=arr.length?'':'<div class="small">No players match that search.</div>';arr.forEach(p=>{const div=document.createElement('div');div.className='player clickable'+(p.attending&&p.active?' attend-on':'')+(!p.active?' inactive':'')+(p.temporary?' temp':'');div.onclick=e=>{if(e.target.closest('button'))return;toggleAttendance(p.id)};const meta=canManageGames()?`H ${p.handling.toFixed(1)} · C ${p.cutting.toFixed(1)} · D ${p.defense.toFixed(1)} · W/L ${p.winLossRating.toFixed(2)}`:(p.active?'Active player':'Inactive player');const inj=canManageGames()?`<button onclick="event.stopPropagation();setInjuryPrompt('${p.id}')">Injury %</button>`:'';div.innerHTML=`<div><div class="player-name">${p.fullName}</div><div class="small">${meta}</div></div><div class="toggle-wrap">${inj}</div>`;list.appendChild(div)})}
 async function toggleAttendance(id){const p=state.players.find(x=>x.id===id);if(!p||!p.active)return;p.attending=!p.attending;renderAll();const{error}=await db.from('attendance').upsert({player_id:id,present:p.attending,updated_by:currentUser?.id||null,updated_at:new Date().toISOString()});if(error){alert(error.message);p.attending=!p.attending;renderAll()}}
-async function clearAttendance(){if(!confirm('Clear attendance for all players?'))return;const rows=state.players.map(p=>({player_id:p.id,present:false,updated_by:currentUser?.id||null,updated_at:new Date().toISOString()}));const{error}=await db.from('attendance').upsert(rows);if(error)alert(error.message);await loadCloudData();renderAll()}
+async function clearAttendance(){
+  if(!canManageGames()){ alert("Only captains/admins can clear attendance."); return; }
+  if(!confirm('Clear attendance for all players?'))return;const rows=state.players.map(p=>({player_id:p.id,present:false,updated_by:currentUser?.id||null,updated_at:new Date().toISOString()}));const{error}=await db.from('attendance').upsert(rows);if(error)alert(error.message);await loadCloudData();renderAll()}
 function toggleShowInactive(){showInactive=!showInactive;updateShowInactiveButton();renderPlayers()}function updateShowInactiveButton(){document.getElementById('toggleInactiveBtn').textContent=showInactive?'Hide Inactive Players':'Show Inactive Players'}function clearPlayerSearch(){document.getElementById('playerSearch').value='';renderPlayers()}
 function updatePairRulesVisibility(){
   updateRoleVisibility();
@@ -146,8 +179,12 @@ function comparePlayersByLastName(a, b){
 }
 
 function normalizeName(n){return n.trim().replace(/s+/g,' ')}function splitName(f){const p=normalizeName(f).split(' ');return{first:p[0]||'',last:p.slice(1).join(' ')}}function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}function activeAttendingPlayers(){return state.players.filter(p=>p.active&&p.attending)}function teamStats(t){return{overall:t.reduce((s,p)=>s+overall(p),0),handling:t.reduce((s,p)=>s+effectiveHandling(p),0),cutting:t.reduce((s,p)=>s+effectiveCutting(p),0),defense:t.reduce((s,p)=>s+effectiveDefense(p),0),count:t.length}}function teamStrength(t){return t.reduce((s,p)=>s+overall(p),0)}function spread(v){if(!v.length)return 0;const avg=v.reduce((a,b)=>a+b,0)/v.length;return v.reduce((s,x)=>s+Math.pow(x-avg,2),0)}function makeInitialTeams(players,n){const arr=shuffle(players).sort((a,b)=>overall(b)-overall(a)),teams=Array.from({length:n},()=>[]);let idx=0,forward=true;while(idx<arr.length){const order=forward?[...teams.keys()]:[...teams.keys()].reverse();order.forEach(ti=>{if(idx<arr.length)teams[ti].push(arr[idx++])});forward=!forward}return teams}function scoreTeams(teams,repeatWeight=state.settings.repeatWeight){const s=state.settings,stats=teams.map(teamStats);let score=0;const handlerPenalty=s.prioritizeHandlerSeparation?5*Number(s.handlerSeparationBoost||2):5;score+=spread(stats.map(x=>x.count))*120;score+=spread(stats.map(x=>x.overall))*14;score+=spread(stats.map(x=>x.handling))*handlerPenalty;score+=spread(stats.map(x=>x.cutting))*5;score+=spread(stats.map(x=>x.defense))*5;if(s.prioritizeEliteBalance){const eliteBoost=Number(s.eliteBalanceBoost||2),topOveralls=teams.map(team=>Math.max(...team.map(p=>overall(p)))),defenseTotals=stats.map(x=>x.defense),maxTop=Math.max(...topOveralls),avgDefense=defenseTotals.reduce((a,b)=>a+b,0)/Math.max(1,defenseTotals.length);score+=spread(topOveralls)*(10*eliteBoost);teams.forEach((team,idx)=>{const topGap=maxTop-topOveralls[idx],defenseSurplus=Math.max(0,defenseTotals[idx]-avgDefense),unmetGap=Math.max(0,topGap-defenseSurplus*.5);score+=unmetGap*(4*eliteBoost)})}const teamOf={};teams.forEach((team,ti)=>team.forEach(p=>teamOf[p.id]=ti));state.pairRules.forEach(r=>{const same=teamOf[r.player1Id]===teamOf[r.player2Id];if(r.type==='together'&&!same)score+=30*Number(r.strength||1);if(r.type==='apart'&&same)score+=30*Number(r.strength||1)});teams.forEach(t=>{for(let i=0;i<t.length;i++)for(let j=i+1;j<t.length;j++)score+=(state.history[pairKey(t[i].id,t[j].id)]||0)*repeatWeight});return score}function cloneTeams(t){return t.map(x=>[...x])}function optimizeTeams(initial,repeatWeight=state.settings.repeatWeight){let best=cloneTeams(initial),bestScore=scoreTeams(best,repeatWeight),improved=true,passes=0;while(improved&&passes<300){improved=false;passes++;for(let a=0;a<best.length;a++)for(let b=a+1;b<best.length;b++)for(let i=0;i<best[a].length;i++)for(let j=0;j<best[b].length;j++){const cand=cloneTeams(best),tmp=cand[a][i];cand[a][i]=cand[b][j];cand[b][j]=tmp;const sc=scoreTeams(cand,repeatWeight);if(sc<bestScore){best=cand;bestScore=sc;improved=true}}}return{teams:best,score:bestScore}}
-async function generateTeamsButton(){if(canManageGames()&&state.currentGame&&!state.resultsSavedForCurrentGame){const saveFirst=confirm('Current game results have not been saved. Save results before generating new teams?');if(saveFirst){if(state.selectedWinnerIndex===null){alert('Tap the winning team first, then press Generate Teams again.');return}await saveResults()}}await generateGame()}
-async function generateGame(){const players=activeAttendingPlayers(),n=Math.max(2,Number(numTeams.value||2)),repeatWeight=Number(state.settings.repeatWeight||4);if(players.length<n){alert('Not enough attending players for that many teams.');return}let best=null;for(let i=0;i<60;i++){const cand=optimizeTeams(makeInitialTeams(players,n),repeatWeight);if(!best||cand.score<best.score)best=cand}state.currentGame={teams:best.teams};state.selectedWinnerIndex=null;state.resultsSavedForCurrentGame=false;if(canManageGames())await saveCurrentGameToDb(false);renderTeams();window.scrollTo({top:0,behavior:'smooth'})}
+async function generateTeamsButton(){
+  if(!canGenerateTeams()){ alert("Only captains/admins can generate teams."); return; }
+  if(canManageGames()&&state.currentGame&&!state.resultsSavedForCurrentGame){const saveFirst=confirm('Current game results have not been saved. Save results before generating new teams?');if(saveFirst){if(state.selectedWinnerIndex===null){alert('Tap the winning team first, then press Generate Teams again.');return}await saveResults()}}await generateGame()}
+async function generateGame(){
+  if(!canGenerateTeams()){ alert("Only captains/admins can generate teams."); return; }
+  const players=activeAttendingPlayers(),n=Math.max(2,Number(numTeams.value||2)),repeatWeight=Number(state.settings.repeatWeight||4);if(players.length<n){alert('Not enough attending players for that many teams.');return}let best=null;for(let i=0;i<60;i++){const cand=optimizeTeams(makeInitialTeams(players,n),repeatWeight);if(!best||cand.score<best.score)best=cand}state.currentGame={teams:best.teams};state.selectedWinnerIndex=null;state.resultsSavedForCurrentGame=false;if(canManageGames())await saveCurrentGameToDb(false);renderTeams();window.scrollTo({top:0,behavior:'smooth'})}
 function serializableTeams(){return(state.currentGame?.teams||[]).map(t=>t.map(p=>({id:p.id,fullName:p.fullName})))}async function saveCurrentGameToDb(saved){const{error}=await db.from('current_game').upsert({id:'main',teams:serializableTeams(),selected_winner_index:state.selectedWinnerIndex,results_saved:!!saved,generated_at:new Date().toISOString(),updated_by:currentUser?.id||null});if(error)alert(error.message)}function selectWinner(i){if(!canManageGames())return;state.selectedWinnerIndex=state.selectedWinnerIndex===i?null:i;saveCurrentGameToDb(false);renderTeams()}
 function renderTeams(){const out=teamsOutput;resultMessage.textContent='';if(!state.currentGame){out.innerHTML='<div class="small">No game generated yet.</div>';return}const wrap=document.createElement('div');wrap.className='grid grid-3';state.currentGame.teams.forEach((team,idx)=>{const stats=teamStats(team),box=document.createElement('div');let cls='teambox team-clickable';if(state.selectedWinnerIndex!==null)cls+=idx===state.selectedWinnerIndex?' team-win':' team-loss';box.className=cls;box.onclick=()=>selectWinner(idx);const teamMeta=canManageGames()?`<span class="small">${stats.overall.toFixed(2)}</span>`:`<span class="small">${team.length} players</span>`;const ratings=canManageGames()?`<div class="small">H ${stats.handling.toFixed(1)} · C ${stats.cutting.toFixed(1)} · D ${stats.defense.toFixed(1)}</div>`:'';const rows=team.map(p=>canManageGames()?`<div class="row" style="justify-content:space-between"><span>${p.fullName}</span><span class="small">${overall(p).toFixed(2)}</span></div>`:`<div class="row" style="justify-content:space-between"><span>${p.fullName}</span></div>`).join('');box.innerHTML=`<div class="teamhead"><strong>Team ${idx+1}</strong>${teamMeta}</div>${ratings}<div class="hr"></div>${rows}`;wrap.appendChild(box)});out.innerHTML='';out.appendChild(wrap)}
 async function saveResults(){if(!canManageGames()){alert('Captain/admin only.');return}if(!state.currentGame){alert('Generate teams first.');return}if(state.selectedWinnerIndex===null){alert('Tap the winning team first.');return}if(state.resultsSavedForCurrentGame&&!confirm('Results already saved. Save again anyway?'))return;const winner=state.currentGame.teams[state.selectedWinnerIndex],losers=state.currentGame.teams.filter((_,i)=>i!==state.selectedWinnerIndex),winnerStrength=teamStats(winner).overall,updates=new Map();state.currentGame.teams.flat().forEach(p=>updates.set(p.id,{...p}));losers.forEach(lt=>{const ls=teamStats(lt).overall,we=expectedWinProb(winnerStrength,ls),le=expectedWinProb(ls,winnerStrength),scaledK=Number(state.settings.kFactor||.08)/Math.max(1,losers.length),wd=scaledK*(1-we),ld=scaledK*(0-le);winner.forEach(p=>updates.get(p.id).winLossRating+=wd);lt.forEach(p=>updates.get(p.id).winLossRating+=ld)});state.currentGame.teams.forEach((team,idx)=>team.forEach(p=>{const u=updates.get(p.id);u.gamesPlayed=Number(u.gamesPlayed||0)+1;if(idx===state.selectedWinnerIndex)u.wins=Number(u.wins||0)+1;else u.losses=Number(u.losses||0)+1}));for(const p of updates.values()){const{error}=await db.from('players').update({win_loss:p.winLossRating,games_played:p.gamesPlayed,wins:p.wins,losses:p.losses,updated_at:new Date().toISOString()}).eq('id',p.id);if(error){alert(error.message);return}await db.from('rating_history').insert({player_id:p.id,value:p.winLossRating})}await addCurrentTeamsToHistory();await db.from('games').insert({teams:serializableTeams(),winner_team_index:state.selectedWinnerIndex,created_by:currentUser?.id||null});state.resultsSavedForCurrentGame=true;await saveCurrentGameToDb(true);await loadCloudData();renderAll();resultMessage.textContent='Results saved.'}
@@ -162,8 +199,148 @@ function describeSeasonStatsChanges(rows){const changes=[];let matched=0,missing
 function previewSeasonStatsCsv(){const text=document.getElementById('seasonStatsCsv')?.value.trim();if(!text){alert('Paste season_stats.csv first.');return}const res=describeSeasonStatsChanges(parseCsv(text));seasonPreviewBox.style.display='block';seasonPreviewSummary.textContent=`${res.changes.length} rows scanned · ${res.matched} matched · ${res.missing} missing`;seasonPreviewList.innerHTML='';res.changes.forEach(i=>{const d=document.createElement('div');d.className='player';d.innerHTML=`<div><div class="player-name">${i.type}: ${i.name}</div><div class="small">${i.details}</div></div>`;seasonPreviewList.appendChild(d)})}
 function closeSeasonPreview(){seasonPreviewBox.style.display='none'}
 async function importSeasonStatsCsv(){if(!isAdmin()){alert('Admin only.');return}const text=document.getElementById('seasonStatsCsv')?.value.trim();if(!text){alert('Paste season_stats.csv first.');return}const rows=parseCsv(text);let updated=0,missing=0;for(const r of rows){const first=(r['First Name']||'').trim(),last=(r['Last Name']||'').trim(),full=normalizeName(`${first} ${last}`);if(!full)continue;const ex=state.players.find(p=>p.fullName.toLowerCase()===full.toLowerCase());if(!ex){missing++;continue}const payload={games_played:Number(r['Games Played']||0),wins:Number(r.Wins||0),losses:Number(r.Losses||0),updated_at:new Date().toISOString()};const{error}=await db.from('players').update(payload).eq('id',ex.id);if(error){alert(error.message);return}updated++}await loadCloudData();renderAll();alert(`Imported season stats for ${updated} players.${missing?` ${missing} rows did not match existing players.`:''}`)}
-function getDatePrefix(){const d=new Date();return`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`}function escapeCsv(v){const s=String(v??'');return/[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}function downloadBlob(fn,content,type){const blob=new Blob([content],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fn;a.click()}function downloadBackupJson(){downloadBlob(`${getDatePrefix()}_ultimate-teams-cloud-backup.json`,JSON.stringify(state,null,2),'application/json')}function downloadRatingsCsv(){const sorted=[...state.players].sort(comparePlayersByLastName),header=['First Name','Last Name','Handling','Cutting','Defense','Win/Loss'];const build=ps=>[header,...ps.map(p=>[p.firstName,p.lastName,p.handling,p.cutting,p.defense,p.winLossRating.toFixed(2)])].map(r=>r.map(escapeCsv).join(',')).join('\n');const stats=[['First Name','Last Name','Games Played','Wins','Losses','Win %','Win/Loss'],...sorted.map(p=>[p.firstName,p.lastName,p.gamesPlayed,p.wins,p.losses,p.gamesPlayed?((p.wins/p.gamesPlayed)*100).toFixed(1)+'%':'0.0%',p.winLossRating.toFixed(2)])].map(r=>r.map(escapeCsv).join(',')).join('\n');const pre=getDatePrefix();downloadBlob(`${pre}_active_players.csv`,build(sorted.filter(p=>p.active)),'text/csv');setTimeout(()=>downloadBlob(`${pre}_inactive_players.csv`,build(sorted.filter(p=>!p.active)),'text/csv'),250);setTimeout(()=>downloadBlob(`${pre}_season_stats.csv`,stats,'text/csv'),500)}async function resetSeasonStats(){if(!isAdmin()){alert('Admin only.');return}if(!confirm('Reset Games Played, Wins, and Losses for all players?'))return;const{error}=await db.from('players').update({games_played:0,wins:0,losses:0,updated_at:new Date().toISOString()}).not('id','is',null);if(error)alert(error.message);await loadCloudData();renderAll()}async function resetHistory(){if(!isAdmin()){alert('Admin only.');return}if(!confirm('Reset teammate history?'))return;const{error}=await db.from('teammate_history').delete().not('player_a','is',null);if(error)alert(error.message);await loadCloudData();renderAll()}
+function getDatePrefix(){const d=new Date();return`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`}function escapeCsv(v){const s=String(v??'');return/[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}function downloadBlob(fn,content,type){const blob=new Blob([content],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fn;a.click()}function downloadBackupJson(){downloadBlob(`${getDatePrefix()}_ultimate-teams-cloud-backup.json`,JSON.stringify(state,null,2),'application/json')}function downloadRatingsCsv(){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  const sorted=[...state.players].sort(comparePlayersByLastName),header=['First Name','Last Name','Handling','Cutting','Defense','Win/Loss'];const build=ps=>[header,...ps.map(p=>[p.firstName,p.lastName,p.handling,p.cutting,p.defense,p.winLossRating.toFixed(2)])].map(r=>r.map(escapeCsv).join(',')).join('\n');const stats=[['First Name','Last Name','Games Played','Wins','Losses','Win %','Win/Loss'],...sorted.map(p=>[p.firstName,p.lastName,p.gamesPlayed,p.wins,p.losses,p.gamesPlayed?((p.wins/p.gamesPlayed)*100).toFixed(1)+'%':'0.0%',p.winLossRating.toFixed(2)])].map(r=>r.map(escapeCsv).join(',')).join('\n');const pre=getDatePrefix();downloadBlob(`${pre}_active_players.csv`,build(sorted.filter(p=>p.active)),'text/csv');setTimeout(()=>downloadBlob(`${pre}_inactive_players.csv`,build(sorted.filter(p=>!p.active)),'text/csv'),250);setTimeout(()=>downloadBlob(`${pre}_season_stats.csv`,stats,'text/csv'),500)}async function resetSeasonStats(){if(!isAdmin()){alert('Admin only.');return}if(!confirm('Reset Games Played, Wins, and Losses for all players?'))return;const{error}=await db.from('players').update({games_played:0,wins:0,losses:0,updated_at:new Date().toISOString()}).not('id','is',null);if(error)alert(error.message);await loadCloudData();renderAll()}async function resetHistory(){if(!isAdmin()){alert('Admin only.');return}if(!confirm('Reset teammate history?'))return;const{error}=await db.from('teammate_history').delete().not('player_a','is',null);if(error)alert(error.message);await loadCloudData();renderAll()}
 
 function lockPairFromMain(){ return lockPair(); }
 
 function addPairRuleFromMain(){ return addPairRule(); }
+
+
+function showModal(id){
+  const modal = document.getElementById(id);
+  if(modal) modal.style.display = "flex";
+}
+function hideModal(id){
+  const modal = document.getElementById(id);
+  if(modal) modal.style.display = "none";
+}
+function closeModal(event, id){
+  if(event && event.target && event.target.id === id) hideModal(id);
+}
+function clearModalSearch(id){
+  const el = document.getElementById(id);
+  if(el) el.value = "";
+}
+
+
+
+function openRatingsModal(){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  const content = document.getElementById("ratingsModalContent");
+  if(!content){ return; }
+  const search = (document.getElementById("ratingsSearch")?.value || "").trim().toLowerCase();
+  const players = [...state.players]
+    .filter(p => !search || p.fullName.toLowerCase().includes(search))
+    .sort(comparePlayersByLastName || ((a,b)=>a.fullName.localeCompare(b.fullName)));
+
+  content.innerHTML = players.length ? players.map((p, i) => {
+    return `<div class="player"><div><div class="player-name">${i+1}. ${p.fullName}</div><div class="small">Overall ${overall(p).toFixed(2)} · H ${Number(p.handling||0).toFixed(1)} · C ${Number(p.cutting||0).toFixed(1)} · D ${Number(p.defense||0).toFixed(1)} · W/L ${Number(p.winLossRating||0).toFixed(2)} · ${p.active ? "Active" : "Inactive"}</div></div></div>`;
+  }).join("") : '<div class="small">No players match that filter.</div>';
+
+  showModal("ratingsModal");
+}
+
+
+
+let selectedEditPlayerId = null;
+
+function openEditPlayerModal(){
+  if(!canEditPlayerNames()){ alert("Captain/admin only."); return; }
+  updateRoleVisibility();
+  const search = (document.getElementById("editPlayerSearch")?.value || "").trim().toLowerCase();
+  const players = [...state.players]
+    .filter(p => !search || p.fullName.toLowerCase().includes(search))
+    .sort(comparePlayersByLastName || ((a,b)=>a.fullName.localeCompare(b.fullName)));
+
+  const list = document.getElementById("editPlayerModalList");
+  if(list){
+    list.innerHTML = players.length
+      ? players.map(p => `<div class="player clickable" onclick="selectPlayerForEdit('${p.id}')"><div><div class="player-name">${p.fullName}</div><div class="small">${p.active ? "Active" : "Inactive"}${isAdmin() ? ` · H ${Number(p.handling||0).toFixed(1)} · C ${Number(p.cutting||0).toFixed(1)} · D ${Number(p.defense||0).toFixed(1)} · W/L ${Number(p.winLossRating||0).toFixed(2)}` : ""}</div></div></div>`).join("")
+      : '<div class="small">No players match that search.</div>';
+  }
+
+  const help = document.getElementById("editPlayerHelp");
+  if(help) help.textContent = isAdmin()
+    ? "Admins can edit names and ratings."
+    : "Captains can edit player names only. Ratings are read-only.";
+
+  showModal("editPlayerModal");
+  updateRoleVisibility();
+}
+
+function selectPlayerForEdit(id){
+  const player = state.players.find(p => p.id === id);
+  if(!player) return;
+  selectedEditPlayerId = id;
+  const empty = document.getElementById("editPlayerFormEmpty");
+  const form = document.getElementById("editPlayerForm");
+  if(empty) empty.style.display = "none";
+  if(form) form.style.display = "block";
+
+  const first = document.getElementById("editFirstName");
+  const last = document.getElementById("editLastName");
+  const h = document.getElementById("editHandling");
+  const c = document.getElementById("editCutting");
+  const d = document.getElementById("editDefense");
+  const wl = document.getElementById("editWinLoss");
+
+  if(first) first.value = player.firstName || "";
+  if(last) last.value = player.lastName || "";
+  if(h) h.value = Number(player.handling || 0).toFixed(1);
+  if(c) c.value = Number(player.cutting || 0).toFixed(1);
+  if(d) d.value = Number(player.defense || 0).toFixed(1);
+  if(wl) wl.value = Number(player.winLossRating || 0).toFixed(2);
+
+  [h,c,d,wl].forEach(el => { if(el) el.disabled = !isAdmin(); });
+
+  const status = document.getElementById("editPlayerStatus");
+  if(status) status.textContent = `${player.active ? "Active" : "Inactive"} · Games ${Number(player.gamesPlayed||0)} · Wins ${Number(player.wins||0)} · Losses ${Number(player.losses||0)}`;
+  updateRoleVisibility();
+}
+
+async function saveEditedPlayer(){
+  if(!canEditPlayerNames()){ alert("Captain/admin only."); return; }
+  const player = state.players.find(p => p.id === selectedEditPlayerId);
+  if(!player) return;
+
+  const firstName = (document.getElementById("editFirstName")?.value || "").trim();
+  const lastName = (document.getElementById("editLastName")?.value || "").trim();
+  if(!firstName && !lastName){ alert("Enter a valid player name."); return; }
+
+  const update = {
+    first_name: firstName,
+    last_name: lastName,
+    updated_at: new Date().toISOString()
+  };
+
+  if(isAdmin()){
+    update.handling = Number(document.getElementById("editHandling")?.value || 0);
+    update.cutting = Number(document.getElementById("editCutting")?.value || 0);
+    update.defense = Number(document.getElementById("editDefense")?.value || 0);
+    update.win_loss = Number(document.getElementById("editWinLoss")?.value || 0);
+  }
+
+  const { error } = await db.from("players").update(update).eq("id", player.id);
+  if(error){ alert(error.message); return; }
+
+  await loadCloudData();
+  renderAll();
+  openEditPlayerModal();
+  alert("Player updated.");
+}
+
+async function deleteEditedPlayer(){
+  if(!isAdmin()){ alert("Admin only."); return; }
+  const player = state.players.find(p => p.id === selectedEditPlayerId);
+  if(!player) return;
+  if(!confirm(`Delete ${player.fullName}? This cannot be undone.`)) return;
+  const { error } = await db.from("players").delete().eq("id", player.id);
+  if(error){ alert(error.message); return; }
+  selectedEditPlayerId = null;
+  await loadCloudData();
+  renderAll();
+  openEditPlayerModal();
+}
+

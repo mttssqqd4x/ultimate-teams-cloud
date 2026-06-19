@@ -117,3 +117,55 @@ using (
     and created_by = auth.uid()
   )
 );
+
+
+-- v4.5 player-name edit permissions for captains
+-- Captains may edit player names, but this trigger blocks them from changing ratings/stats/status fields.
+create or replace function public.prevent_captain_rating_edits()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  user_role public.app_role;
+begin
+  select role into user_role from public.profiles where id = auth.uid();
+
+  if user_role = 'captain' then
+    if new.handling is distinct from old.handling
+       or new.cutting is distinct from old.cutting
+       or new.defense is distinct from old.defense
+       or new.win_loss is distinct from old.win_loss
+       or new.active is distinct from old.active
+       or new.injury_pct is distinct from old.injury_pct
+       or new.temporary is distinct from old.temporary
+       or new.games_played is distinct from old.games_played
+       or new.wins is distinct from old.wins
+       or new.losses is distinct from old.losses then
+      raise exception 'Captains can edit player names only.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists prevent_captain_rating_edits_trigger on public.players;
+create trigger prevent_captain_rating_edits_trigger
+before update on public.players
+for each row execute function public.prevent_captain_rating_edits();
+
+drop policy if exists players_update_admin_or_captain_name on public.players;
+drop policy if exists players_update_admin on public.players;
+
+create policy players_update_admin_or_captain_name
+on public.players
+for update
+to authenticated
+using (
+  public.is_admin() or public.can_manage_games()
+)
+with check (
+  public.is_admin() or public.can_manage_games()
+);

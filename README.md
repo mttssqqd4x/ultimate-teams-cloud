@@ -193,3 +193,53 @@ This version fixes the sign-in button after login:
 - Sign in button hides when a user is signed in
 - Sign out button shows when signed in
 - Sign in button returns only after signing out
+
+
+## v4.5 permissions update
+
+### Guests / users
+Can:
+- view the main page
+- mark attendance
+
+Cannot:
+- generate teams
+- clear attendance
+- see the Generate Teams button
+- see Clear Attendance
+- see Pair Rules
+- see Add One-Time Player
+- see ratings
+- access the Data page
+
+### Captains
+Can:
+- mark attendance
+- clear attendance
+- generate teams
+- save results
+- use their own pair rules
+- add one-time players
+- access the Data page
+- view player ratings
+- download CSV files
+- edit player names only
+
+Cannot:
+- edit player ratings
+- import CSVs
+- reset season stats
+- reset teammate history
+- change algorithm settings
+- see other captains' pair rules
+
+### Admins
+Can:
+- access all tools
+- import CSVs
+- import season stats
+- edit names and ratings
+- reset stats/history
+- change settings
+
+Run `setup_supabase.sql` again for v4.5. It adds a database trigger so captains can update names but cannot update rating/stat fields.
