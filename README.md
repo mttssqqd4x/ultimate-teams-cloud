@@ -245,13 +245,14 @@ Can:
 Run `setup_supabase.sql` again for v4.5. It adds a database trigger so captains can update names but cannot update rating/stat fields.
 
 
-## v4.6 fix
+## v4.6 Data page tool fix
 
 This version fixes the Data page tools:
-- moved **Edit Player** and **View Player Ratings/Stats** directly above **Export Backup JSON** and **Download Ratings CSV**
-- fixed the **Edit Player** button/modal
-- added/fixed **View Player Ratings/Stats**
-- captains can edit player names only
-- admins can edit player names and ratings
-- captains/admins can download ratings CSV
-- backup JSON remains admin-only
+- Edit Player opens correctly
+- View Player Ratings opens correctly
+- both buttons are placed directly above Export Backup JSON and Download Ratings CSV in the Load/Edit tools
+- removed the separate captain tools card
+- captains can edit names only
+- admins can edit names and ratings
+
+Run `setup_supabase.sql` again if captain name edits are blocked.
