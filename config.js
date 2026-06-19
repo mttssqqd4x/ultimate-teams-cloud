@@ -1,4 +1,4 @@
 window.ULTIMATE_TEAMS_CONFIG = {
-  SUPABASE_URL: "https://fsdqkozqkshqwvmhq.supabase.co",
+  SUPABASE_URL: "https://fsdqkozqjshqooqwvmhq.supabase.co",
   SUPABASE_PUBLISHABLE_KEY: "PASTE_YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY_HERE"
 };
