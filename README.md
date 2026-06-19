@@ -96,3 +96,66 @@ Chris,Trujillo,6,6,6,0.00
 ## iPhone
 
 Open the clean GitHub Pages URL in Safari and use Add to Home Screen. Do not use a `?v=` URL for the Home Screen app.
+
+
+## v3 changes
+
+This version adds a safe Season Stats CSV import for moving data from the old local app into the cloud app.
+
+Use this import after importing active and inactive player ratings. It updates only:
+- Games Played
+- Wins
+- Losses
+
+It does not overwrite:
+- Handling
+- Cutting
+- Defense
+- Win/Loss rating
+- active/inactive status
+
+This version also restores Lock Pair behavior from the local app. Lock Pair creates a very strong pair rule using strength `999`, matching the local app behavior.
+
+Pair Rules are now admin-only in the cloud app:
+- admins can see and edit pair rules
+- captains cannot see or edit pair rules
+- users/guests cannot see or edit pair rules
+
+The team-generation scoring was updated to match the newer local app structure more closely:
+- team count balance
+- overall balance
+- handling balance
+- cutting balance
+- defense balance
+- pair rule penalties
+- teammate-history penalties
+- handler-separation priority
+- elite-player balance priority
+
+The multi-team result update now scales K-factor across opponents so a single saved game counts as one game, matching the newer local app behavior.
+
+
+## v4 changes
+
+### Captain-owned pair rules
+Captains can now create and see their own pair rules.
+
+- Captains can create pair rules.
+- Captains can see/remove only the pair rules they created.
+- Admins can see/manage all pair rules.
+- Guests/users cannot see or edit pair rules.
+
+This requires the new `created_by` column and updated RLS policies in `setup_supabase.sql`.
+
+### Lock Pair restored
+The Pair Rules section now includes **Lock Pair**.
+
+Lock Pair creates a very strong pair rule using strength `999`, matching the local app behavior.
+
+### Sign-in moved off the main page
+The sign-in form no longer sits on the main page.
+
+Guests see a simple **Sign in** button in the top bar. Pressing it opens the sign-in page. The main app remains available without signing in.
+
+### SQL update required
+Run the v4 `setup_supabase.sql` in Supabase even if you already ran v3. It adds `pair_rules.created_by` and replaces pair-rule policies.
