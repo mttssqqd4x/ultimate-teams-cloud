@@ -176,6 +176,12 @@ This version changes guest/user visibility:
 - Sign in button is the only way to open the sign-in panel
 
 
-## v4.3 change
+## v4.3 sort update
 
-Player lists, present-player lists, dropdowns, and CSV exports now sort by last name first, then first name.
+This version changes UI sorting to sort players by last name first.
+
+Sorting behavior:
+- players with last names appear before players without last names
+- then sort by last name
+- then sort by first name
+- CSV files keep their existing export format and behavior
