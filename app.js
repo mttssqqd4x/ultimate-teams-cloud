@@ -74,26 +74,39 @@ function setAuthMessage(m){document.getElementById('authMessage').textContent=m}
 async function signUp(){const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;if(!email||!password){setAuthMessage('Enter email and password.');return}const{error}=await db.auth.signUp({email,password});if(error){setAuthMessage(error.message);return}setAuthMessage('Account created. Check email if confirmation is enabled, then sign in.')}
 async function signIn(){const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;if(!email||!password){setAuthMessage('Enter email and password.');return}const{error}=await db.auth.signInWithPassword({email,password});if(error){setAuthMessage(error.message);return}}
 async function signOut(){await db.auth.signOut()}async function afterAuthChange(){if(currentUser)await loadProfile();else profile={role:'guest',email:'Guest'};document.getElementById('authPage').classList.toggle('hidden',!!currentUser);document.getElementById('signOutBtn').classList.toggle('hidden',!currentUser);document.getElementById('dataTabBtn').classList.toggle('hidden',!isAdmin());updateAuthButtons();
+  updateNavVisibility();
+  updateRoleVisibility();
   await loadCloudData();renderAll();showPage('main')}
 async function loadProfile(){let{data}=await db.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();if(!data){await db.from('profiles').insert({id:currentUser.id,email:currentUser.email,role:'user'});const res=await db.from('profiles').select('*').eq('id',currentUser.id).single();data=res.data}profile=data||{role:'user',email:currentUser.email}}
 function showPage(page){
+  if(page === "data" && !canAccessDataPage()) page = "main";
+  updateNavVisibility();
   setTimeout(() => { injectDataPageToolButtons(); updateRoleVisibility(); }, 0);if(page==='data'&&!isAdmin())page='main';document.getElementById('mainPage').classList.toggle('hidden',page!=='main');document.getElementById('dataPage').classList.toggle('hidden',page!=='data'||!isAdmin());document.getElementById('stickybar').classList.toggle('hidden',page!=='main');document.getElementById('mainTabBtn').classList.toggle('tab-active',page==='main');document.getElementById('dataTabBtn').classList.toggle('tab-active',page==='data')}
 function dbPlayerToLocal(r,att){return{id:r.id,firstName:r.first_name||'',lastName:r.last_name||'',fullName:r.full_name||`${r.first_name||''} ${r.last_name||''}`.trim(),handling:Number(r.handling||0),cutting:Number(r.cutting||0),defense:Number(r.defense||0),winLossRating:Number(r.win_loss||0),active:!!r.active,injuryPct:Number(r.injury_pct||1),temporary:!!r.temporary,gamesPlayed:Number(r.games_played||0),wins:Number(r.wins||0),losses:Number(r.losses||0),attending:!!att[r.id]}}
 async function loadCloudData(){const[pr,ar,rr,hr,sr,gr]=await Promise.all([db.from('players').select('*').order('first_name'),db.from('attendance').select('*'),db.from('pair_rules').select('*').order('created_at'),db.from('teammate_history').select('*'),db.from('settings').select('*').eq('id','main').maybeSingle(),db.from('current_game').select('*').eq('id','main').maybeSingle()]);if(pr.error){alert('Players load error: '+pr.error.message);return}const att={};(ar.data||[]).forEach(a=>att[a.player_id]=a.present);state.players=(pr.data||[]).map(r=>dbPlayerToLocal(r,att));state.pairRules=(rr.data||[]).map(r=>({id:r.id,player1Id:r.player1_id,player2Id:r.player2_id,type:r.rule_type,strength:Number(r.strength||1)}));state.history={};(hr.data||[]).forEach(h=>state.history[pairKey(h.player_a,h.player_b)]=Number(h.count||0));if(sr.data)state.settings={weightHandling:Number(sr.data.weight_handling),weightCutting:Number(sr.data.weight_cutting),weightDefense:Number(sr.data.weight_defense),kFactor:Number(sr.data.k_factor),repeatWeight:Number(sr.data.repeat_weight),prioritizeHandlerSeparation:!!sr.data.prioritize_handler_separation,handlerSeparationBoost:Number(sr.data.handler_separation_boost),prioritizeEliteBalance:!!sr.data.prioritize_elite_balance,eliteBalanceBoost:Number(sr.data.elite_balance_boost)};if(gr.data){state.currentGame=hydrateGame(gr.data.teams);state.selectedWinnerIndex=gr.data.selected_winner_index;state.resultsSavedForCurrentGame=!!gr.data.results_saved}syncSettingsForm()}
 function hydrateGame(j){if(!j)return null;return{teams:j.map(t=>t.map(x=>state.players.find(p=>p.id===(x.id||x))||x))}}
 
 
+
 function updateRoleVisibility(){
-  const showCaptainAdmin = !!(profile && (profile.role === "admin" || profile.role === "captain"));
+  const showCaptainAdmin = isCaptainOrAdmin();
   const showAdmin = !!(profile && profile.role === "admin");
 
   if(!showCaptainAdmin){
     state.showInactive = true;
   }
 
+  updateNavVisibility();
+
   document.querySelectorAll(".captain-admin-only").forEach(el => {
     el.classList.toggle("hidden", !showCaptainAdmin);
     el.style.display = showCaptainAdmin ? "" : "none";
+  });
+
+  document.querySelectorAll("[data-captain-admin-only='true']").forEach(el => {
+    const container = el.closest("#numTeamsSection") || el.closest(".grid") || el;
+    container.classList.toggle("hidden", !showCaptainAdmin);
+    container.style.display = showCaptainAdmin ? "" : "none";
   });
 
   document.querySelectorAll(".admin-only").forEach(el => {
@@ -118,6 +131,16 @@ function updateRoleVisibility(){
     el.style.display = showCaptainAdmin ? "" : "none";
   });
 
+  const numTeams = document.getElementById("numTeams");
+  if(numTeams){
+    const container = document.getElementById("numTeamsSection") || numTeams.closest(".grid") || numTeams.parentElement;
+    if(container){
+      container.classList.toggle("hidden", !showCaptainAdmin);
+      container.style.display = showCaptainAdmin ? "" : "none";
+    }
+    numTeams.disabled = !showCaptainAdmin;
+  }
+
   const toggleInactiveBtn = document.getElementById("toggleInactiveBtn");
   if(toggleInactiveBtn){
     toggleInactiveBtn.classList.toggle("hidden", !showCaptainAdmin);
@@ -138,36 +161,8 @@ function updateRoleVisibility(){
   }
 }
 
-function canGenerateTeams(){ return profile?.role === "admin" || profile?.role === "captain"; }
-function canAccessDataPage(){ return profile?.role === "admin" || profile?.role === "captain"; }
-function canEditRatings(){ return profile?.role === "admin"; }
-function canEditPlayerNames(){ return profile?.role === "admin" || profile?.role === "captain"; }
 
 
-function renderAll(){
-  updateRoleVisibility();updateStats();updateShowInactiveButton();updateSelectOptions();renderPresentList();renderPairRules();
-  updatePairRulesVisibility();renderPlayers();renderTeams();document.getElementById('saveResultsWrap').classList.toggle('hidden',!canManageGames());document.getElementById('tempPlayerBox').classList.toggle('hidden',!canManageGames());document.getElementById('pairRulesBox').classList.toggle('hidden',!isAdmin())}
-function updateStats(){
-  updateAuthButtons();document.getElementById('statPlayers').textContent=state.players.length;document.getElementById('statAttending').textContent=state.players.filter(p=>p.active&&p.attending).length;document.getElementById('userEmail').textContent=currentUser?.email||'Guest';document.getElementById('userRole').textContent=profile?.role||'guest'}
-function updateSelectOptions(){const present=presentPlayers(),all=[...state.players].sort(comparePlayersByLastName);[['tempLike',all],['pairP1',present],['pairP2',present]].forEach(([id,arr])=>{const sel=document.getElementById(id);if(!sel)return;const old=sel.value;sel.innerHTML='<option value="">Select...</option>';arr.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.fullName;sel.appendChild(o)});sel.value=old})}
-function presentPlayers(){return state.players.filter(p=>p.active&&p.attending).sort(comparePlayersByLastName)}
-function renderPresentList(){const box=document.getElementById('presentPlayersList'),cnt=document.getElementById('presentCount'),ps=presentPlayers();cnt.textContent=String(ps.length);box.innerHTML=ps.length?'':'<div class="small">No players marked present.</div>';ps.forEach(p=>{const el=document.createElement('div');el.className='present-row';const meta=canManageGames()?`H ${p.handling.toFixed(1)} · C ${p.cutting.toFixed(1)} · D ${p.defense.toFixed(1)} · ${(p.injuryPct*100).toFixed(0)}% · W/L ${p.winLossRating.toFixed(2)}`:'Present';el.innerHTML=`<span class="present-name">${p.fullName}</span><span class="present-meta">${meta}</span>`;box.appendChild(el)})}
-function renderPlayers(){const list=document.getElementById('playerList'),search=(document.getElementById('playerSearch')?.value||'').toLowerCase().trim();const arr=[...state.players].filter(p=>showInactive||p.active).filter(p=>!search||p.fullName.toLowerCase().includes(search)).sort(comparePlayersByLastName);list.innerHTML=arr.length?'':'<div class="small">No players match that search.</div>';arr.forEach(p=>{const div=document.createElement('div');div.className='player clickable'+(p.attending&&p.active?' attend-on':'')+(!p.active?' inactive':'')+(p.temporary?' temp':'');div.onclick=e=>{if(e.target.closest('button'))return;toggleAttendance(p.id)};const meta=canManageGames()?`H ${p.handling.toFixed(1)} · C ${p.cutting.toFixed(1)} · D ${p.defense.toFixed(1)} · W/L ${p.winLossRating.toFixed(2)}`:(p.active?'Active player':'Inactive player');const inj=canManageGames()?`<button onclick="event.stopPropagation();setInjuryPrompt('${p.id}')">Injury %</button>`:'';div.innerHTML=`<div><div class="player-name">${p.fullName}</div><div class="small">${meta}</div></div><div class="toggle-wrap">${inj}</div>`;list.appendChild(div)})}
-async function toggleAttendance(id){const p=state.players.find(x=>x.id===id);if(!p||!p.active)return;p.attending=!p.attending;renderAll();const{error}=await db.from('attendance').upsert({player_id:id,present:p.attending,updated_by:currentUser?.id||null,updated_at:new Date().toISOString()});if(error){alert(error.message);p.attending=!p.attending;renderAll()}}
-async function clearAttendance(){
-  if(!canManageGames()){ alert("Only captains/admins can clear attendance."); return; }
-  if(!confirm('Clear attendance for all players?'))return;const rows=state.players.map(p=>({player_id:p.id,present:false,updated_by:currentUser?.id||null,updated_at:new Date().toISOString()}));const{error}=await db.from('attendance').upsert(rows);if(error)alert(error.message);await loadCloudData();renderAll()}
-function toggleShowInactive(){
-  if(!canToggleInactiveVisibility()){ state.showInactive = true; renderPlayers(); return; }
-  showInactive=!showInactive;updateShowInactiveButton();renderPlayers()}function updateShowInactiveButton(){document.getElementById('toggleInactiveBtn').textContent=showInactive?'Hide Inactive Players':'Show Inactive Players'}function clearPlayerSearch(){document.getElementById('playerSearch').value='';renderPlayers()}
-function updatePairRulesVisibility(){
-  updateRoleVisibility();
-}
-function visiblePairRulesForCurrentUser(){
-  if(profile?.role === "admin") return state.pairRules;
-  if(profile?.role === "captain") return state.pairRules.filter(r => r.createdBy && r.createdBy === currentUserIdOrNull());
-  return [];
-}
 function renderPairRules(){const box=document.getElementById('pairRuleList');if(!box)return;const visibleRules = visiblePairRulesForCurrentUser ? visiblePairRulesForCurrentUser() : state.pairRules;
   if(!visibleRules.length){box.innerHTML='<div class="small">No pair rules yet.</div>';return}box.innerHTML='';state.pairRules.forEach(r=>{const p1=state.players.find(p=>p.id===r.player1Id),p2=state.players.find(p=>p.id===r.player2Id),div=document.createElement('div');const locked=Number(r.strength||0)>=999;const typeLabel=r.type==='together'?'Together':'Apart';div.className='player '+(r.type==='together'?'pair-card-together':'pair-card-apart');div.innerHTML=`<div><div class="player-name">${p1?.fullName||'Unknown'} ↔ ${p2?.fullName||'Unknown'}</div><div class="small">${locked?'Locked '+typeLabel:typeLabel+' · Strength '+Number(r.strength).toFixed(1)}</div></div><div class="toggle-wrap"><button class="btn-danger" onclick="removePairRule('${r.id}')">Remove</button></div>`;box.appendChild(div)})}
 async function addPairRule(){if(!isAdmin()){alert('Admin only.');return}const p1=pairP1.value,p2=pairP2.value,type=pairType.value,strength=Number(pairStrength.value||1);if(!p1||!p2||p1===p2){alert('Choose two different players.');return}const{error}=await db.from('pair_rules').insert({player1_id:p1,player2_id:p2,rule_type:type,strength});if(error)alert(error.message);await loadCloudData();renderAll()}async function lockPair(){if(!isAdmin()){alert('Admin only.');return}const p1=pairP1.value,p2=pairP2.value,type=pairType.value||'together';if(!p1||!p2||p1===p2){alert('Choose two different players.');return}const{error}=await db.from('pair_rules').insert({player1_id:p1,player2_id:p2,rule_type:type,strength:999});if(error)alert(error.message);await loadCloudData();renderAll()}async function removePairRule(id){if(!isAdmin())return;const{error}=await db.from('pair_rules').delete().eq('id',id);if(error)alert(error.message);await loadCloudData();renderAll()}async function clearPairRules(){if(!isAdmin())return;if(!confirm('Clear all pair rules?'))return;const{error}=await db.from('pair_rules').delete().not('id','is',null);if(error)alert(error.message);await loadCloudData();renderAll()}
@@ -465,9 +460,39 @@ function clearModalSearch(id){
   if(el) el.value = "";
 }
 
-function isPlainUserOrGuest(){
-  return !(profile && (profile.role === "admin" || profile.role === "captain"));
+
+
+
+
+function isCaptainOrAdmin(){
+  return !!(profile && (profile.role === "admin" || profile.role === "captain"));
+}
+function canAccessDataPage(){
+  return isCaptainOrAdmin();
+}
+function canGenerateTeams(){
+  return isCaptainOrAdmin();
 }
 function canToggleInactiveVisibility(){
-  return profile && (profile.role === "admin" || profile.role === "captain");
+  return isCaptainOrAdmin();
 }
+function isPlainUserOrGuest(){
+  return !isCaptainOrAdmin();
+}
+
+
+
+function updateNavVisibility(){
+  const dataBtn = document.getElementById("dataTabBtn");
+  if(dataBtn){
+    const show = canAccessDataPage();
+    dataBtn.classList.toggle("hidden", !show);
+    dataBtn.style.display = show ? "" : "none";
+  }
+  const mainBtn = document.getElementById("mainTabBtn");
+  if(mainBtn){
+    mainBtn.classList.remove("hidden");
+    mainBtn.style.display = "";
+  }
+}
+

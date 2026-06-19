@@ -290,3 +290,12 @@ Changes:
 - guests/users cannot see or use Show/Hide Inactive Players
 - guests/users cannot see Number of Teams
 - captains/admins still have the inactive filter and Number of Teams control
+
+
+## v4.10 role visibility fix
+
+Fixes:
+- regular users/guests can no longer see or edit Number of Teams
+- Number of Teams is disabled and hidden unless signed in as captain/admin
+- captains now get the Data page button after sign-in
+- Data page remains hidden from guests/users
