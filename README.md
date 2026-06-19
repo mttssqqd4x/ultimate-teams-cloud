@@ -256,3 +256,14 @@ This version fixes the Data page tools:
 - admins can edit names and ratings
 
 Run `setup_supabase.sql` again if captain name edits are blocked.
+
+
+## v4.7 modal placement fix
+
+This version fixes the Edit Player and View Player Ratings tools appearing at the bottom of pages.
+
+Changes:
+- the Edit Player and View Player Ratings modal sections are forced hidden by default
+- those tools only open inside pop-up modals after their buttons are tapped
+- the buttons are only injected into the Data page, above Backup JSON and Download Ratings CSV
+- the separate bottom/duplicate buttons were removed

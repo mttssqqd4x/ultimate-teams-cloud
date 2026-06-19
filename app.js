@@ -1,9 +1,9 @@
 
+
 function injectDataPageToolButtons(){
   const target = document.getElementById("dataLoadEdit");
   if(!target) return;
 
-  // Remove old injected blocks to avoid duplicates.
   target.querySelectorAll(".injected-data-tools").forEach(el => el.remove());
 
   const labels = Array.from(target.querySelectorAll("label"));
@@ -19,6 +19,7 @@ function injectDataPageToolButtons(){
   `;
   backupLabel.parentNode.insertBefore(block, backupLabel);
 }
+
 
 document.addEventListener("DOMContentLoaded", () => hideSignInBox());
 const CONFIG=window.ULTIMATE_TEAMS_CONFIG||{};const SUPABASE_URL=(CONFIG.SUPABASE_URL||'').replace(/\/rest\/v1\/?$/,'').replace(/\/$/,'');const SUPABASE_KEY=CONFIG.SUPABASE_PUBLISHABLE_KEY||CONFIG.SUPABASE_ANON_KEY||'';let db=null,currentUser=null,profile={role:'guest',email:'Guest'},showInactive=false;const state={players:[],pairRules:[],history:{},settings:{weightHandling:.35,weightCutting:.35,weightDefense:.30,kFactor:.08,repeatWeight:4,prioritizeHandlerSeparation:false,handlerSeparationBoost:2,prioritizeEliteBalance:false,eliteBalanceBoost:2},currentGame:null,selectedWinnerIndex:null,resultsSavedForCurrentGame:false};
@@ -226,21 +227,10 @@ function lockPairFromMain(){ return lockPair(); }
 function addPairRuleFromMain(){ return addPairRule(); }
 
 
-function showModal(id){
-  const modal = document.getElementById(id);
-  if(modal) modal.style.display = "flex";
-}
-function hideModal(id){
-  const modal = document.getElementById(id);
-  if(modal) modal.style.display = "none";
-}
-function closeModal(event, id){
-  if(event && event.target && event.target.id === id) hideModal(id);
-}
-function clearModalSearch(id){
-  const el = document.getElementById(id);
-  if(el) el.value = "";
-}
+
+
+
+
 
 
 
@@ -404,4 +394,34 @@ async function deleteEditedPlayer(){
   openEditPlayerModal(false);
 }
 
+
+
+
+function showModal(id){
+  const modal = document.getElementById(id);
+  if(modal){
+    modal.classList.add("modal-open");
+    modal.style.display = "flex";
+  }
+}
+function hideModal(id){
+  const modal = document.getElementById(id);
+  if(modal){
+    modal.classList.remove("modal-open");
+    modal.style.display = "none";
+  }
+}
+function closeModal(event, id){
+  if(event && event.target && event.target.id === id) hideModal(id);
+}
+function clearModalSearch(id){
+  const el = document.getElementById(id);
+  if(el) el.value = "";
+}
+
+
+
+function hideAllModals(){
+  ["ratingsModal","editPlayerModal","trendModal","simulateModal","balanceModal"].forEach(id => hideModal(id));
+}
 
