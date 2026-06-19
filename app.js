@@ -1,3 +1,7 @@
+function canGenerateTeams(){ return profile?.role === "admin" || profile?.role === "captain"; }
+function canAccessDataPage(){ return profile?.role === "admin" || profile?.role === "captain"; }
+function canEditRatings(){ return profile?.role === "admin"; }
+function canEditPlayerNames(){ return profile?.role === "admin" || profile?.role === "captain"; }
 document.addEventListener("DOMContentLoaded", () => hideSignInBox());
 const CONFIG=window.ULTIMATE_TEAMS_CONFIG||{};const SUPABASE_URL=(CONFIG.SUPABASE_URL||'').replace(/\/rest\/v1\/?$/,'').replace(/\/$/,'');const SUPABASE_KEY=CONFIG.SUPABASE_PUBLISHABLE_KEY||CONFIG.SUPABASE_ANON_KEY||'';let db=null,currentUser=null,profile={role:'guest',email:'Guest'},showInactive=false;const state={players:[],pairRules:[],history:{},settings:{weightHandling:.35,weightCutting:.35,weightDefense:.30,kFactor:.08,repeatWeight:4,prioritizeHandlerSeparation:false,handlerSeparationBoost:2,prioritizeEliteBalance:false,eliteBalanceBoost:2},currentGame:null,selectedWinnerIndex:null,resultsSavedForCurrentGame:false};
 function toggleSignInBox(event){
@@ -82,33 +86,24 @@ function updateRoleVisibility(){
     el.style.display = showAdmin ? "" : "none";
   });
 
-  const captainTools = document.getElementById("captainDataTools");
-  if(captainTools){
-    captainTools.classList.toggle("hidden", !showCaptainAdmin);
-    captainTools.style.display = showCaptainAdmin ? "" : "none";
-  }
-
   ["attendanceTempPlayer","tempPlayerCard","attendancePairRules","pairRulesCard","section-pair-rules"].forEach(id => {
     const el = document.getElementById(id);
     if(!el) return;
-    const show = showCaptainAdmin;
-    el.classList.toggle("hidden", !show);
-    el.style.display = show ? "" : "none";
+    el.classList.toggle("hidden", !showCaptainAdmin);
+    el.style.display = showCaptainAdmin ? "" : "none";
   });
-
-  const sticky = document.getElementById("stickybar");
-  if(sticky && showCaptainAdmin){
-    sticky.classList.remove("hidden");
-    sticky.style.display = "";
-  } else if(sticky){
-    sticky.classList.add("hidden");
-    sticky.style.display = "none";
-  }
 
   const clearBtn = document.querySelector('button[onclick="clearAttendance()"]');
   if(clearBtn){
     clearBtn.classList.toggle("hidden", !showCaptainAdmin);
     clearBtn.style.display = showCaptainAdmin ? "" : "none";
+  }
+
+  const sticky = document.getElementById("stickybar");
+  if(sticky){
+    const showSticky = showCaptainAdmin && !document.getElementById("mainPage")?.classList.contains("hidden");
+    sticky.classList.toggle("hidden", !showSticky);
+    sticky.style.display = showSticky ? "" : "none";
   }
 }
 
@@ -201,6 +196,7 @@ function closeSeasonPreview(){seasonPreviewBox.style.display='none'}
 async function importSeasonStatsCsv(){if(!isAdmin()){alert('Admin only.');return}const text=document.getElementById('seasonStatsCsv')?.value.trim();if(!text){alert('Paste season_stats.csv first.');return}const rows=parseCsv(text);let updated=0,missing=0;for(const r of rows){const first=(r['First Name']||'').trim(),last=(r['Last Name']||'').trim(),full=normalizeName(`${first} ${last}`);if(!full)continue;const ex=state.players.find(p=>p.fullName.toLowerCase()===full.toLowerCase());if(!ex){missing++;continue}const payload={games_played:Number(r['Games Played']||0),wins:Number(r.Wins||0),losses:Number(r.Losses||0),updated_at:new Date().toISOString()};const{error}=await db.from('players').update(payload).eq('id',ex.id);if(error){alert(error.message);return}updated++}await loadCloudData();renderAll();alert(`Imported season stats for ${updated} players.${missing?` ${missing} rows did not match existing players.`:''}`)}
 function getDatePrefix(){const d=new Date();return`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`}function escapeCsv(v){const s=String(v??'');return/[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}function downloadBlob(fn,content,type){const blob=new Blob([content],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fn;a.click()}function downloadBackupJson(){downloadBlob(`${getDatePrefix()}_ultimate-teams-cloud-backup.json`,JSON.stringify(state,null,2),'application/json')}function downloadRatingsCsv(){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
   const sorted=[...state.players].sort(comparePlayersByLastName),header=['First Name','Last Name','Handling','Cutting','Defense','Win/Loss'];const build=ps=>[header,...ps.map(p=>[p.firstName,p.lastName,p.handling,p.cutting,p.defense,p.winLossRating.toFixed(2)])].map(r=>r.map(escapeCsv).join(',')).join('\n');const stats=[['First Name','Last Name','Games Played','Wins','Losses','Win %','Win/Loss'],...sorted.map(p=>[p.firstName,p.lastName,p.gamesPlayed,p.wins,p.losses,p.gamesPlayed?((p.wins/p.gamesPlayed)*100).toFixed(1)+'%':'0.0%',p.winLossRating.toFixed(2)])].map(r=>r.map(escapeCsv).join(',')).join('\n');const pre=getDatePrefix();downloadBlob(`${pre}_active_players.csv`,build(sorted.filter(p=>p.active)),'text/csv');setTimeout(()=>downloadBlob(`${pre}_inactive_players.csv`,build(sorted.filter(p=>!p.active)),'text/csv'),250);setTimeout(()=>downloadBlob(`${pre}_season_stats.csv`,stats,'text/csv'),500)}async function resetSeasonStats(){if(!isAdmin()){alert('Admin only.');return}if(!confirm('Reset Games Played, Wins, and Losses for all players?'))return;const{error}=await db.from('players').update({games_played:0,wins:0,losses:0,updated_at:new Date().toISOString()}).not('id','is',null);if(error)alert(error.message);await loadCloudData();renderAll()}async function resetHistory(){if(!isAdmin()){alert('Admin only.');return}if(!confirm('Reset teammate history?'))return;const{error}=await db.from('teammate_history').delete().not('player_a','is',null);if(error)alert(error.message);await loadCloudData();renderAll()}
 
 function lockPairFromMain(){ return lockPair(); }
@@ -244,36 +240,54 @@ function openRatingsModal(){
 
 
 
+
 let selectedEditPlayerId = null;
 
-function openEditPlayerModal(){
+function openEditPlayerModal(openModal = true){
   if(!canEditPlayerNames()){ alert("Captain/admin only."); return; }
-  updateRoleVisibility();
-  const search = (document.getElementById("editPlayerSearch")?.value || "").trim().toLowerCase();
-  const players = [...state.players]
-    .filter(p => !search || p.fullName.toLowerCase().includes(search))
-    .sort(comparePlayersByLastName || ((a,b)=>a.fullName.localeCompare(b.fullName)));
 
   const list = document.getElementById("editPlayerModalList");
-  if(list){
-    list.innerHTML = players.length
-      ? players.map(p => `<div class="player clickable" onclick="selectPlayerForEdit('${p.id}')"><div><div class="player-name">${p.fullName}</div><div class="small">${p.active ? "Active" : "Inactive"}${isAdmin() ? ` · H ${Number(p.handling||0).toFixed(1)} · C ${Number(p.cutting||0).toFixed(1)} · D ${Number(p.defense||0).toFixed(1)} · W/L ${Number(p.winLossRating||0).toFixed(2)}` : ""}</div></div></div>`).join("")
-      : '<div class="small">No players match that search.</div>';
-  }
+  if(!list){ alert("Edit Player modal is missing from the page."); return; }
+
+  const search = (document.getElementById("editPlayerSearch")?.value || "").trim().toLowerCase();
+  const players = [...state.players]
+    .filter(p => !search || String(p.fullName || "").toLowerCase().includes(search))
+    .sort(comparePlayersByLastName);
+
+  list.innerHTML = players.length ? players.map(p => {
+    const ratingLine = isAdmin()
+      ? `H ${Number(p.handling||0).toFixed(1)} · C ${Number(p.cutting||0).toFixed(1)} · D ${Number(p.defense||0).toFixed(1)} · W/L ${Number(p.winLossRating||0).toFixed(2)}`
+      : "Name edit only";
+    return `<div class="player clickable" onclick="selectPlayerForEdit('${p.id}')">
+      <div>
+        <div class="player-name">${p.fullName}</div>
+        <div class="small">${p.active ? "Active" : "Inactive"} · ${ratingLine}</div>
+      </div>
+    </div>`;
+  }).join("") : '<div class="small">No players match that search.</div>';
 
   const help = document.getElementById("editPlayerHelp");
   if(help) help.textContent = isAdmin()
-    ? "Admins can edit names and ratings."
-    : "Captains can edit player names only. Ratings are read-only.";
+    ? "Admins can edit player names and ratings."
+    : "Captains can edit player names only. Ratings are shown separately but cannot be changed.";
 
-  showModal("editPlayerModal");
+  const empty = document.getElementById("editPlayerFormEmpty");
+  const form = document.getElementById("editPlayerForm");
+  if(!selectedEditPlayerId){
+    if(empty) empty.style.display = "block";
+    if(form) form.style.display = "none";
+  }
+
   updateRoleVisibility();
+  showModal("editPlayerModal");
 }
 
 function selectPlayerForEdit(id){
-  const player = state.players.find(p => p.id === id);
+  const player = state.players.find(p => String(p.id) === String(id));
   if(!player) return;
-  selectedEditPlayerId = id;
+
+  selectedEditPlayerId = player.id;
+
   const empty = document.getElementById("editPlayerFormEmpty");
   const form = document.getElementById("editPlayerForm");
   if(empty) empty.style.display = "none";
@@ -295,15 +309,21 @@ function selectPlayerForEdit(id){
 
   [h,c,d,wl].forEach(el => { if(el) el.disabled = !isAdmin(); });
 
+  const gp = Number(player.gamesPlayed || 0);
+  const wins = Number(player.wins || 0);
+  const losses = Number(player.losses || 0);
+  const winPct = gp > 0 ? ((wins / gp) * 100).toFixed(1) + "%" : "0.0%";
   const status = document.getElementById("editPlayerStatus");
-  if(status) status.textContent = `${player.active ? "Active" : "Inactive"} · Games ${Number(player.gamesPlayed||0)} · Wins ${Number(player.wins||0)} · Losses ${Number(player.losses||0)}`;
+  if(status) status.textContent = `${player.active ? "Active" : "Inactive"} · Games ${gp} · Wins ${wins} · Losses ${losses} · Win % ${winPct}`;
+
   updateRoleVisibility();
 }
 
 async function saveEditedPlayer(){
   if(!canEditPlayerNames()){ alert("Captain/admin only."); return; }
-  const player = state.players.find(p => p.id === selectedEditPlayerId);
-  if(!player) return;
+
+  const player = state.players.find(p => String(p.id) === String(selectedEditPlayerId));
+  if(!player){ alert("Select a player first."); return; }
 
   const firstName = (document.getElementById("editFirstName")?.value || "").trim();
   const lastName = (document.getElementById("editLastName")?.value || "").trim();
@@ -327,20 +347,24 @@ async function saveEditedPlayer(){
 
   await loadCloudData();
   renderAll();
-  openEditPlayerModal();
+  selectedEditPlayerId = null;
+  openEditPlayerModal(false);
   alert("Player updated.");
 }
 
 async function deleteEditedPlayer(){
   if(!isAdmin()){ alert("Admin only."); return; }
-  const player = state.players.find(p => p.id === selectedEditPlayerId);
-  if(!player) return;
+  const player = state.players.find(p => String(p.id) === String(selectedEditPlayerId));
+  if(!player){ alert("Select a player first."); return; }
   if(!confirm(`Delete ${player.fullName}? This cannot be undone.`)) return;
+
   const { error } = await db.from("players").delete().eq("id", player.id);
   if(error){ alert(error.message); return; }
+
   selectedEditPlayerId = null;
   await loadCloudData();
   renderAll();
-  openEditPlayerModal();
+  openEditPlayerModal(false);
 }
+
 
