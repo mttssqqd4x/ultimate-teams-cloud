@@ -157,3 +157,10 @@ Signed-in users see **Sign out** instead.
 Run the new `setup_supabase.sql` again in Supabase.
 
 The v4 SQL adds pair-rule ownership with a `created_by` column and updates Row Level Security policies.
+
+
+## v4.1 fix
+
+This version fixes the top **Sign in** button.
+
+The sign-in form is now hidden by default and the button explicitly toggles the form open/closed.

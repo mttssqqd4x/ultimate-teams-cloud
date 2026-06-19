@@ -1,4 +1,19 @@
-const CONFIG=window.ULTIMATE_TEAMS_CONFIG||{};const SUPABASE_URL=(CONFIG.SUPABASE_URL||'').replace(/\/rest\/v1\/?$/,'').replace(/\/$/,'');const SUPABASE_KEY=CONFIG.SUPABASE_PUBLISHABLE_KEY||CONFIG.SUPABASE_ANON_KEY||'';let db=null,currentUser=null,profile={role:'guest',email:'Guest'},showInactive=false;const state={players:[],pairRules:[],history:{},settings:{weightHandling:.35,weightCutting:.35,weightDefense:.30,kFactor:.08,repeatWeight:4,prioritizeHandlerSeparation:false,handlerSeparationBoost:2,prioritizeEliteBalance:false,eliteBalanceBoost:2},currentGame:null,selectedWinnerIndex:null,resultsSavedForCurrentGame:false};document.addEventListener('DOMContentLoaded',init);
+const CONFIG=window.ULTIMATE_TEAMS_CONFIG||{};const SUPABASE_URL=(CONFIG.SUPABASE_URL||'').replace(/\/rest\/v1\/?$/,'').replace(/\/$/,'');const SUPABASE_KEY=CONFIG.SUPABASE_PUBLISHABLE_KEY||CONFIG.SUPABASE_ANON_KEY||'';let db=null,currentUser=null,profile={role:'guest',email:'Guest'},showInactive=false;const state={players:[],pairRules:[],history:{},settings:{weightHandling:.35,weightCutting:.35,weightDefense:.30,kFactor:.08,repeatWeight:4,prioritizeHandlerSeparation:false,handlerSeparationBoost:2,prioritizeEliteBalance:false,eliteBalanceBoost:2},currentGame:null,selectedWinnerIndex:null,resultsSavedForCurrentGame:false};
+function toggleSignInBox(){
+  const box = document.getElementById("authPage");
+  if(!box) return;
+  box.classList.toggle("hidden");
+  if(!box.classList.contains("hidden")){
+    const email = document.getElementById("authEmail");
+    if(email) setTimeout(() => email.focus(), 50);
+  }
+}
+function hideSignInBox(){
+  const box = document.getElementById("authPage");
+  if(box) box.classList.add("hidden");
+}
+
+document.addEventListener('DOMContentLoaded',init);
 async function init(){if(!SUPABASE_URL||!SUPABASE_KEY||SUPABASE_KEY.includes('PASTE_')){setAuthMessage('Config missing. Open config.js and paste your Supabase publishable/anon key.');return}db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);const{data}=await db.auth.getSession();currentUser=data?.session?.user||null;db.auth.onAuthStateChange(async(_e,s)=>{currentUser=s?.user||null;await afterAuthChange()});await afterAuthChange()}
 function setAuthMessage(m){document.getElementById('authMessage').textContent=m}function isAdmin(){return profile?.role==='admin'}function canManageGames(){return profile?.role==='admin'||profile?.role==='captain'}function isGuestOrUser(){return !canManageGames()}
 async function signUp(){const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;if(!email||!password){setAuthMessage('Enter email and password.');return}const{error}=await db.auth.signUp({email,password});if(error){setAuthMessage(error.message);return}setAuthMessage('Account created. Check email if confirmation is enabled, then sign in.')}
