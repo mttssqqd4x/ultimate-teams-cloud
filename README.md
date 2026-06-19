@@ -325,3 +325,17 @@ Fixes:
 - captains/admins can generate teams, clear attendance, and access Data
 - captains get limited Data tools: Edit Player name only, View Player Ratings, Download Ratings CSV
 - admins get full Data tools
+
+
+## v4.13 Data page fix
+
+This version fixes the blank Data page by replacing the fragile cloned Data-page layout with explicit Data-page HTML.
+
+Changes:
+- Data page renders directly instead of cloning hidden Main-page content
+- captains see Player Tools on Data page:
+  - Edit Player
+  - View Player Ratings
+  - Download Ratings CSV
+- admins also see full import/settings/reset/backup tools
+- Data page counters now update correctly

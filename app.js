@@ -254,11 +254,19 @@ function renderAll(){
 }
 
 function updateStats(){
+  const playerCount = state.players.length;
+  const attendingCount = state.players.filter(p => p.attending).length;
+  const role = normalizedRole();
+
   const setText = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = String(val); };
+
   setText("userEmail", currentUser?.email || "Guest");
-  setText("userRole", normalizedRole());
-  setText("statPlayers", state.players.length);
-  setText("statAttending", state.players.filter(p => p.attending).length);
+  setText("userRole", role);
+  setText("statPlayers", playerCount);
+  setText("statAttending", attendingCount);
+  setText("statPlayersData", playerCount);
+  setText("statAttendingData", attendingCount);
+  setText("statRoleData", role);
 }
 
 function updateNavVisibility(){
@@ -331,13 +339,6 @@ function updateRoleVisibility(){
     sticky.classList.toggle("hidden", !show);
     sticky.style.display = show ? "" : "none";
   }
-
-  const resultNotice = document.getElementById("resultNotice");
-  if(resultNotice){
-    resultNotice.textContent = showCaptainAdmin
-      ? "Captains/admins can tap the winning team and save results."
-      : "Users can mark attendance. Captains/admins generate teams and save results.";
-  }
 }
 
 function showPage(page){
@@ -355,6 +356,8 @@ function showPage(page){
 
   updateNavVisibility();
   updateRoleVisibility();
+  syncSettingsForm();
+  updateStats();
 }
 
 function playerById(id){
