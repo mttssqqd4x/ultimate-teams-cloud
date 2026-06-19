@@ -4,12 +4,82 @@ const SUPABASE_KEY=CONFIG.SUPABASE_PUBLISHABLE_KEY||CONFIG.SUPABASE_ANON_KEY||""
 let db,currentUser=null,profile=null,showInactive=false;
 const state={players:[],pairRules:[],history:{},settings:{weightHandling:.35,weightCutting:.35,weightDefense:.30,kFactor:.08,repeatWeight:4,prioritizeHandlerSeparation:false,handlerSeparationBoost:2,prioritizeEliteBalance:false,eliteBalanceBoost:2},currentGame:null,selectedWinnerIndex:null,resultsSavedForCurrentGame:false};
 document.addEventListener("DOMContentLoaded",init);
-async function init(){if(!SUPABASE_URL||!SUPABASE_KEY||SUPABASE_KEY.includes("PASTE_")){setAuthMessage("Config missing. Open config.js and paste your Supabase publishable/anon key.");return}db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);const {data}=await db.auth.getSession();currentUser=data?.session?.user||null;db.auth.onAuthStateChange(async(_e,s)=>{currentUser=s?.user||null;await afterAuthChange()});await afterAuthChange()}
-function setAuthMessage(m){document.getElementById("authMessage").textContent=m}function isAdmin(){return profile?.role==="admin"}function canManageGames(){return profile?.role==="admin"||profile?.role==="captain"}
-async function signUp(){const email=val("authEmail").trim(),password=val("authPassword");if(!email||!password){setAuthMessage("Enter email and password.");return}const {error}=await db.auth.signUp({email,password});setAuthMessage(error?error.message:"Account created. If email confirmation is enabled, check your email. Then sign in.")}
-async function signIn(){const email=val("authEmail").trim(),password=val("authPassword");if(!email||!password){setAuthMessage("Enter email and password.");return}const {error}=await db.auth.signInWithPassword({email,password});if(error)setAuthMessage(error.message)}
+async function init(){
+  try{
+    if(!window.supabase){setAuthMessage("Supabase library did not load. Check internet connection or content blockers.");return}
+    if(!SUPABASE_URL||!SUPABASE_KEY||SUPABASE_KEY.includes("PASTE_")){setAuthMessage("Config missing. Open config.js and paste your Supabase publishable/anon key.");return}
+    db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+    const {data,error}=await db.auth.getSession();
+    if(error) setAuthMessage("Session check error: "+error.message);
+    currentUser=data?.session?.user||null;
+    db.auth.onAuthStateChange(async(_e,s)=>{currentUser=s?.user||null;await afterAuthChange()});
+    await afterAuthChange();
+  }catch(e){
+    setAuthMessage("Startup failed: "+friendlyError(e));
+  }
+}
+function setAuthMessage(m){document.getElementById("authMessage").textContent=m}
+function friendlyError(e){
+  const msg = e?.message || String(e || "Unknown error");
+  if(msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("load failed")){
+    return msg + " — check that the Supabase project URL is correct, the project is not paused, the publishable/anon key is complete, and Safari/content blockers are not blocking supabase.co.";
+  }
+  return msg;
+}
+async function testSupabaseConnection(){
+  try{
+    if(!db){setAuthMessage("Supabase client is not initialized yet.");return}
+    setAuthMessage("Testing Supabase connection...");
+    const {data,error}=await db.auth.getSession();
+    if(error){setAuthMessage("Connection/session error: "+error.message);return}
+    const response = await fetch(SUPABASE_URL + "/auth/v1/settings", {headers:{apikey:SUPABASE_KEY, Authorization:"Bearer "+SUPABASE_KEY}});
+    if(!response.ok){
+      const txt = await response.text();
+      setAuthMessage("Supabase reached, but returned HTTP "+response.status+": "+txt.slice(0,180));
+      return;
+    }
+    setAuthMessage("Supabase connection works. Try creating the account again.");
+  }catch(e){
+    setAuthMessage("Connection test failed: "+friendlyError(e));
+  }
+}
+function isAdmin(){return profile?.role==="admin"}function canManageGames(){return profile?.role==="admin"||profile?.role==="captain"}
+async function signUp(){
+  try{
+    const email=val("authEmail").trim(),password=val("authPassword");
+    if(!email||!password){setAuthMessage("Enter email and password.");return}
+    setAuthMessage("Creating account...");
+    const {error}=await db.auth.signUp({email,password});
+    setAuthMessage(error?("Create account error: "+error.message):"Account created. If email confirmation is enabled, check your email. Then sign in.");
+  }catch(e){
+    setAuthMessage("Create account request failed: "+friendlyError(e));
+  }
+}
+async function signIn(){
+  try{
+    const email=val("authEmail").trim(),password=val("authPassword");
+    if(!email||!password){setAuthMessage("Enter email and password.");return}
+    setAuthMessage("Signing in...");
+    const {error}=await db.auth.signInWithPassword({email,password});
+    if(error)setAuthMessage("Sign in error: "+error.message);
+  }catch(e){
+    setAuthMessage("Sign in request failed: "+friendlyError(e));
+  }
+}
 async function signOut(){await db.auth.signOut()}
-async function afterAuthChange(){["authPage"].forEach(id=>document.getElementById(id).classList.toggle("hidden",!!currentUser));["mainPage","stickybar","signOutBtn","mainTabBtn"].forEach(id=>document.getElementById(id).classList.toggle("hidden",!currentUser));if(!currentUser){profile=null;showPage("main");return}await loadProfile();await loadCloudData();renderAll();showPage("main")}
+async function afterAuthChange(){
+  ["authPage"].forEach(id=>document.getElementById(id).classList.toggle("hidden",!!currentUser));
+  ["mainPage","stickybar","signOutBtn","mainTabBtn"].forEach(id=>document.getElementById(id).classList.toggle("hidden",!currentUser));
+  if(!currentUser){profile=null;showPage("main");return}
+  try{
+    await loadProfile();
+    await loadCloudData();
+    renderAll();
+    showPage("main");
+  }catch(e){
+    setAuthMessage("Signed in, but data load failed: "+friendlyError(e));
+  }
+}
 async function loadProfile(){let {data}=await db.from("profiles").select("*").eq("id",currentUser.id).maybeSingle();if(!data){await db.from("profiles").insert({id:currentUser.id,email:currentUser.email,role:"user"});data=(await db.from("profiles").select("*").eq("id",currentUser.id).single()).data}profile=data||{role:"user",email:currentUser.email};txt("userEmail",currentUser.email||"—");txt("userRole",profile.role||"user");document.getElementById("dataTabBtn").classList.toggle("hidden",!isAdmin())}
 function showPage(page){if(page==="data"&&!isAdmin())page="main";document.getElementById("mainPage").classList.toggle("hidden",page!=="main"||!currentUser);document.getElementById("dataPage").classList.toggle("hidden",page!=="data"||!currentUser||!isAdmin());document.getElementById("stickybar").classList.toggle("hidden",page!=="main"||!currentUser);document.getElementById("mainTabBtn").classList.toggle("tab-active",page==="main");document.getElementById("dataTabBtn").classList.toggle("tab-active",page==="data")}
 function dbPlayerToLocal(r,am){return{id:r.id,firstName:r.first_name||"",lastName:r.last_name||"",fullName:r.full_name||`${r.first_name||""} ${r.last_name||""}`.trim(),handling:Number(r.handling||0),cutting:Number(r.cutting||0),defense:Number(r.defense||0),winLossRating:Number(r.win_loss||0),active:!!r.active,injuryPct:Number(r.injury_pct||1),temporary:!!r.temporary,gamesPlayed:Number(r.games_played||0),wins:Number(r.wins||0),losses:Number(r.losses||0),attending:!!am[r.id]}}

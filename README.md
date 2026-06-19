@@ -354,3 +354,23 @@ Recommended next polish:
 - real-time live updates
 - password reset link
 - stricter attendance permissions
+
+
+## v2 signup/load troubleshooting
+
+This version adds:
+- clearer create-account errors
+- a Test connection button
+- a fallback Supabase script source
+- the provided project URL in config.js
+
+If you see `Load failed`, try:
+1. Press **Test connection**.
+2. Make sure the Supabase URL is exactly `https://fsdqkozqkshqwvmhq.supabase.co`.
+3. Make sure the key is the full publishable/anon key.
+4. Make sure the Supabase project is active/not paused.
+5. Try Safari without content blockers, or Chrome on desktop.
+6. Confirm `setup_supabase.sql` has been run in Supabase.
+7. In Supabase Auth settings, confirm Email provider is enabled.
+
+Do not put a service_role or secret key in config.js.
