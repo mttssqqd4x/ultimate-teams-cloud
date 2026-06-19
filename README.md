@@ -279,3 +279,14 @@ Changes:
 - they are still hidden from guests/users
 - modals remain hidden until the buttons are tapped
 - a copy is also included in the Data page Load/Edit area above Backup JSON / Download Ratings CSV when the Load/Edit section is rendered
+
+
+## v4.9 attendance and user-view update
+
+Changes:
+- inactive players can be marked present
+- present players now include inactive players if they are marked attending
+- guests/users see all players by default
+- guests/users cannot see or use Show/Hide Inactive Players
+- guests/users cannot see Number of Teams
+- captains/admins still have the inactive filter and Number of Teams control

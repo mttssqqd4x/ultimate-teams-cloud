@@ -82,11 +82,14 @@ function dbPlayerToLocal(r,att){return{id:r.id,firstName:r.first_name||'',lastNa
 async function loadCloudData(){const[pr,ar,rr,hr,sr,gr]=await Promise.all([db.from('players').select('*').order('first_name'),db.from('attendance').select('*'),db.from('pair_rules').select('*').order('created_at'),db.from('teammate_history').select('*'),db.from('settings').select('*').eq('id','main').maybeSingle(),db.from('current_game').select('*').eq('id','main').maybeSingle()]);if(pr.error){alert('Players load error: '+pr.error.message);return}const att={};(ar.data||[]).forEach(a=>att[a.player_id]=a.present);state.players=(pr.data||[]).map(r=>dbPlayerToLocal(r,att));state.pairRules=(rr.data||[]).map(r=>({id:r.id,player1Id:r.player1_id,player2Id:r.player2_id,type:r.rule_type,strength:Number(r.strength||1)}));state.history={};(hr.data||[]).forEach(h=>state.history[pairKey(h.player_a,h.player_b)]=Number(h.count||0));if(sr.data)state.settings={weightHandling:Number(sr.data.weight_handling),weightCutting:Number(sr.data.weight_cutting),weightDefense:Number(sr.data.weight_defense),kFactor:Number(sr.data.k_factor),repeatWeight:Number(sr.data.repeat_weight),prioritizeHandlerSeparation:!!sr.data.prioritize_handler_separation,handlerSeparationBoost:Number(sr.data.handler_separation_boost),prioritizeEliteBalance:!!sr.data.prioritize_elite_balance,eliteBalanceBoost:Number(sr.data.elite_balance_boost)};if(gr.data){state.currentGame=hydrateGame(gr.data.teams);state.selectedWinnerIndex=gr.data.selected_winner_index;state.resultsSavedForCurrentGame=!!gr.data.results_saved}syncSettingsForm()}
 function hydrateGame(j){if(!j)return null;return{teams:j.map(t=>t.map(x=>state.players.find(p=>p.id===(x.id||x))||x))}}
 
+
 function updateRoleVisibility(){
   const showCaptainAdmin = !!(profile && (profile.role === "admin" || profile.role === "captain"));
-  const dataQuickTools = document.getElementById("dataPageQuickTools");
-  if(dataQuickTools){ dataQuickTools.classList.toggle("hidden", !showCaptainAdmin); dataQuickTools.style.display = showCaptainAdmin ? "" : "none"; }
   const showAdmin = !!(profile && profile.role === "admin");
+
+  if(!showCaptainAdmin){
+    state.showInactive = true;
+  }
 
   document.querySelectorAll(".captain-admin-only").forEach(el => {
     el.classList.toggle("hidden", !showCaptainAdmin);
@@ -108,12 +111,18 @@ function updateRoleVisibility(){
     el.style.display = showAdmin ? "" : "none";
   });
 
-  ["attendanceTempPlayer","tempPlayerCard","attendancePairRules","pairRulesCard","section-pair-rules"].forEach(id => {
+  ["numTeamsSection","attendanceTempPlayer","tempPlayerCard","attendancePairRules","pairRulesCard","section-pair-rules"].forEach(id => {
     const el = document.getElementById(id);
     if(!el) return;
     el.classList.toggle("hidden", !showCaptainAdmin);
     el.style.display = showCaptainAdmin ? "" : "none";
   });
+
+  const toggleInactiveBtn = document.getElementById("toggleInactiveBtn");
+  if(toggleInactiveBtn){
+    toggleInactiveBtn.classList.toggle("hidden", !showCaptainAdmin);
+    toggleInactiveBtn.style.display = showCaptainAdmin ? "" : "none";
+  }
 
   const clearBtn = document.querySelector('button[onclick="clearAttendance()"]');
   if(clearBtn){
@@ -123,10 +132,12 @@ function updateRoleVisibility(){
 
   const sticky = document.getElementById("stickybar");
   if(sticky){
-    sticky.classList.toggle("hidden", !showCaptainAdmin || document.getElementById("mainPage")?.classList.contains("hidden"));
-    sticky.style.display = (!showCaptainAdmin || document.getElementById("mainPage")?.classList.contains("hidden")) ? "none" : "";
+    const mainVisible = !document.getElementById("mainPage")?.classList.contains("hidden");
+    sticky.classList.toggle("hidden", !showCaptainAdmin || !mainVisible);
+    sticky.style.display = (!showCaptainAdmin || !mainVisible) ? "none" : "";
   }
 }
+
 function canGenerateTeams(){ return profile?.role === "admin" || profile?.role === "captain"; }
 function canAccessDataPage(){ return profile?.role === "admin" || profile?.role === "captain"; }
 function canEditRatings(){ return profile?.role === "admin"; }
@@ -146,7 +157,9 @@ async function toggleAttendance(id){const p=state.players.find(x=>x.id===id);if(
 async function clearAttendance(){
   if(!canManageGames()){ alert("Only captains/admins can clear attendance."); return; }
   if(!confirm('Clear attendance for all players?'))return;const rows=state.players.map(p=>({player_id:p.id,present:false,updated_by:currentUser?.id||null,updated_at:new Date().toISOString()}));const{error}=await db.from('attendance').upsert(rows);if(error)alert(error.message);await loadCloudData();renderAll()}
-function toggleShowInactive(){showInactive=!showInactive;updateShowInactiveButton();renderPlayers()}function updateShowInactiveButton(){document.getElementById('toggleInactiveBtn').textContent=showInactive?'Hide Inactive Players':'Show Inactive Players'}function clearPlayerSearch(){document.getElementById('playerSearch').value='';renderPlayers()}
+function toggleShowInactive(){
+  if(!canToggleInactiveVisibility()){ state.showInactive = true; renderPlayers(); return; }
+  showInactive=!showInactive;updateShowInactiveButton();renderPlayers()}function updateShowInactiveButton(){document.getElementById('toggleInactiveBtn').textContent=showInactive?'Hide Inactive Players':'Show Inactive Players'}function clearPlayerSearch(){document.getElementById('playerSearch').value='';renderPlayers()}
 function updatePairRulesVisibility(){
   updateRoleVisibility();
 }
@@ -450,4 +463,11 @@ function closeModal(event, id){
 function clearModalSearch(id){
   const el = document.getElementById(id);
   if(el) el.value = "";
+}
+
+function isPlainUserOrGuest(){
+  return !(profile && (profile.role === "admin" || profile.role === "captain"));
+}
+function canToggleInactiveVisibility(){
+  return profile && (profile.role === "admin" || profile.role === "captain");
 }
