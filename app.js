@@ -856,7 +856,16 @@ async function generateTeamsButton(){
   if(!canGenerateTeams()){ alert("Only captains/admins can generate teams."); return; }
 
   if(state.currentGame && !state.resultsSavedForCurrentGame){
-    alert("Reminder: current game results have not been saved. If you want this game to count toward season stats and Win/Loss ratings, save results before or after generating the next teams.");
+    const continueWithoutResults = confirm(
+      "Reminder: results have not been saved for the current game.\\n\\n" +
+      "Continue without recording the results?\\n\\n" +
+      "Yes = save teammate pairings only and generate next teams.\\n" +
+      "No = go back so you can select a winner and save results."
+    );
+
+    if(!continueWithoutResults) return;
+
+    await savePairingsOnlyForCurrentGame();
   }
 
   await generateGame();
@@ -1008,6 +1017,27 @@ async function saveResults(){
   const msg = document.getElementById("resultMessage");
   if(msg) msg.textContent = "Results saved.";
 }
+
+async function savePairingsOnlyForCurrentGame(){
+  if(!state.currentGame) return;
+
+  await addCurrentTeamsToHistory();
+
+  // Record that a game happened without recording a winner/rating update.
+  try{
+    await db.from("games").insert({
+      teams: serializableTeams(),
+      winner_team_index: null,
+      created_by: currentUser?.id || null
+    });
+  }catch(e){
+    console.warn("Could not insert pairings-only game record", e);
+  }
+
+  state.resultsSavedForCurrentGame = true;
+  await saveCurrentGameToDb(true);
+}
+
 async function addCurrentTeamsToHistory(){
   const rows = [];
   (state.currentGame?.teams || []).forEach(team => {

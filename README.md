@@ -341,15 +341,15 @@ Changes:
 - Data page counters now update correctly
 
 
-## v4.14 Generate Teams reminder change
+## v4.14 pairings-only next game flow
 
-This version changes the Generate Teams flow.
+This version changes the Generate Teams button behavior when current results have not been saved.
 
-Before:
-- if results were not saved, Generate Teams asked whether to save results first
-- choosing save required selecting a winner before continuing
+If a captain/admin presses **Generate Teams** while the current game has unsaved results:
+- the app shows a reminder that results have not been saved
+- choosing **No** cancels so the captain can select a winner and save results
+- choosing **Yes** saves teammate pairings/history only
+- then the app generates the next teams
+- wins/losses and Win/Loss ratings are not updated
 
-Now:
-- Generate Teams shows a reminder if the current game results are unsaved
-- it does not force saving results
-- it continues generating the next teams after the reminder
+This supports rotating teams while still tracking teammate-history pairings.
