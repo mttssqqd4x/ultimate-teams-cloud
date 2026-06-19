@@ -267,3 +267,15 @@ Changes:
 - those tools only open inside pop-up modals after their buttons are tapped
 - the buttons are only injected into the Data page, above Backup JSON and Download Ratings CSV
 - the separate bottom/duplicate buttons were removed
+
+
+## v4.8 button placement fix
+
+This version fixes the missing Data page buttons.
+
+Changes:
+- Edit Player and View Player Ratings are now placed directly in the Data page HTML
+- they are no longer dependent on JavaScript injection
+- they are still hidden from guests/users
+- modals remain hidden until the buttons are tapped
+- a copy is also included in the Data page Load/Edit area above Backup JSON / Download Ratings CSV when the Load/Edit section is rendered

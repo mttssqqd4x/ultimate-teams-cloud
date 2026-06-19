@@ -84,6 +84,8 @@ function hydrateGame(j){if(!j)return null;return{teams:j.map(t=>t.map(x=>state.p
 
 function updateRoleVisibility(){
   const showCaptainAdmin = !!(profile && (profile.role === "admin" || profile.role === "captain"));
+  const dataQuickTools = document.getElementById("dataPageQuickTools");
+  if(dataQuickTools){ dataQuickTools.classList.toggle("hidden", !showCaptainAdmin); dataQuickTools.style.display = showCaptainAdmin ? "" : "none"; }
   const showAdmin = !!(profile && profile.role === "admin");
 
   document.querySelectorAll(".captain-admin-only").forEach(el => {
@@ -425,3 +427,27 @@ function hideAllModals(){
   ["ratingsModal","editPlayerModal","trendModal","simulateModal","balanceModal"].forEach(id => hideModal(id));
 }
 
+
+
+// v4.8 robust modal helpers override
+function showModal(id){
+  const modal = document.getElementById(id);
+  if(modal){
+    modal.classList.add("modal-open");
+    modal.style.display = "flex";
+  }
+}
+function hideModal(id){
+  const modal = document.getElementById(id);
+  if(modal){
+    modal.classList.remove("modal-open");
+    modal.style.display = "none";
+  }
+}
+function closeModal(event, id){
+  if(event && event.target && event.target.id === id) hideModal(id);
+}
+function clearModalSearch(id){
+  const el = document.getElementById(id);
+  if(el) el.value = "";
+}
