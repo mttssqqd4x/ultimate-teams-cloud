@@ -174,3 +174,8 @@ This version changes guest/user visibility:
 - captains/admins still see those tools
 - sign-in panel is forced hidden by default on page load
 - Sign in button is the only way to open the sign-in panel
+
+
+## v4.3 change
+
+Player lists, present-player lists, dropdowns, and CSV exports now sort by last name first, then first name.
