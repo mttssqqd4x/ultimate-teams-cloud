@@ -164,3 +164,13 @@ The v4 SQL adds pair-rule ownership with a `created_by` column and updates Row L
 This version fixes the top **Sign in** button.
 
 The sign-in form is now hidden by default and the button explicitly toggles the form open/closed.
+
+
+## v4.2 fix
+
+This version changes guest/user visibility:
+- guests and regular users do not see Pair Rules
+- guests and regular users do not see Add One-Time Player
+- captains/admins still see those tools
+- sign-in panel is forced hidden by default on page load
+- Sign in button is the only way to open the sign-in panel

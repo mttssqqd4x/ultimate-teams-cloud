@@ -1,16 +1,27 @@
+document.addEventListener("DOMContentLoaded", () => hideSignInBox());
 const CONFIG=window.ULTIMATE_TEAMS_CONFIG||{};const SUPABASE_URL=(CONFIG.SUPABASE_URL||'').replace(/\/rest\/v1\/?$/,'').replace(/\/$/,'');const SUPABASE_KEY=CONFIG.SUPABASE_PUBLISHABLE_KEY||CONFIG.SUPABASE_ANON_KEY||'';let db=null,currentUser=null,profile={role:'guest',email:'Guest'},showInactive=false;const state={players:[],pairRules:[],history:{},settings:{weightHandling:.35,weightCutting:.35,weightDefense:.30,kFactor:.08,repeatWeight:4,prioritizeHandlerSeparation:false,handlerSeparationBoost:2,prioritizeEliteBalance:false,eliteBalanceBoost:2},currentGame:null,selectedWinnerIndex:null,resultsSavedForCurrentGame:false};
-function toggleSignInBox(){
+function toggleSignInBox(event){
+  if(event && event.preventDefault) event.preventDefault();
   const box = document.getElementById("authPage");
-  if(!box) return;
-  box.classList.toggle("hidden");
-  if(!box.classList.contains("hidden")){
+  if(!box) return false;
+  const isHidden = box.classList.contains("hidden") || box.style.display === "none";
+  if(isHidden){
+    box.classList.remove("hidden");
+    box.style.display = "block";
     const email = document.getElementById("authEmail");
     if(email) setTimeout(() => email.focus(), 50);
+  } else {
+    box.classList.add("hidden");
+    box.style.display = "none";
   }
+  return false;
 }
 function hideSignInBox(){
   const box = document.getElementById("authPage");
-  if(box) box.classList.add("hidden");
+  if(box){
+    box.classList.add("hidden");
+    box.style.display = "none";
+  }
 }
 
 document.addEventListener('DOMContentLoaded',init);
@@ -24,7 +35,32 @@ function showPage(page){if(page==='data'&&!isAdmin())page='main';document.getEle
 function dbPlayerToLocal(r,att){return{id:r.id,firstName:r.first_name||'',lastName:r.last_name||'',fullName:r.full_name||`${r.first_name||''} ${r.last_name||''}`.trim(),handling:Number(r.handling||0),cutting:Number(r.cutting||0),defense:Number(r.defense||0),winLossRating:Number(r.win_loss||0),active:!!r.active,injuryPct:Number(r.injury_pct||1),temporary:!!r.temporary,gamesPlayed:Number(r.games_played||0),wins:Number(r.wins||0),losses:Number(r.losses||0),attending:!!att[r.id]}}
 async function loadCloudData(){const[pr,ar,rr,hr,sr,gr]=await Promise.all([db.from('players').select('*').order('first_name'),db.from('attendance').select('*'),db.from('pair_rules').select('*').order('created_at'),db.from('teammate_history').select('*'),db.from('settings').select('*').eq('id','main').maybeSingle(),db.from('current_game').select('*').eq('id','main').maybeSingle()]);if(pr.error){alert('Players load error: '+pr.error.message);return}const att={};(ar.data||[]).forEach(a=>att[a.player_id]=a.present);state.players=(pr.data||[]).map(r=>dbPlayerToLocal(r,att));state.pairRules=(rr.data||[]).map(r=>({id:r.id,player1Id:r.player1_id,player2Id:r.player2_id,type:r.rule_type,strength:Number(r.strength||1)}));state.history={};(hr.data||[]).forEach(h=>state.history[pairKey(h.player_a,h.player_b)]=Number(h.count||0));if(sr.data)state.settings={weightHandling:Number(sr.data.weight_handling),weightCutting:Number(sr.data.weight_cutting),weightDefense:Number(sr.data.weight_defense),kFactor:Number(sr.data.k_factor),repeatWeight:Number(sr.data.repeat_weight),prioritizeHandlerSeparation:!!sr.data.prioritize_handler_separation,handlerSeparationBoost:Number(sr.data.handler_separation_boost),prioritizeEliteBalance:!!sr.data.prioritize_elite_balance,eliteBalanceBoost:Number(sr.data.elite_balance_boost)};if(gr.data){state.currentGame=hydrateGame(gr.data.teams);state.selectedWinnerIndex=gr.data.selected_winner_index;state.resultsSavedForCurrentGame=!!gr.data.results_saved}syncSettingsForm()}
 function hydrateGame(j){if(!j)return null;return{teams:j.map(t=>t.map(x=>state.players.find(p=>p.id===(x.id||x))||x))}}
-function renderAll(){updateStats();updateShowInactiveButton();updateSelectOptions();renderPresentList();renderPairRules();
+
+function updateRoleVisibility(){
+  const showCaptainAdmin = !!(profile && (profile.role === "admin" || profile.role === "captain"));
+  const showAdmin = !!(profile && profile.role === "admin");
+
+  document.querySelectorAll(".captain-admin-only").forEach(el => {
+    el.classList.toggle("hidden", !showCaptainAdmin);
+    el.style.display = showCaptainAdmin ? "" : "none";
+  });
+
+  document.querySelectorAll(".admin-only").forEach(el => {
+    el.classList.toggle("hidden", !showAdmin);
+    el.style.display = showAdmin ? "" : "none";
+  });
+
+  ["attendanceTempPlayer","tempPlayerCard","attendancePairRules","pairRulesCard","section-pair-rules"].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const show = showCaptainAdmin;
+    el.classList.toggle("hidden", !show);
+    el.style.display = show ? "" : "none";
+  });
+}
+
+function renderAll(){
+  updateRoleVisibility();updateStats();updateShowInactiveButton();updateSelectOptions();renderPresentList();renderPairRules();
   updatePairRulesVisibility();renderPlayers();renderTeams();document.getElementById('saveResultsWrap').classList.toggle('hidden',!canManageGames());document.getElementById('tempPlayerBox').classList.toggle('hidden',!canManageGames());document.getElementById('pairRulesBox').classList.toggle('hidden',!isAdmin())}
 function updateStats(){document.getElementById('statPlayers').textContent=state.players.length;document.getElementById('statAttending').textContent=state.players.filter(p=>p.active&&p.attending).length;document.getElementById('userEmail').textContent=currentUser?.email||'Guest';document.getElementById('userRole').textContent=profile?.role||'guest'}
 function updateSelectOptions(){const present=presentPlayers(),all=[...state.players].sort((a,b)=>a.fullName.localeCompare(b.fullName));[['tempLike',all],['pairP1',present],['pairP2',present]].forEach(([id,arr])=>{const sel=document.getElementById(id);if(!sel)return;const old=sel.value;sel.innerHTML='<option value="">Select...</option>';arr.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.fullName;sel.appendChild(o)});sel.value=old})}
@@ -35,11 +71,7 @@ async function toggleAttendance(id){const p=state.players.find(x=>x.id===id);if(
 async function clearAttendance(){if(!confirm('Clear attendance for all players?'))return;const rows=state.players.map(p=>({player_id:p.id,present:false,updated_by:currentUser?.id||null,updated_at:new Date().toISOString()}));const{error}=await db.from('attendance').upsert(rows);if(error)alert(error.message);await loadCloudData();renderAll()}
 function toggleShowInactive(){showInactive=!showInactive;updateShowInactiveButton();renderPlayers()}function updateShowInactiveButton(){document.getElementById('toggleInactiveBtn').textContent=showInactive?'Hide Inactive Players':'Show Inactive Players'}function clearPlayerSearch(){document.getElementById('playerSearch').value='';renderPlayers()}
 function updatePairRulesVisibility(){
-  const show = canManagePairRules();
-  ["attendancePairRules","pairRulesCard","section-pair-rules"].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.classList.toggle("hidden", !show);
-  });
+  updateRoleVisibility();
 }
 function visiblePairRulesForCurrentUser(){
   if(profile?.role === "admin") return state.pairRules;
@@ -49,7 +81,9 @@ function visiblePairRulesForCurrentUser(){
 function renderPairRules(){const box=document.getElementById('pairRuleList');if(!box)return;const visibleRules = visiblePairRulesForCurrentUser ? visiblePairRulesForCurrentUser() : state.pairRules;
   if(!visibleRules.length){box.innerHTML='<div class="small">No pair rules yet.</div>';return}box.innerHTML='';state.pairRules.forEach(r=>{const p1=state.players.find(p=>p.id===r.player1Id),p2=state.players.find(p=>p.id===r.player2Id),div=document.createElement('div');const locked=Number(r.strength||0)>=999;const typeLabel=r.type==='together'?'Together':'Apart';div.className='player '+(r.type==='together'?'pair-card-together':'pair-card-apart');div.innerHTML=`<div><div class="player-name">${p1?.fullName||'Unknown'} ↔ ${p2?.fullName||'Unknown'}</div><div class="small">${locked?'Locked '+typeLabel:typeLabel+' · Strength '+Number(r.strength).toFixed(1)}</div></div><div class="toggle-wrap"><button class="btn-danger" onclick="removePairRule('${r.id}')">Remove</button></div>`;box.appendChild(div)})}
 async function addPairRule(){if(!isAdmin()){alert('Admin only.');return}const p1=pairP1.value,p2=pairP2.value,type=pairType.value,strength=Number(pairStrength.value||1);if(!p1||!p2||p1===p2){alert('Choose two different players.');return}const{error}=await db.from('pair_rules').insert({player1_id:p1,player2_id:p2,rule_type:type,strength});if(error)alert(error.message);await loadCloudData();renderAll()}async function lockPair(){if(!isAdmin()){alert('Admin only.');return}const p1=pairP1.value,p2=pairP2.value,type=pairType.value||'together';if(!p1||!p2||p1===p2){alert('Choose two different players.');return}const{error}=await db.from('pair_rules').insert({player1_id:p1,player2_id:p2,rule_type:type,strength:999});if(error)alert(error.message);await loadCloudData();renderAll()}async function removePairRule(id){if(!isAdmin())return;const{error}=await db.from('pair_rules').delete().eq('id',id);if(error)alert(error.message);await loadCloudData();renderAll()}async function clearPairRules(){if(!isAdmin())return;if(!confirm('Clear all pair rules?'))return;const{error}=await db.from('pair_rules').delete().not('id','is',null);if(error)alert(error.message);await loadCloudData();renderAll()}
-function loadTempRatingsFromLike(){const src=state.players.find(p=>p.id===tempLike.value);if(!src)return;tempHandling.value=src.handling;tempCutting.value=src.cutting;tempDefense.value=src.defense}async function addTempPlayer(){if(!canManageGames()){alert('Captain/admin only.');return}const full=normalizeName(tempName.value);if(!full){alert('Enter a player name.');return}const parts=splitName(full);const payload={first_name:parts.first,last_name:parts.last,handling:Number(tempHandling.value||3),cutting:Number(tempCutting.value||3),defense:Number(tempDefense.value||3),win_loss:0,active:true,injury_pct:1,temporary:true};const{data,error}=await db.from('players').insert(payload).select().single();if(error){alert(error.message);return}await db.from('attendance').upsert({player_id:data.id,present:true,updated_by:currentUser?.id||null});tempName.value='';await loadCloudData();renderAll()}async function setInjuryPrompt(id){if(!canManageGames())return;const p=state.players.find(x=>x.id===id),pct=prompt('Enter available percent, e.g. 80 for 80%',Math.round((p.injuryPct||1)*100));if(pct===null)return;const val=Math.max(0,Math.min(100,Number(pct)))/100;const{error}=await db.from('players').update({injury_pct:val,updated_at:new Date().toISOString()}).eq('id',id);if(error)alert(error.message);await loadCloudData();renderAll()}
+function loadTempRatingsFromLike(){const src=state.players.find(p=>p.id===tempLike.value);if(!src)return;tempHandling.value=src.handling;tempCutting.value=src.cutting;tempDefense.value=src.defense}async function addTempPlayer(){
+  if(!canManageGames()){ alert("Captain/admin only."); return; }
+  if(!canManageGames()){alert('Captain/admin only.');return}const full=normalizeName(tempName.value);if(!full){alert('Enter a player name.');return}const parts=splitName(full);const payload={first_name:parts.first,last_name:parts.last,handling:Number(tempHandling.value||3),cutting:Number(tempCutting.value||3),defense:Number(tempDefense.value||3),win_loss:0,active:true,injury_pct:1,temporary:true};const{data,error}=await db.from('players').insert(payload).select().single();if(error){alert(error.message);return}await db.from('attendance').upsert({player_id:data.id,present:true,updated_by:currentUser?.id||null});tempName.value='';await loadCloudData();renderAll()}async function setInjuryPrompt(id){if(!canManageGames())return;const p=state.players.find(x=>x.id===id),pct=prompt('Enter available percent, e.g. 80 for 80%',Math.round((p.injuryPct||1)*100));if(pct===null)return;const val=Math.max(0,Math.min(100,Number(pct)))/100;const{error}=await db.from('players').update({injury_pct:val,updated_at:new Date().toISOString()}).eq('id',id);if(error)alert(error.message);await loadCloudData();renderAll()}
 function effectiveHandling(p){const inj=Number(p.injuryPct)||1;return(Number(p.handling)||0)*(.5+.5*inj)}function effectiveCutting(p){return(Number(p.cutting)||0)*(Number(p.injuryPct)||1)}function effectiveDefense(p){return(Number(p.defense)||0)*(Number(p.injuryPct)||1)}function baseOverall(p){const s=state.settings;return effectiveHandling(p)*s.weightHandling+effectiveCutting(p)*s.weightCutting+effectiveDefense(p)*s.weightDefense}function overall(p){return baseOverall(p)+Number(p.winLossRating||0)}function expectedWinProb(a,b){return 1/(1+Math.pow(10,(b-a)/4))}function pairKey(a,b){return a<b?`${a}|${b}`:`${b}|${a}`}function normalizeName(n){return n.trim().replace(/s+/g,' ')}function splitName(f){const p=normalizeName(f).split(' ');return{first:p[0]||'',last:p.slice(1).join(' ')}}function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}function activeAttendingPlayers(){return state.players.filter(p=>p.active&&p.attending)}function teamStats(t){return{overall:t.reduce((s,p)=>s+overall(p),0),handling:t.reduce((s,p)=>s+effectiveHandling(p),0),cutting:t.reduce((s,p)=>s+effectiveCutting(p),0),defense:t.reduce((s,p)=>s+effectiveDefense(p),0),count:t.length}}function teamStrength(t){return t.reduce((s,p)=>s+overall(p),0)}function spread(v){if(!v.length)return 0;const avg=v.reduce((a,b)=>a+b,0)/v.length;return v.reduce((s,x)=>s+Math.pow(x-avg,2),0)}function makeInitialTeams(players,n){const arr=shuffle(players).sort((a,b)=>overall(b)-overall(a)),teams=Array.from({length:n},()=>[]);let idx=0,forward=true;while(idx<arr.length){const order=forward?[...teams.keys()]:[...teams.keys()].reverse();order.forEach(ti=>{if(idx<arr.length)teams[ti].push(arr[idx++])});forward=!forward}return teams}function scoreTeams(teams,repeatWeight=state.settings.repeatWeight){const s=state.settings,stats=teams.map(teamStats);let score=0;const handlerPenalty=s.prioritizeHandlerSeparation?5*Number(s.handlerSeparationBoost||2):5;score+=spread(stats.map(x=>x.count))*120;score+=spread(stats.map(x=>x.overall))*14;score+=spread(stats.map(x=>x.handling))*handlerPenalty;score+=spread(stats.map(x=>x.cutting))*5;score+=spread(stats.map(x=>x.defense))*5;if(s.prioritizeEliteBalance){const eliteBoost=Number(s.eliteBalanceBoost||2),topOveralls=teams.map(team=>Math.max(...team.map(p=>overall(p)))),defenseTotals=stats.map(x=>x.defense),maxTop=Math.max(...topOveralls),avgDefense=defenseTotals.reduce((a,b)=>a+b,0)/Math.max(1,defenseTotals.length);score+=spread(topOveralls)*(10*eliteBoost);teams.forEach((team,idx)=>{const topGap=maxTop-topOveralls[idx],defenseSurplus=Math.max(0,defenseTotals[idx]-avgDefense),unmetGap=Math.max(0,topGap-defenseSurplus*.5);score+=unmetGap*(4*eliteBoost)})}const teamOf={};teams.forEach((team,ti)=>team.forEach(p=>teamOf[p.id]=ti));state.pairRules.forEach(r=>{const same=teamOf[r.player1Id]===teamOf[r.player2Id];if(r.type==='together'&&!same)score+=30*Number(r.strength||1);if(r.type==='apart'&&same)score+=30*Number(r.strength||1)});teams.forEach(t=>{for(let i=0;i<t.length;i++)for(let j=i+1;j<t.length;j++)score+=(state.history[pairKey(t[i].id,t[j].id)]||0)*repeatWeight});return score}function cloneTeams(t){return t.map(x=>[...x])}function optimizeTeams(initial,repeatWeight=state.settings.repeatWeight){let best=cloneTeams(initial),bestScore=scoreTeams(best,repeatWeight),improved=true,passes=0;while(improved&&passes<300){improved=false;passes++;for(let a=0;a<best.length;a++)for(let b=a+1;b<best.length;b++)for(let i=0;i<best[a].length;i++)for(let j=0;j<best[b].length;j++){const cand=cloneTeams(best),tmp=cand[a][i];cand[a][i]=cand[b][j];cand[b][j]=tmp;const sc=scoreTeams(cand,repeatWeight);if(sc<bestScore){best=cand;bestScore=sc;improved=true}}}return{teams:best,score:bestScore}}
 async function generateTeamsButton(){if(canManageGames()&&state.currentGame&&!state.resultsSavedForCurrentGame){const saveFirst=confirm('Current game results have not been saved. Save results before generating new teams?');if(saveFirst){if(state.selectedWinnerIndex===null){alert('Tap the winning team first, then press Generate Teams again.');return}await saveResults()}}await generateGame()}
 async function generateGame(){const players=activeAttendingPlayers(),n=Math.max(2,Number(numTeams.value||2)),repeatWeight=Number(state.settings.repeatWeight||4);if(players.length<n){alert('Not enough attending players for that many teams.');return}let best=null;for(let i=0;i<60;i++){const cand=optimizeTeams(makeInitialTeams(players,n),repeatWeight);if(!best||cand.score<best.score)best=cand}state.currentGame={teams:best.teams};state.selectedWinnerIndex=null;state.resultsSavedForCurrentGame=false;if(canManageGames())await saveCurrentGameToDb(false);renderTeams();window.scrollTo({top:0,behavior:'smooth'})}
