@@ -299,3 +299,13 @@ Fixes:
 - Number of Teams is disabled and hidden unless signed in as captain/admin
 - captains now get the Data page button after sign-in
 - Data page remains hidden from guests/users
+
+
+## v4.11 captain/data and inactive attendance fix
+
+This version adds final override logic for:
+- captain role detection
+- Data tab visibility for captains/admins
+- inactive-player attendance selection
+- present-player inclusion for inactive players marked present
+- users/guests seeing all players while still not seeing Number of Teams

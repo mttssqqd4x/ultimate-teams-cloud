@@ -496,3 +496,230 @@ function updateNavVisibility(){
   }
 }
 
+
+
+
+/* v4.11 final role + attendance overrides */
+function normalizedRole(){
+  const r = String(profile?.role || "").trim().toLowerCase();
+  if(r === "admin" || r === "captain" || r === "user") return r;
+  return currentUser ? "user" : "guest";
+}
+
+function isAdmin(){
+  return normalizedRole() === "admin";
+}
+
+function isCaptain(){
+  return normalizedRole() === "captain";
+}
+
+function isCaptainOrAdmin(){
+  const r = normalizedRole();
+  return r === "admin" || r === "captain";
+}
+
+function canManageGames(){ return isCaptainOrAdmin(); }
+function canGenerateTeams(){ return isCaptainOrAdmin(); }
+function canAccessDataPage(){ return isCaptainOrAdmin(); }
+function canToggleInactiveVisibility(){ return isCaptainOrAdmin(); }
+function isPlainUserOrGuest(){ return !isCaptainOrAdmin(); }
+
+function playerById(id){
+  return state.players.find(p => String(p.id) === String(id));
+}
+
+function presentPlayers(){
+  return [...state.players].filter(p => !!p.attending).sort(comparePlayersByLastName || ((a,b)=>String(a.fullName||"").localeCompare(String(b.fullName||""))));
+}
+
+async function toggleAttendance(id){
+  const p = playerById(id);
+  if(!p) return;
+
+  const next = !p.attending;
+  p.attending = next;
+
+  // Save attendance remotely when possible. Do not require active=true.
+  try{
+    if(typeof db !== "undefined" && db && db.from){
+      if(next){
+        await db.from("attendance").upsert({player_id:p.id, attending:true}, {onConflict:"player_id"});
+      } else {
+        await db.from("attendance").delete().eq("player_id", p.id);
+      }
+    }
+  }catch(e){
+    console.warn("Attendance sync failed", e);
+  }
+
+  try{ saveState && saveState(); }catch(e){}
+  renderAll();
+}
+
+function updateNavVisibility(){
+  const dataBtn = document.getElementById("dataTabBtn");
+  if(dataBtn){
+    const show = canAccessDataPage();
+    dataBtn.classList.toggle("hidden", !show);
+    dataBtn.style.display = show ? "" : "none";
+  }
+  const mainBtn = document.getElementById("mainTabBtn");
+  if(mainBtn){
+    mainBtn.classList.remove("hidden");
+    mainBtn.style.display = "";
+  }
+}
+
+function updateRoleVisibility(){
+  const showCaptainAdmin = isCaptainOrAdmin();
+  const showAdmin = isAdmin();
+
+  if(!showCaptainAdmin){
+    state.showInactive = true;
+  }
+
+  updateNavVisibility();
+
+  document.querySelectorAll(".captain-admin-only").forEach(el => {
+    el.classList.toggle("hidden", !showCaptainAdmin);
+    el.style.display = showCaptainAdmin ? "" : "none";
+  });
+
+  document.querySelectorAll("[data-captain-admin-only='true']").forEach(el => {
+    const container = document.getElementById("numTeamsSection") || el.closest(".grid") || el.parentElement || el;
+    container.classList.toggle("hidden", !showCaptainAdmin);
+    container.style.display = showCaptainAdmin ? "" : "none";
+    el.disabled = !showCaptainAdmin;
+  });
+
+  document.querySelectorAll(".admin-only").forEach(el => {
+    el.classList.toggle("hidden", !showAdmin);
+    el.style.display = showAdmin ? "" : "none";
+  });
+
+  document.querySelectorAll(".admin-only-inline").forEach(el => {
+    el.classList.toggle("hidden", !showAdmin);
+    el.style.display = showAdmin ? "" : "none";
+  });
+
+  document.querySelectorAll(".admin-rating-fields").forEach(el => {
+    el.classList.toggle("hidden", !showAdmin);
+    el.style.display = showAdmin ? "" : "none";
+  });
+
+  ["numTeamsSection","attendanceTempPlayer","tempPlayerCard","attendancePairRules","pairRulesCard","section-pair-rules"].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.toggle("hidden", !showCaptainAdmin);
+    el.style.display = showCaptainAdmin ? "" : "none";
+  });
+
+  const numTeams = document.getElementById("numTeams");
+  if(numTeams){
+    const container = document.getElementById("numTeamsSection") || numTeams.closest(".grid") || numTeams.parentElement;
+    if(container){
+      container.classList.toggle("hidden", !showCaptainAdmin);
+      container.style.display = showCaptainAdmin ? "" : "none";
+    }
+    numTeams.disabled = !showCaptainAdmin;
+  }
+
+  const toggleInactiveBtn = document.getElementById("toggleInactiveBtn");
+  if(toggleInactiveBtn){
+    toggleInactiveBtn.classList.toggle("hidden", !showCaptainAdmin);
+    toggleInactiveBtn.style.display = showCaptainAdmin ? "" : "none";
+  }
+
+  const clearBtn = document.querySelector('button[onclick="clearAttendance()"]');
+  if(clearBtn){
+    clearBtn.classList.toggle("hidden", !showCaptainAdmin);
+    clearBtn.style.display = showCaptainAdmin ? "" : "none";
+  }
+
+  const sticky = document.getElementById("stickybar");
+  if(sticky){
+    const mainPage = document.getElementById("mainPage");
+    const mainVisible = !mainPage || mainPage.style.display !== "none";
+    sticky.classList.toggle("hidden", !showCaptainAdmin || !mainVisible);
+    sticky.style.display = (!showCaptainAdmin || !mainVisible) ? "none" : "";
+  }
+}
+
+function renderPlayers(){
+  const list = document.getElementById("playerList");
+  if(!list) return;
+  list.innerHTML = "";
+
+  const search = (document.getElementById("playerSearch")?.value || "").trim().toLowerCase();
+
+  const filtered = [...state.players]
+    .filter(p => isPlainUserOrGuest() || state.showInactive || p.active)
+    .filter(p => !search || String(p.fullName || "").toLowerCase().includes(search))
+    .sort(comparePlayersByLastName || ((a,b)=>String(a.fullName||"").localeCompare(String(b.fullName||""))));
+
+  if(!filtered.length){
+    list.innerHTML = '<div class="small">No players match that search.</div>';
+    return;
+  }
+
+  filtered.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "player clickable" + (p.attending ? " attend-on" : "") + (!p.active ? " inactive" : "") + (p.temporary ? " temp" : "");
+    div.onclick = (e) => { if(e.target.closest("button")) return; toggleAttendance(p.id); };
+
+    const controls = isCaptainOrAdmin()
+      ? `<div class="toggle-wrap"><button onclick="event.stopPropagation(); toggleActive('${p.id}')">${p.active ? "Inactive" : "Active"}</button><button onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">Injury %</button>${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}</div>`
+      : "";
+
+    div.innerHTML = `<div><div class="player-name">${p.fullName}</div>${!p.active ? '<div class="small">Inactive</div>' : ''}</div>${controls}`;
+    list.appendChild(div);
+  });
+}
+
+function showPage(page){
+  if(page === "data" && !canAccessDataPage()) page = "main";
+
+  const mainPage = document.getElementById("mainPage");
+  const dataPage = document.getElementById("dataPage");
+  const mainBtn = document.getElementById("mainTabBtn");
+  const dataBtn = document.getElementById("dataTabBtn");
+
+  if(mainPage) mainPage.style.display = page === "main" ? "block" : "none";
+  if(dataPage) dataPage.style.display = page === "data" ? "block" : "none";
+  if(mainBtn) mainBtn.classList.toggle("tab-active", page === "main");
+  if(dataBtn) dataBtn.classList.toggle("tab-active", page === "data");
+
+  if(page === "data" && typeof syncDataPage === "function") syncDataPage();
+
+  updateNavVisibility();
+  updateRoleVisibility();
+  renderPlayers();
+}
+
+/* Patch auth-change/render cycle after all earlier definitions */
+const __oldAfterAuthChange_v411 = (typeof afterAuthChange === "function") ? afterAuthChange : null;
+if(__oldAfterAuthChange_v411){
+  afterAuthChange = async function(){
+    await __oldAfterAuthChange_v411();
+    updateNavVisibility();
+    updateRoleVisibility();
+    renderPlayers();
+  };
+}
+
+const __oldRenderAll_v411 = (typeof renderAll === "function") ? renderAll : null;
+if(__oldRenderAll_v411){
+  renderAll = function(){
+    __oldRenderAll_v411();
+    updateNavVisibility();
+    updateRoleVisibility();
+  };
+}
+
+setTimeout(() => {
+  updateNavVisibility();
+  updateRoleVisibility();
+  renderPlayers();
+}, 0);
+
