@@ -17,8 +17,6 @@ create or replace function public.is_admin() returns boolean language sql securi
 create or replace function public.can_manage_games() returns boolean language sql security definer set search_path=public as $$ select exists(select 1 from public.profiles where id=auth.uid() and role in('admin','captain')); $$;
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$ begin insert into public.profiles(id,email,role) values(new.id,new.email,'user') on conflict(id) do nothing; return new; end; $$;
 drop trigger if exists on_auth_user_created on auth.users; create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
-alter table public.pair_rules add column if not exists created_by uuid references auth.users(id);
-
 alter table public.profiles enable row level security; alter table public.players enable row level security; alter table public.attendance enable row level security; alter table public.pair_rules enable row level security; alter table public.teammate_history enable row level security; alter table public.settings enable row level security; alter table public.current_game enable row level security; alter table public.games enable row level security; alter table public.rating_history enable row level security;
 -- Drop old/new policies
 DO $$ DECLARE r record; BEGIN FOR r IN SELECT schemaname,tablename,policyname FROM pg_policies WHERE schemaname='public' AND tablename IN ('profiles','players','attendance','pair_rules','teammate_history','settings','current_game','games','rating_history') LOOP EXECUTE format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename); END LOOP; END $$;
@@ -52,52 +50,70 @@ create policy rating_history_insert_captain on public.rating_history for insert 
 -- update public.profiles set role='admin' where email='samschra44@gmail.com';
 
 
+-- v4 pair-rule ownership update
+alter table public.pair_rules
+add column if not exists created_by uuid references auth.users(id);
+
 drop policy if exists pair_rules_select_public on public.pair_rules;
 drop policy if exists pair_rules_select_authenticated on public.pair_rules;
+drop policy if exists pair_rules_manage_admin on public.pair_rules;
 drop policy if exists pair_rules_manage_captain on public.pair_rules;
-drop policy if exists pair_rules_select_own_or_admin on public.pair_rules;
-drop policy if exists pair_rules_insert_captain_own_or_admin on public.pair_rules;
-drop policy if exists pair_rules_update_own_or_admin on public.pair_rules;
-drop policy if exists pair_rules_delete_own_or_admin on public.pair_rules;
+drop policy if exists pair_rules_select_admin_or_own_captain on public.pair_rules;
+drop policy if exists pair_rules_insert_admin_or_captain on public.pair_rules;
+drop policy if exists pair_rules_update_admin_or_own_captain on public.pair_rules;
+drop policy if exists pair_rules_delete_admin_or_own_captain on public.pair_rules;
 
--- Captains can only see and manage pair rules they created.
--- Admins can see and manage all pair rules.
-create policy pair_rules_select_own_or_admin
+create policy pair_rules_select_admin_or_own_captain
 on public.pair_rules
 for select
 to authenticated
 using (
   public.is_admin()
-  or (public.can_manage_games() and created_by = auth.uid())
+  or (
+    public.can_manage_games()
+    and created_by = auth.uid()
+  )
 );
 
-create policy pair_rules_insert_captain_own_or_admin
+create policy pair_rules_insert_admin_or_captain
 on public.pair_rules
 for insert
 to authenticated
 with check (
   public.is_admin()
-  or (public.can_manage_games() and created_by = auth.uid())
+  or (
+    public.can_manage_games()
+    and created_by = auth.uid()
+  )
 );
 
-create policy pair_rules_update_own_or_admin
+create policy pair_rules_update_admin_or_own_captain
 on public.pair_rules
 for update
 to authenticated
 using (
   public.is_admin()
-  or (public.can_manage_games() and created_by = auth.uid())
+  or (
+    public.can_manage_games()
+    and created_by = auth.uid()
+  )
 )
 with check (
   public.is_admin()
-  or (public.can_manage_games() and created_by = auth.uid())
+  or (
+    public.can_manage_games()
+    and created_by = auth.uid()
+  )
 );
 
-create policy pair_rules_delete_own_or_admin
+create policy pair_rules_delete_admin_or_own_captain
 on public.pair_rules
 for delete
 to authenticated
 using (
   public.is_admin()
-  or (public.can_manage_games() and created_by = auth.uid())
+  or (
+    public.can_manage_games()
+    and created_by = auth.uid()
+  )
 );

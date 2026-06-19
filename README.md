@@ -138,31 +138,22 @@ The multi-team result update now scales K-factor across opponents so a single sa
 ## v4 changes
 
 ### Captain-owned pair rules
-Captains can now create and see their own pair rules.
+Captains can now create, view, and delete their own pair rules.
 
-- Captains can create pair rules.
-- Captains can see/remove only the pair rules they created.
-- Admins can see/manage all pair rules.
-- Guests/users cannot see or edit pair rules.
+Captains cannot see or delete other captains' pair rules.
 
-This requires the new `created_by` column and updated RLS policies in `setup_supabase.sql`.
+Admins can see and manage all pair rules.
 
-### Lock Pair restored
-The Pair Rules section now includes **Lock Pair**.
+Guests and regular users cannot see pair rules.
 
-Lock Pair creates a very strong pair rule using strength `999`, matching the local app behavior.
+### Sign-in button
+The sign-in section no longer sits open on the main page.
 
-### Sign-in moved off the main page
-The sign-in form no longer sits on the main page.
+Guests see a small **Sign in** button. Tapping it opens the sign-in form.
 
-Guests see a simple **Sign in** button in the top bar. Pressing it opens the sign-in page. The main app remains available without signing in.
+Signed-in users see **Sign out** instead.
 
 ### SQL update required
-Run the v4 `setup_supabase.sql` in Supabase even if you already ran v3. It adds `pair_rules.created_by` and replaces pair-rule policies.
+Run the new `setup_supabase.sql` again in Supabase.
 
-
-## v5 fix
-
-This version fixes the blank Sign in page.
-
-The sign-in page now uses explicit display switching instead of relying only on the shared hidden class. The top-bar Sign in button opens the form, and the Back button returns to the main app.
+The v4 SQL adds pair-rule ownership with a `created_by` column and updates Row Level Security policies.
