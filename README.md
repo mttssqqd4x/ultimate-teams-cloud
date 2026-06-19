@@ -309,3 +309,19 @@ This version adds final override logic for:
 - inactive-player attendance selection
 - present-player inclusion for inactive players marked present
 - users/guests seeing all players while still not seeing Number of Teams
+
+
+## v4.12 clean app rebuild
+
+This version replaces the broken patched `app.js` with a clean rebuilt file.
+
+Fixes:
+- restored the missing core `renderAll()` function
+- fixed captain Data page access
+- fixed inactive-player attendance marking
+- attendance now saves to the correct Supabase column: `present`
+- inactive players marked present are included in generated teams
+- users/guests can see and mark all players but cannot see Number of Teams
+- captains/admins can generate teams, clear attendance, and access Data
+- captains get limited Data tools: Edit Player name only, View Player Ratings, Download Ratings CSV
+- admins get full Data tools
