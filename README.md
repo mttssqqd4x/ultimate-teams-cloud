@@ -339,3 +339,17 @@ Changes:
   - Download Ratings CSV
 - admins also see full import/settings/reset/backup tools
 - Data page counters now update correctly
+
+
+## v4.14 Generate Teams reminder change
+
+This version changes the Generate Teams flow.
+
+Before:
+- if results were not saved, Generate Teams asked whether to save results first
+- choosing save required selecting a winner before continuing
+
+Now:
+- Generate Teams shows a reminder if the current game results are unsaved
+- it does not force saving results
+- it continues generating the next teams after the reminder

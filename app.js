@@ -854,16 +854,11 @@ function optimizeTeams(initial, repeatWeight = state.settings.repeatWeight){
 
 async function generateTeamsButton(){
   if(!canGenerateTeams()){ alert("Only captains/admins can generate teams."); return; }
+
   if(state.currentGame && !state.resultsSavedForCurrentGame){
-    const saveFirst = confirm("Current game results have not been saved. Save results before generating new teams?");
-    if(saveFirst){
-      if(state.selectedWinnerIndex === null){
-        alert("Tap the winning team first, then press Generate Teams again.");
-        return;
-      }
-      await saveResults();
-    }
+    alert("Reminder: current game results have not been saved. If you want this game to count toward season stats and Win/Loss ratings, save results before or after generating the next teams.");
   }
+
   await generateGame();
 }
 async function generateGame(){
