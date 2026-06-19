@@ -159,3 +159,10 @@ Guests see a simple **Sign in** button in the top bar. Pressing it opens the sig
 
 ### SQL update required
 Run the v4 `setup_supabase.sql` in Supabase even if you already ran v3. It adds `pair_rules.created_by` and replaces pair-rule policies.
+
+
+## v5 fix
+
+This version fixes the blank Sign in page.
+
+The sign-in page now uses explicit display switching instead of relying only on the shared hidden class. The top-bar Sign in button opens the form, and the Back button returns to the main app.
