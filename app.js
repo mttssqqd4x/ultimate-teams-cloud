@@ -24,12 +24,34 @@ function hideSignInBox(){
   }
 }
 
+function updateAuthButtons(){
+  const signedIn = !!currentUser;
+  const showSignInBtn = document.getElementById("showSignInBtn");
+  const signOutBtn = document.getElementById("signOutBtn");
+
+  if(showSignInBtn){
+    showSignInBtn.classList.toggle("hidden", signedIn);
+    showSignInBtn.style.display = signedIn ? "none" : "";
+  }
+
+  if(signOutBtn){
+    signOutBtn.classList.toggle("hidden", !signedIn);
+    signOutBtn.style.display = signedIn ? "" : "none";
+  }
+
+  if(signedIn){
+    hideSignInBox();
+  }
+}
+
+
 document.addEventListener('DOMContentLoaded',init);
 async function init(){if(!SUPABASE_URL||!SUPABASE_KEY||SUPABASE_KEY.includes('PASTE_')){setAuthMessage('Config missing. Open config.js and paste your Supabase publishable/anon key.');return}db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);const{data}=await db.auth.getSession();currentUser=data?.session?.user||null;db.auth.onAuthStateChange(async(_e,s)=>{currentUser=s?.user||null;await afterAuthChange()});await afterAuthChange()}
 function setAuthMessage(m){document.getElementById('authMessage').textContent=m}function isAdmin(){return profile?.role==='admin'}function canManageGames(){return profile?.role==='admin'||profile?.role==='captain'}function isGuestOrUser(){return !canManageGames()}
 async function signUp(){const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;if(!email||!password){setAuthMessage('Enter email and password.');return}const{error}=await db.auth.signUp({email,password});if(error){setAuthMessage(error.message);return}setAuthMessage('Account created. Check email if confirmation is enabled, then sign in.')}
 async function signIn(){const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;if(!email||!password){setAuthMessage('Enter email and password.');return}const{error}=await db.auth.signInWithPassword({email,password});if(error){setAuthMessage(error.message);return}}
-async function signOut(){await db.auth.signOut()}async function afterAuthChange(){if(currentUser)await loadProfile();else profile={role:'guest',email:'Guest'};document.getElementById('authPage').classList.toggle('hidden',!!currentUser);document.getElementById('signOutBtn').classList.toggle('hidden',!currentUser);document.getElementById('dataTabBtn').classList.toggle('hidden',!isAdmin());await loadCloudData();renderAll();showPage('main')}
+async function signOut(){await db.auth.signOut()}async function afterAuthChange(){if(currentUser)await loadProfile();else profile={role:'guest',email:'Guest'};document.getElementById('authPage').classList.toggle('hidden',!!currentUser);document.getElementById('signOutBtn').classList.toggle('hidden',!currentUser);document.getElementById('dataTabBtn').classList.toggle('hidden',!isAdmin());updateAuthButtons();
+  await loadCloudData();renderAll();showPage('main')}
 async function loadProfile(){let{data}=await db.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();if(!data){await db.from('profiles').insert({id:currentUser.id,email:currentUser.email,role:'user'});const res=await db.from('profiles').select('*').eq('id',currentUser.id).single();data=res.data}profile=data||{role:'user',email:currentUser.email}}
 function showPage(page){if(page==='data'&&!isAdmin())page='main';document.getElementById('mainPage').classList.toggle('hidden',page!=='main');document.getElementById('dataPage').classList.toggle('hidden',page!=='data'||!isAdmin());document.getElementById('stickybar').classList.toggle('hidden',page!=='main');document.getElementById('mainTabBtn').classList.toggle('tab-active',page==='main');document.getElementById('dataTabBtn').classList.toggle('tab-active',page==='data')}
 function dbPlayerToLocal(r,att){return{id:r.id,firstName:r.first_name||'',lastName:r.last_name||'',fullName:r.full_name||`${r.first_name||''} ${r.last_name||''}`.trim(),handling:Number(r.handling||0),cutting:Number(r.cutting||0),defense:Number(r.defense||0),winLossRating:Number(r.win_loss||0),active:!!r.active,injuryPct:Number(r.injury_pct||1),temporary:!!r.temporary,gamesPlayed:Number(r.games_played||0),wins:Number(r.wins||0),losses:Number(r.losses||0),attending:!!att[r.id]}}
@@ -62,7 +84,8 @@ function updateRoleVisibility(){
 function renderAll(){
   updateRoleVisibility();updateStats();updateShowInactiveButton();updateSelectOptions();renderPresentList();renderPairRules();
   updatePairRulesVisibility();renderPlayers();renderTeams();document.getElementById('saveResultsWrap').classList.toggle('hidden',!canManageGames());document.getElementById('tempPlayerBox').classList.toggle('hidden',!canManageGames());document.getElementById('pairRulesBox').classList.toggle('hidden',!isAdmin())}
-function updateStats(){document.getElementById('statPlayers').textContent=state.players.length;document.getElementById('statAttending').textContent=state.players.filter(p=>p.active&&p.attending).length;document.getElementById('userEmail').textContent=currentUser?.email||'Guest';document.getElementById('userRole').textContent=profile?.role||'guest'}
+function updateStats(){
+  updateAuthButtons();document.getElementById('statPlayers').textContent=state.players.length;document.getElementById('statAttending').textContent=state.players.filter(p=>p.active&&p.attending).length;document.getElementById('userEmail').textContent=currentUser?.email||'Guest';document.getElementById('userRole').textContent=profile?.role||'guest'}
 function updateSelectOptions(){const present=presentPlayers(),all=[...state.players].sort(comparePlayersByLastName);[['tempLike',all],['pairP1',present],['pairP2',present]].forEach(([id,arr])=>{const sel=document.getElementById(id);if(!sel)return;const old=sel.value;sel.innerHTML='<option value="">Select...</option>';arr.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.fullName;sel.appendChild(o)});sel.value=old})}
 function presentPlayers(){return state.players.filter(p=>p.active&&p.attending).sort(comparePlayersByLastName)}
 function renderPresentList(){const box=document.getElementById('presentPlayersList'),cnt=document.getElementById('presentCount'),ps=presentPlayers();cnt.textContent=String(ps.length);box.innerHTML=ps.length?'':'<div class="small">No players marked present.</div>';ps.forEach(p=>{const el=document.createElement('div');el.className='present-row';const meta=canManageGames()?`H ${p.handling.toFixed(1)} · C ${p.cutting.toFixed(1)} · D ${p.defense.toFixed(1)} · ${(p.injuryPct*100).toFixed(0)}% · W/L ${p.winLossRating.toFixed(2)}`:'Present';el.innerHTML=`<span class="present-name">${p.fullName}</span><span class="present-meta">${meta}</span>`;box.appendChild(el)})}

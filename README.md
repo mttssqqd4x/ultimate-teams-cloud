@@ -185,3 +185,11 @@ Sorting behavior:
 - then sort by last name
 - then sort by first name
 - CSV files keep their existing export format and behavior
+
+
+## v4.4 fix
+
+This version fixes the sign-in button after login:
+- Sign in button hides when a user is signed in
+- Sign out button shows when signed in
+- Sign in button returns only after signing out
