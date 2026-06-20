@@ -409,3 +409,14 @@ Changes:
   - wins, losses, win %, and Win/Loss rating
   - players with a record shown with a green circled record
   - players without a record shown without the green circle
+
+
+## v4.23 Player Tools button grid
+
+Changes:
+- Player Tools buttons are now in one clean 2×2 grid:
+  - Edit Player
+  - View Player Ratings
+  - View Win/Loss Records
+  - Download Ratings CSV
+- Buttons are equal width and wrap text cleanly on phones

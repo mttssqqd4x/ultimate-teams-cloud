@@ -33,6 +33,20 @@
     .record-pill{border:2px solid #22c55e;border-radius:999px;padding:3px 9px;font-weight:700;white-space:nowrap}
     .record-pill-no-border{padding:3px 9px;font-weight:700;white-space:nowrap}
 
+  
+    .player-tools-grid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:12px;
+      margin-top:10px;
+    }
+    .player-tools-grid button{
+      width:100%;
+      min-height:72px;
+      white-space:normal;
+      line-height:1.2;
+    }
+
   </style>
 </head>
 <body>
@@ -61,14 +75,11 @@
     <details open>
       <summary><span class="summary-title">Player Tools</span><span></span></summary>
       <div class="notice" style="margin-top:10px">Captains can edit names only. Admins can edit names and ratings.</div>
-      <div class="toolbar" style="margin-top:10px">
+      <div class="player-tools-grid">
         <button class="btn-secondary" type="button" onclick="openEditPlayerModal()">Edit Player</button>
         <button class="btn-secondary" type="button" onclick="openRatingsModal()">View Player Ratings</button>
         <button class="btn-secondary" type="button" onclick="openWinLossModal()">View Win/Loss Records</button>
-      </div>
-      <div class="toolbar" style="margin-top:10px">
         <button class="btn-secondary" type="button" onclick="downloadRatingsCsv()">Download Ratings CSV</button>
-        <span></span>
       </div>
     </details>
   </div>
