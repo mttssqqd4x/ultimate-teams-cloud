@@ -443,3 +443,12 @@ Changes:
 - account-creation section includes First Name, Last Name, Email, and Password
 - **Back to sign in** returns to the sign-in section
 - sign-in form remains hidden behind the Sign in button
+
+
+## v4.26 signed-in user pinned in attendance
+
+Changes:
+- if a signed-in user's account name matches a player name, that player is pinned to the top of the Attendance list
+- all other players stay sorted normally by last name
+- the signed-in player row gets a small **You** label
+- matching uses profile first/last/full name and Auth metadata first/last/full name

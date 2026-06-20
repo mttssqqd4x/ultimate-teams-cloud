@@ -582,6 +582,46 @@ function renderPresentList(){
   `).join("");
 }
 
+
+function normalizeNameForMatch(value){
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function currentUserFullNameForMatch(){
+  const meta = currentUser?.user_metadata || {};
+  const profileName = profile?.full_name || `${profile?.first_name || ""} ${profile?.last_name || ""}`.trim();
+  const metaName = meta.full_name || `${meta.first_name || ""} ${meta.last_name || ""}`.trim();
+  return normalizeNameForMatch(profileName || metaName);
+}
+
+function isCurrentSignedInPlayer(p){
+  if(!currentUser || !p) return false;
+
+  const userName = currentUserFullNameForMatch();
+  const playerName = normalizeNameForMatch(p.fullName || `${p.firstName || ""} ${p.lastName || ""}`.trim());
+
+  if(userName && playerName && userName === playerName) return true;
+
+  const meta = currentUser.user_metadata || {};
+  const userFirst = normalizeNameForMatch(profile?.first_name || meta.first_name);
+  const userLast = normalizeNameForMatch(profile?.last_name || meta.last_name);
+  const playerFirst = normalizeNameForMatch(p.firstName);
+  const playerLast = normalizeNameForMatch(p.lastName);
+
+  return !!(userFirst && userLast && userFirst === playerFirst && userLast === playerLast);
+}
+
+function compareAttendancePlayers(a, b){
+  const aMe = isCurrentSignedInPlayer(a);
+  const bMe = isCurrentSignedInPlayer(b);
+  if(aMe && !bMe) return -1;
+  if(!aMe && bMe) return 1;
+  return comparePlayersByLastName(a, b);
+}
+
 function renderPlayers(){
   const list = document.getElementById("playerList");
   if(!list) return;
@@ -591,7 +631,7 @@ function renderPlayers(){
   const players = [...state.players]
     .filter(p => isPlainUserOrGuest() || state.showInactive || p.active)
     .filter(p => !search || p.fullName.toLowerCase().includes(search))
-    .sort(comparePlayersByLastName);
+    .sort(compareAttendancePlayers);
 
   if(!players.length){
     list.innerHTML = '<div class="small">No players match that search.</div>';
@@ -618,7 +658,7 @@ function renderPlayers(){
 
     row.innerHTML = `
       <div>
-        <div class="player-name">${escapeHtml(p.fullName)}</div>
+        <div class="player-name">${escapeHtml(p.fullName)}${isCurrentSignedInPlayer(p) ? ' <span class="chip">You</span>' : ""}</div>
         ${!p.active ? '<div class="small">Inactive</div>' : ""}
       </div>
       ${controls}
