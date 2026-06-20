@@ -393,3 +393,19 @@ Changes:
 Important:
 - Run the updated `setup_supabase.sql` if live updates do not work yet.
 - The new SQL enables Realtime on `public.current_game`.
+
+
+## v4.22 Data page status and Win/Loss Records
+
+Changes:
+- removed the User / Role / Players / Attending status chip row from the main page
+- the status chip row now appears only on the Data page
+- added User to the Data page status chip row
+- renamed **Attendance And Player Settings** to **Attendance**
+- added a fourth Player Tools button: **View Win/Loss Records**
+- Win/Loss Records modal includes:
+  - search by player name
+  - players sorted by games played, most first
+  - wins, losses, win %, and Win/Loss rating
+  - players with a record shown with a green circled record
+  - players without a record shown without the green circle

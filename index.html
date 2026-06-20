@@ -28,6 +28,11 @@
       display: none !important;
     }
 
+  
+    .record-row{display:flex;justify-content:space-between;gap:12px;align-items:center}
+    .record-pill{border:2px solid #22c55e;border-radius:999px;padding:3px 9px;font-weight:700;white-space:nowrap}
+    .record-pill-no-border{padding:3px 9px;font-weight:700;white-space:nowrap}
+
   </style>
 </head>
 <body>
@@ -35,17 +40,17 @@
   <div class="topbar"><h1 style="margin:0;flex:1">Ultimate Teams</h1><button id="mainTabBtn" class="btn-secondary tab-active" style="width:auto" onclick="showPage('main')">Main</button><button id="dataTabBtn" class="btn-secondary" style="width:auto" onclick="showPage('data')">Data</button><button id="showSignInBtn" class="btn-secondary" style="width:auto" type="button" onclick="toggleSignInBox(event)">Sign in</button><button id="signOutBtn" class="btn-secondary hidden" style="width:auto" onclick="signOut()">Sign out</button></div>
   <div id="authPage" class="card hidden"><h2>Optional captain/admin sign in</h2><div class="notice"></div><div class="grid grid-2" style="margin-top:10px"><div><label>Email</label><input id="authEmail" type="email" placeholder="you@example.com"></div><div><label>Password</label><input id="authPassword" type="password" placeholder="password"></div></div><div class="toolbar" style="margin-top:10px"><button class="btn" onclick="signIn()">Sign in</button><button class="btn-secondary" onclick="signUp()">Create account</button></div><div id="authMessage" class="small" style="margin-top:10px"></div></div>
   <div id="mainPage">
-    <div class="card"><div class="row"><span class="chip">User: <strong id="userEmail">Guest</strong></span><span class="chip">Role: <strong id="userRole">guest</strong></span><span class="chip">Players: <strong id="statPlayers">0</strong></span><span class="chip">Attending: <strong id="statAttending">0</strong></span></div></div>
     <div class="card"><details id="teamsDetails"><summary><span class="summary-title">Current Game</span><span class="muted-inline">teams</span></summary><div id="teamsOutput" style="margin-top:10px"></div><div class="hr"></div><div class="notice" id="resultNotice"></div><div style="margin-top:10px" id="saveResultsWrap" class="hidden"><button class="btn-success" onclick="saveResults()">Save results</button>
 
         <button id="clearTeamsBtn" class="btn-danger admin-only" type="button" onclick="clearCurrentTeams()">Clear Teams</button>
 </div><div id="resultMessage" class="small" style="margin-top:8px"></div></details></div>
-    <div class="card"><details open><summary><span class="summary-title">Attendance And Player Settings</span><span></span></summary><div class="subbox"><details><summary><span class="muted-inline">Present Players</span><span class="muted-inline" id="presentCount"></span></summary><div id="presentPlayersList" class="present-list" style="margin-top:10px"></div></details></div><div class="subbox" id="tempPlayerBox"><details><summary><span class="muted-inline">Add One-Time Player</span><span></span></summary><div class="grid grid-2" style="margin-top:10px"><div><label>New Player Full Name</label><input id="tempName" placeholder="Mike Jones"></div><div><label>Rate Like</label><select id="tempLike" onchange="loadTempRatingsFromLike()"></select></div></div><div class="grid grid-3" style="margin-top:10px"><div><label>Handling</label><input id="tempHandling" type="number" step="0.1" value="3"></div><div><label>Cutting</label><input id="tempCutting" type="number" step="0.1" value="3"></div><div><label>Defense</label><input id="tempDefense" type="number" step="0.1" value="3"></div></div><div style="margin-top:10px"><button class="btn" onclick="addTempPlayer()">Add One-Time Player</button></div></details></div><div class="subbox" id="pairRulesBox"><details><summary><span class="muted-inline">Pair Rules</span><span></span></summary><div class="grid grid-4" style="margin-top:10px"><div><label>Player 1</label><select id="pairP1"></select></div><div><label>Player 2</label><select id="pairP2"></select></div><div><label>Rule</label><select id="pairType"><option value="apart">Apart</option><option value="together">Together</option></select></div><div><label>Strength</label><input id="pairStrength" type="number" min="0.1" max="5" step="0.1" value="1.0"></div></div><div style="margin-top:10px" class="section-actions"><button class="btn" onclick="addPairRule()">Add Pair Rule</button><button class="btn-secondary" onclick="lockPair()">Lock Pair</button><button class="btn-danger" onclick="clearPairRules()">Clear All Pair Rules</button></div><div id="pairRuleList" class="list" style="margin-top:10px"></div></details></div><div id="numTeamsSection" class="captain-admin-only"><div class="grid grid-1" style="margin-top:10px"><div><label>Number Of Teams</label><input id="numTeams" data-captain-admin-only="true" type="number" min="2" value="3"></div></div></div><div style="margin-top:10px" class="grid grid-2"><button id="toggleInactiveBtn" class="btn-secondary captain-admin-only" onclick="toggleShowInactive()">Show Inactive Players</button><button class="btn-warn captain-admin-only" onclick="clearAttendance()">Clear Attendance</button></div><div class="search-row" style="margin-top:10px"><div><label>Search Players</label><input id="playerSearch" type="text" placeholder="Search by name..." oninput="renderPlayers()"></div><div><label>&nbsp;</label><button class="btn-secondary" style="width:auto" onclick="clearPlayerSearch()">Clear</button></div></div><div id="playerList" class="list" style="margin-top:10px"></div></details></div>
+    <div class="card"><details open><summary><span class="summary-title">Attendance</span><span></span></summary><div class="subbox"><details><summary><span class="muted-inline">Present Players</span><span class="muted-inline" id="presentCount"></span></summary><div id="presentPlayersList" class="present-list" style="margin-top:10px"></div></details></div><div class="subbox" id="tempPlayerBox"><details><summary><span class="muted-inline">Add One-Time Player</span><span></span></summary><div class="grid grid-2" style="margin-top:10px"><div><label>New Player Full Name</label><input id="tempName" placeholder="Mike Jones"></div><div><label>Rate Like</label><select id="tempLike" onchange="loadTempRatingsFromLike()"></select></div></div><div class="grid grid-3" style="margin-top:10px"><div><label>Handling</label><input id="tempHandling" type="number" step="0.1" value="3"></div><div><label>Cutting</label><input id="tempCutting" type="number" step="0.1" value="3"></div><div><label>Defense</label><input id="tempDefense" type="number" step="0.1" value="3"></div></div><div style="margin-top:10px"><button class="btn" onclick="addTempPlayer()">Add One-Time Player</button></div></details></div><div class="subbox" id="pairRulesBox"><details><summary><span class="muted-inline">Pair Rules</span><span></span></summary><div class="grid grid-4" style="margin-top:10px"><div><label>Player 1</label><select id="pairP1"></select></div><div><label>Player 2</label><select id="pairP2"></select></div><div><label>Rule</label><select id="pairType"><option value="apart">Apart</option><option value="together">Together</option></select></div><div><label>Strength</label><input id="pairStrength" type="number" min="0.1" max="5" step="0.1" value="1.0"></div></div><div style="margin-top:10px" class="section-actions"><button class="btn" onclick="addPairRule()">Add Pair Rule</button><button class="btn-secondary" onclick="lockPair()">Lock Pair</button><button class="btn-danger" onclick="clearPairRules()">Clear All Pair Rules</button></div><div id="pairRuleList" class="list" style="margin-top:10px"></div></details></div><div id="numTeamsSection" class="captain-admin-only"><div class="grid grid-1" style="margin-top:10px"><div><label>Number Of Teams</label><input id="numTeams" data-captain-admin-only="true" type="number" min="2" value="3"></div></div></div><div style="margin-top:10px" class="grid grid-2"><button id="toggleInactiveBtn" class="btn-secondary captain-admin-only" onclick="toggleShowInactive()">Show Inactive Players</button><button class="btn-warn captain-admin-only" onclick="clearAttendance()">Clear Attendance</button></div><div class="search-row" style="margin-top:10px"><div><label>Search Players</label><input id="playerSearch" type="text" placeholder="Search by name..." oninput="renderPlayers()"></div><div><label>&nbsp;</label><button class="btn-secondary" style="width:auto" onclick="clearPlayerSearch()">Clear</button></div></div><div id="playerList" class="list" style="margin-top:10px"></div></details></div>
   </div>
   
 <div id="dataPage" style="display:none">
   <div class="card">
     <div class="row">
+      <span class="chip">User: <strong id="userEmailData">Guest</strong></span>
       <span class="chip">Players: <strong id="statPlayersData">0</strong></span>
       <span class="chip">Attending: <strong id="statAttendingData">0</strong></span>
       <span class="chip">Role: <strong id="statRoleData">guest</strong></span>
@@ -59,6 +64,7 @@
       <div class="toolbar" style="margin-top:10px">
         <button class="btn-secondary" type="button" onclick="openEditPlayerModal()">Edit Player</button>
         <button class="btn-secondary" type="button" onclick="openRatingsModal()">View Player Ratings</button>
+        <button class="btn-secondary" type="button" onclick="openWinLossModal()">View Win/Loss Records</button>
       </div>
       <div class="toolbar" style="margin-top:10px">
         <button class="btn-secondary" type="button" onclick="downloadRatingsCsv()">Download Ratings CSV</button>
@@ -210,6 +216,23 @@
   </div>
 </div>
 
+
+
+<div id="winLossModal" class="modal-backdrop" onclick="closeModal(event, 'winLossModal')">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="margin:0">Win/Loss Records</h2>
+      <button class="btn-secondary" style="width:auto" onclick="hideModal('winLossModal')">Close</button>
+    </div>
+    <div class="small" style="margin-top:10px">Sorted by games played, most first. Players with a record are circled in green.</div>
+    <div class="toolbar-3" style="margin-top:10px">
+      <input id="winLossSearch" placeholder="Search players..." oninput="openWinLossModal(false)">
+      <span></span>
+      <button class="btn-secondary" style="width:auto" onclick="clearModalSearch('winLossSearch'); openWinLossModal(false)">Clear</button>
+    </div>
+    <div id="winLossModalContent" style="margin-top:10px"></div>
+  </div>
+</div>
 
 <div class="stickybar" id="stickybar"><div class="inner"><button type="button" class="btn-success" onclick="generateTeamsButton()">Generate Teams</button></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="app.js"></script>

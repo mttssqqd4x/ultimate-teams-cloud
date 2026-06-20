@@ -295,6 +295,7 @@ function updateStats(){
   const setText = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = String(val); };
 
   setText("userEmail", currentUser?.email || "Guest");
+  setText("userEmailData", currentUser?.email || "Guest");
   setText("userRole", role);
   setText("statPlayers", playerCount);
   setText("statAttending", attendingCount);
@@ -1446,8 +1447,50 @@ function clearModalSearch(id){
   if(el) el.value = "";
 }
 function hideAllModals(){
-  ["ratingsModal", "editPlayerModal"].forEach(hideModal);
+  ["ratingsModal", "editPlayerModal", "winLossModal"].forEach(hideModal);
 }
+
+function openWinLossModal(show = true){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+
+  const content = document.getElementById("winLossModalContent");
+  if(!content) return;
+
+  const search = (document.getElementById("winLossSearch")?.value || "").trim().toLowerCase();
+
+  const players = [...state.players]
+    .filter(p => !search || p.fullName.toLowerCase().includes(search))
+    .sort((a, b) => {
+      const games = Number(b.gamesPlayed || 0) - Number(a.gamesPlayed || 0);
+      if(games) return games;
+      const wins = Number(b.wins || 0) - Number(a.wins || 0);
+      if(wins) return wins;
+      return comparePlayersByLastName(a, b);
+    });
+
+  content.innerHTML = players.length ? players.map((p, i) => {
+    const games = Number(p.gamesPlayed || 0);
+    const wins = Number(p.wins || 0);
+    const losses = Number(p.losses || 0);
+    const winPct = games ? ((wins / games) * 100).toFixed(1) + "%" : "No record";
+    const badgeClass = games ? "record-pill" : "record-pill-no-border";
+
+    return `
+      <div class="player">
+        <div class="record-row" style="width:100%">
+          <div>
+            <div class="player-name">${i + 1}. ${escapeHtml(p.fullName)}</div>
+            <div class="small">Games ${games} · Wins ${wins} · Losses ${losses} · Win % ${winPct} · W/L Rating ${Number(p.winLossRating || 0).toFixed(2)}</div>
+          </div>
+          <div class="${badgeClass}">${wins}-${losses}</div>
+        </div>
+      </div>
+    `;
+  }).join("") : '<div class="small">No players match that search.</div>';
+
+  if(show) showModal("winLossModal");
+}
+
 function openRatingsModal(show = true){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
   const content = document.getElementById("ratingsModalContent");
