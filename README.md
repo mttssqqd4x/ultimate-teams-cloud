@@ -452,3 +452,13 @@ Changes:
 - all other players stay sorted normally by last name
 - the signed-in player row gets a small **You** label
 - matching uses profile first/last/full name and Auth metadata first/last/full name
+
+
+## v4.27 confirmation messaging cleanup
+
+Changes:
+- after creating an account, the app now shows a clear **Check your email** popup
+- the auth message also stays visible after the account is created
+- the account-confirmed popup button now says **Continue**
+- **Continue** only closes the popup; it no longer opens the sign-in section
+- updated account-confirmed wording for cases where Supabase already signs the user in after confirmation

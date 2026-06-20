@@ -257,6 +257,13 @@ function updateAuthButtons(){
   }
   if(signedIn) hideSignInBox();
 }
+
+function showCheckEmailMessage(email){
+  const line = document.getElementById("checkEmailAddressLine");
+  if(line) line.textContent = email ? `Confirmation email sent to ${email}.` : "";
+  showModal("checkEmailModal");
+}
+
 async function signUp(){
   const firstName = (document.getElementById("authFirstName")?.value || "").trim();
   const lastName = (document.getElementById("authLastName")?.value || "").trim();
@@ -289,10 +296,11 @@ async function signUp(){
 
   if(error){ setAuthMessage(error.message); return; }
 
-  setAuthMessage("Account created. Check your email to confirm your account, then return to the app and sign in.");
   showSignInSection();
   const signInEmail = document.getElementById("authEmail");
   if(signInEmail) signInEmail.value = email;
+  setAuthMessage("Account created. Check your email to confirm your account, then return to the app and sign in.");
+  showCheckEmailMessage(email);
 }
 async function signIn(){
   const email = document.getElementById("authEmail")?.value.trim();
@@ -1625,6 +1633,7 @@ function clearModalSearch(id){
 }
 function hideAllModals(){
   ["ratingsModal", "editPlayerModal", "winLossModal"].forEach(hideModal);
+  hideModal("checkEmailModal");
 }
 
 function openWinLossModal(show = true){
