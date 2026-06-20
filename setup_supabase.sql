@@ -220,3 +220,13 @@ using (
 with check (
   public.is_admin() or public.can_manage_games()
 );
+
+
+-- v4.21: Enable live current-game updates for all clients.
+-- Run this once in Supabase SQL Editor if teams do not update live across devices.
+do $$
+begin
+  alter publication supabase_realtime add table public.current_game;
+exception
+  when duplicate_object then null;
+end $$;

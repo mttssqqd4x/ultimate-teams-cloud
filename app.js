@@ -6,6 +6,8 @@ const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY
 let db = null;
 let currentUser = null;
 let profile = { role: "guest", email: "Guest" };
+let currentGameChannel = null;
+let liveRefreshTimer = null;
 
 const state = {
   players: [],
@@ -42,6 +44,8 @@ async function init(){
 
   db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  subscribeToCurrentGameUpdates();
+
   const { data } = await db.auth.getSession();
   currentUser = data?.session?.user || null;
 
@@ -51,6 +55,35 @@ async function init(){
   });
 
   await afterAuthChange();
+}
+
+
+function subscribeToCurrentGameUpdates(){
+  if(!db || currentGameChannel) return;
+
+  currentGameChannel = db
+    .channel("current-game-live")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "current_game", filter: "id=eq.main" },
+      () => scheduleLiveRefresh()
+    )
+    .subscribe(status => {
+      console.log("Current game live updates:", status);
+    });
+}
+
+function scheduleLiveRefresh(){
+  if(liveRefreshTimer) clearTimeout(liveRefreshTimer);
+
+  liveRefreshTimer = setTimeout(async () => {
+    try{
+      await loadCloudData();
+      renderAll();
+    }catch(e){
+      console.warn("Live refresh failed", e);
+    }
+  }, 150);
 }
 
 async function afterAuthChange(){
@@ -961,21 +994,18 @@ async function clearCurrentTeams(){
   state.selectedWinnerIndex = null;
   state.resultsSavedForCurrentGame = false;
 
-  const { error } = await db.from("current_game").delete().eq("id", "main");
+  const { error } = await db.from("current_game").upsert({
+    id: "main",
+    teams: [],
+    selected_winner_index: null,
+    results_saved: true,
+    generated_at: new Date().toISOString(),
+    updated_by: currentUser?.id || null
+  }, { onConflict: "id" });
+
   if(error){
-    console.warn("Could not delete current_game row, trying blank update", error);
-    const fallback = await db.from("current_game").upsert({
-      id: "main",
-      teams: null,
-      selected_winner_index: null,
-      results_saved: false,
-      generated_at: null,
-      updated_by: currentUser?.id || null
-    });
-    if(fallback.error){
-      alert("Could not clear teams: " + fallback.error.message);
-      return;
-    }
+    alert("Could not clear teams: " + error.message);
+    return;
   }
 
   renderAll();

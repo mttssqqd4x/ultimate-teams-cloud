@@ -379,3 +379,17 @@ Changes:
 - generated teams section opens automatically when teams exist
 - added an admin-only **Clear Teams** button
 - clearing teams does not change attendance, player ratings, or stats
+
+
+## v4.21 live team updates and guest clear-state fix
+
+Changes:
+- Clear Teams now writes an empty `teams: []` current-game row instead of deleting the row
+- guests/users can read that cleared state after refresh
+- added Supabase Realtime subscription for `current_game`
+- when an admin clears teams, guests/users should see the Current Game section collapse without refreshing
+- when a captain/admin generates new teams, everyone should see the teams update without refreshing
+
+Important:
+- Run the updated `setup_supabase.sql` if live updates do not work yet.
+- The new SQL enables Realtime on `public.current_game`.
