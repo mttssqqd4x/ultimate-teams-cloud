@@ -57,8 +57,40 @@
 <body>
 <div class="app">
   <div class="topbar"><h1 style="margin:0;flex:1">Ultimate Teams</h1><button id="mainTabBtn" class="btn-secondary tab-active" style="width:auto" onclick="showPage('main')">Main</button><button id="dataTabBtn" class="btn-secondary" style="width:auto" onclick="showPage('data')">Data</button><button id="showSignInBtn" class="btn-secondary" style="width:auto" type="button" onclick="toggleSignInBox(event)">Sign in</button><button id="signOutBtn" class="btn-secondary hidden" style="width:auto" onclick="signOut()">Sign out</button></div>
-  <div id="authPage" class="card hidden"><h2>Optional captain/admin sign in</h2><div class="notice"></div><div class="grid grid-2" style="margin-top:10px"><div><label>First Name <span class="small">(new accounts)</span></label><input id="authFirstName" placeholder="First"></div><div><label>Last Name <span class="small">(new accounts)</span></label><input id="authLastName" placeholder="Last"></div></div>
-      <div class="grid grid-2" style="margin-top:10px"><div><label>Email</label><input id="authEmail" type="email" placeholder="you@example.com"></div><div><label>Password</label><input id="authPassword" type="password" placeholder="password"></div></div><div class="toolbar" style="margin-top:10px"><button class="btn" onclick="signIn()">Sign in</button><button class="btn-secondary" onclick="signUp()">Create account</button></div><div id="authMessage" class="small" style="margin-top:10px"></div></div>
+  <div id="authPage" class="card hidden" style="display:none">
+    <div id="authSignInSection">
+      <h2>Sign in</h2>
+      <div class="small">Guests can view the current game. Create an account or sign in to mark attendance. Captains can generate teams, save results, view data, and use tools.</div>
+      <div class="grid grid-2" style="margin-top:10px">
+        <div><label>Email</label><input id="authEmail" type="email" placeholder="you@example.com"></div>
+        <div><label>Password</label><input id="authPassword" type="password" placeholder="password"></div>
+      </div>
+      <div class="toolbar" style="margin-top:10px">
+        <button class="btn" type="button" onclick="signIn()">Sign in</button>
+        <button class="btn-secondary" type="button" onclick="showCreateAccountSection()">Create account</button>
+      </div>
+    </div>
+
+    <div id="authCreateAccountSection" class="hidden" style="display:none">
+      <h2>Create account</h2>
+      <div class="small">Enter your name, email, and password. You will need to confirm your email before signing in.</div>
+      <div class="grid grid-2" style="margin-top:10px">
+        <div><label>First Name</label><input id="authFirstName" placeholder="First"></div>
+        <div><label>Last Name</label><input id="authLastName" placeholder="Last"></div>
+      </div>
+      <div class="grid grid-2" style="margin-top:10px">
+        <div><label>Email</label><input id="authSignupEmail" type="email" placeholder="you@example.com"></div>
+        <div><label>Password</label><input id="authSignupPassword" type="password" placeholder="password"></div>
+      </div>
+      <div class="toolbar" style="margin-top:10px">
+        <button class="btn" type="button" onclick="signUp()">Create account</button>
+        <button class="btn-secondary" type="button" onclick="showSignInSection()">Back to sign in</button>
+      </div>
+    </div>
+
+    <div id="authMessage" class="small" style="margin-top:10px"></div>
+  </div>
+  
   <div id="mainPage">
     <div class="card"><details id="teamsDetails"><summary><span class="summary-title">Current Game</span><span class="muted-inline">teams</span></summary><div id="teamsOutput" style="margin-top:10px"></div><div class="hr"></div><div class="notice" id="resultNotice"></div><div style="margin-top:10px" id="saveResultsWrap" class="hidden"><button class="btn-success" onclick="saveResults()">Save results</button>
 

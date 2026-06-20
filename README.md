@@ -432,3 +432,14 @@ Changes:
 - Create Account now requires First Name and Last Name
 - first/last/full name are sent to Supabase Auth user metadata
 - setup SQL adds optional profile name columns
+
+
+## v4.25 cleaner sign-in/create-account flow
+
+Changes:
+- sign-in section title is now **Sign in**
+- First Name and Last Name no longer appear in the normal sign-in view
+- **Create account** switches to a separate account-creation section
+- account-creation section includes First Name, Last Name, Email, and Password
+- **Back to sign in** returns to the sign-in section
+- sign-in form remains hidden behind the Sign in button

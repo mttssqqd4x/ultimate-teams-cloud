@@ -174,6 +174,44 @@ function setAuthMessage(msg){
   const el = document.getElementById("authMessage");
   if(el) el.textContent = msg || "";
 }
+
+function showSignInSection(){
+  const signIn = document.getElementById("authSignInSection");
+  const create = document.getElementById("authCreateAccountSection");
+  if(signIn){
+    signIn.classList.remove("hidden");
+    signIn.style.display = "block";
+  }
+  if(create){
+    create.classList.add("hidden");
+    create.style.display = "none";
+  }
+  setAuthMessage("");
+}
+
+function showCreateAccountSection(){
+  const signIn = document.getElementById("authSignInSection");
+  const create = document.getElementById("authCreateAccountSection");
+  if(signIn){
+    signIn.classList.add("hidden");
+    signIn.style.display = "none";
+  }
+  if(create){
+    create.classList.remove("hidden");
+    create.style.display = "block";
+  }
+
+  const signInEmail = document.getElementById("authEmail")?.value || "";
+  const signInPassword = document.getElementById("authPassword")?.value || "";
+  const signupEmail = document.getElementById("authSignupEmail");
+  const signupPassword = document.getElementById("authSignupPassword");
+  if(signupEmail && !signupEmail.value) signupEmail.value = signInEmail;
+  if(signupPassword && !signupPassword.value) signupPassword.value = signInPassword;
+
+  setAuthMessage("");
+  setTimeout(() => document.getElementById("authFirstName")?.focus(), 50);
+}
+
 function toggleSignInBox(event){
   if(event?.preventDefault) event.preventDefault();
   const box = document.getElementById("authPage");
@@ -181,7 +219,10 @@ function toggleSignInBox(event){
   const show = box.classList.contains("hidden") || box.style.display === "none";
   box.classList.toggle("hidden", !show);
   box.style.display = show ? "block" : "none";
-  if(show) setTimeout(() => document.getElementById("authEmail")?.focus(), 50);
+  if(show){
+    showSignInSection();
+    setTimeout(() => document.getElementById("authEmail")?.focus(), 50);
+  }
   return false;
 }
 function hideSignInBox(){
@@ -189,6 +230,16 @@ function hideSignInBox(){
   if(box){
     box.classList.add("hidden");
     box.style.display = "none";
+  }
+  const signIn = document.getElementById("authSignInSection");
+  const create = document.getElementById("authCreateAccountSection");
+  if(signIn){
+    signIn.classList.remove("hidden");
+    signIn.style.display = "block";
+  }
+  if(create){
+    create.classList.add("hidden");
+    create.style.display = "none";
   }
 }
 function updateAuthButtons(){
@@ -209,8 +260,8 @@ function updateAuthButtons(){
 async function signUp(){
   const firstName = (document.getElementById("authFirstName")?.value || "").trim();
   const lastName = (document.getElementById("authLastName")?.value || "").trim();
-  const email = document.getElementById("authEmail")?.value.trim();
-  const password = document.getElementById("authPassword")?.value;
+  const email = document.getElementById("authSignupEmail")?.value.trim();
+  const password = document.getElementById("authSignupPassword")?.value;
 
   if(!firstName || !lastName){
     setAuthMessage("Enter first and last name to create an account.");
@@ -239,6 +290,9 @@ async function signUp(){
   if(error){ setAuthMessage(error.message); return; }
 
   setAuthMessage("Account created. Check your email to confirm your account, then return to the app and sign in.");
+  showSignInSection();
+  const signInEmail = document.getElementById("authEmail");
+  if(signInEmail) signInEmail.value = email;
 }
 async function signIn(){
   const email = document.getElementById("authEmail")?.value.trim();
