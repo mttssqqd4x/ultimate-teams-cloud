@@ -420,3 +420,15 @@ Changes:
   - View Win/Loss Records
   - Download Ratings CSV
 - Buttons are equal width and wrap text cleanly on phones
+
+
+## v4.24 auth redirect, guest/user split, and account names
+
+Changes:
+- sign-up confirmation redirects to `https://nmultimateteams.app`
+- app handles Supabase confirmation links and shows an account-confirmed thank-you popup
+- guests can only view the Current Game section
+- users must create an account/sign in before marking attendance
+- Create Account now requires First Name and Last Name
+- first/last/full name are sent to Supabase Auth user metadata
+- setup SQL adds optional profile name columns

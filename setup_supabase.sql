@@ -230,3 +230,9 @@ begin
 exception
   when duplicate_object then null;
 end $$;
+
+
+-- v4.24: optional profile name fields for account-created first/last name.
+alter table public.profiles add column if not exists first_name text;
+alter table public.profiles add column if not exists last_name text;
+alter table public.profiles add column if not exists full_name text;

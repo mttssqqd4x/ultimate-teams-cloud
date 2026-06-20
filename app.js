@@ -2,6 +2,7 @@
 const CONFIG = window.ULTIMATE_TEAMS_CONFIG || {};
 const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
+const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 
 let db = null;
 let currentUser = null;
@@ -32,6 +33,33 @@ const state = {
 
 document.addEventListener("DOMContentLoaded", init);
 
+
+async function completeAuthRedirectIfNeeded(){
+  const params = new URLSearchParams(window.location.search || "");
+  const hash = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
+  const hasAuthCode = !!params.get("code");
+  const hasHashToken = !!hash.get("access_token") || !!hash.get("refresh_token");
+  const authType = params.get("type") || hash.get("type") || "";
+
+  if(hasAuthCode && db?.auth?.exchangeCodeForSession){
+    const { error } = await db.auth.exchangeCodeForSession(params.get("code"));
+    if(error) console.warn("Auth confirmation exchange failed", error);
+  }
+
+  if(hasAuthCode || hasHashToken || authType === "signup"){
+    try{
+      window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
+    }catch(e){}
+
+    setTimeout(() => showAuthConfirmedMessage(), 300);
+  }
+}
+
+function showAuthConfirmedMessage(){
+  const modal = document.getElementById("authConfirmedModal");
+  if(modal) showModal("authConfirmedModal");
+}
+
 async function init(){
   hideSignInBox();
   hideAllModals();
@@ -45,6 +73,7 @@ async function init(){
   db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   subscribeToCurrentGameUpdates();
+  await completeAuthRedirectIfNeeded();
 
   const { data } = await db.auth.getSession();
   currentUser = data?.session?.user || null;
@@ -104,7 +133,20 @@ async function loadProfile(){
   }
 
   if(!data){
-    await db.from("profiles").insert({ id: currentUser.id, email: currentUser.email, role: "user" });
+    const meta = currentUser.user_metadata || {};
+    const basePayload = { id: currentUser.id, email: currentUser.email, role: "user" };
+    const extendedPayload = {
+      ...basePayload,
+      first_name: meta.first_name || "",
+      last_name: meta.last_name || "",
+      full_name: meta.full_name || `${meta.first_name || ""} ${meta.last_name || ""}`.trim()
+    };
+
+    let insertRes = await db.from("profiles").insert(extendedPayload);
+    if(insertRes.error){
+      insertRes = await db.from("profiles").insert(basePayload);
+    }
+
     const res = await db.from("profiles").select("*").eq("id", currentUser.id).maybeSingle();
     profile = res.data || { role: "user", email: currentUser.email };
     return;
@@ -125,6 +167,8 @@ function canManageGames(){ return isCaptainOrAdmin(); }
 function canAccessDataPage(){ return isCaptainOrAdmin(); }
 function canGenerateTeams(){ return isCaptainOrAdmin(); }
 function isPlainUserOrGuest(){ return !isCaptainOrAdmin(); }
+function canMarkAttendance(){ return !!currentUser; }
+function isGuest(){ return !currentUser; }
 
 function setAuthMessage(msg){
   const el = document.getElementById("authMessage");
@@ -163,12 +207,38 @@ function updateAuthButtons(){
   if(signedIn) hideSignInBox();
 }
 async function signUp(){
+  const firstName = (document.getElementById("authFirstName")?.value || "").trim();
+  const lastName = (document.getElementById("authLastName")?.value || "").trim();
   const email = document.getElementById("authEmail")?.value.trim();
   const password = document.getElementById("authPassword")?.value;
-  if(!email || !password){ setAuthMessage("Enter email and password."); return; }
-  const { error } = await db.auth.signUp({ email, password });
+
+  if(!firstName || !lastName){
+    setAuthMessage("Enter first and last name to create an account.");
+    return;
+  }
+  if(!email || !password){
+    setAuthMessage("Enter email and password.");
+    return;
+  }
+
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  const { error } = await db.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: APP_AUTH_REDIRECT_URL,
+      data: {
+        first_name: firstName,
+        last_name: lastName,
+        full_name: fullName
+      }
+    }
+  });
+
   if(error){ setAuthMessage(error.message); return; }
-  setAuthMessage("Account created. Check email if confirmation is enabled, then sign in.");
+
+  setAuthMessage("Account created. Check your email to confirm your account, then return to the app and sign in.");
 }
 async function signIn(){
   const email = document.getElementById("authEmail")?.value.trim();
@@ -374,6 +444,12 @@ function updateRoleVisibility(){
     sticky.classList.toggle("hidden", !show);
     sticky.style.display = show ? "" : "none";
   }
+  document.querySelectorAll(".signed-in-only").forEach(el => {
+    const showSignedIn = !!currentUser;
+    el.classList.toggle("hidden", !showSignedIn);
+    el.style.display = showSignedIn ? "" : "none";
+  });
+
   document.body.classList.add("role-ready");
 }
 
@@ -455,6 +531,7 @@ function renderPresentList(){
 function renderPlayers(){
   const list = document.getElementById("playerList");
   if(!list) return;
+  if(isGuest()){ list.innerHTML = '<div class="small">Sign in to mark attendance.</div>'; return; }
 
   const search = (document.getElementById("playerSearch")?.value || "").trim().toLowerCase();
   const players = [...state.players]
@@ -497,6 +574,12 @@ function renderPlayers(){
 }
 
 async function toggleAttendance(id){
+  if(!canMarkAttendance()){
+    alert("Create an account or sign in to mark attendance.");
+    toggleSignInBox();
+    return;
+  }
+
   const p = playerById(id);
   if(!p) return;
 
