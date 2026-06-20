@@ -366,3 +366,16 @@ Changes:
   - **No, go back**
   - **Yes, continue**
 - choosing Yes still saves teammate pairings only and generates the next teams without recording results
+
+
+## v4.20 protected-tool flash fix and teams collapse
+
+Changes:
+- includes the required `app.js` file in the ZIP package
+- admin/captain-only tools are hidden by CSS before JavaScript finishes loading
+- this prevents guests from briefly seeing admin settings/tools on first load
+- JavaScript adds a `role-ready` class only after role visibility has been applied
+- generated teams section is collapsed on initial load when no teams exist
+- generated teams section opens automatically when teams exist
+- added an admin-only **Clear Teams** button
+- clearing teams does not change attendance, player ratings, or stats

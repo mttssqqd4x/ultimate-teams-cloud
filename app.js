@@ -218,7 +218,7 @@ async function loadCloudData(){
     };
   }
 
-  if(gameRes.data?.teams){
+  if(gameRes.data?.teams && Array.isArray(gameRes.data.teams) && gameRes.data.teams.length){
     state.currentGame = hydrateGame(gameRes.data.teams);
     state.selectedWinnerIndex = gameRes.data.selected_winner_index;
     state.resultsSavedForCurrentGame = !!gameRes.data.results_saved;
@@ -251,6 +251,7 @@ function renderAll(){
   renderPlayers();
   renderTeams();
   syncSettingsForm();
+  updateTeamsDetailsOpenState();
 }
 
 function updateStats(){
@@ -339,6 +340,7 @@ function updateRoleVisibility(){
     sticky.classList.toggle("hidden", !show);
     sticky.style.display = show ? "" : "none";
   }
+  document.body.classList.add("role-ready");
 }
 
 function showPage(page){
@@ -901,9 +903,7 @@ async function generateTeamsButton(){
 
   if(state.currentGame && !state.resultsSavedForCurrentGame){
     const continueWithoutResults = await confirmContinueWithoutResults();
-
     if(!continueWithoutResults) return;
-
     await savePairingsOnlyForCurrentGame();
   }
 
@@ -930,6 +930,7 @@ async function generateGame(){
   state.resultsSavedForCurrentGame = false;
   await saveCurrentGameToDb(false);
   renderAll();
+  updateTeamsDetailsOpenState();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 function serializableTeams(){
@@ -946,6 +947,47 @@ async function saveCurrentGameToDb(saved){
   });
   if(error) alert(error.message);
 }
+
+
+async function clearCurrentTeams(){
+  if(!isAdmin()){ alert("Admin only."); return; }
+  if(!state.currentGame){
+    alert("There are no generated teams to clear.");
+    return;
+  }
+  if(!confirm("Clear the currently generated teams? This does not change player ratings or attendance.")) return;
+
+  state.currentGame = null;
+  state.selectedWinnerIndex = null;
+  state.resultsSavedForCurrentGame = false;
+
+  const { error } = await db.from("current_game").delete().eq("id", "main");
+  if(error){
+    console.warn("Could not delete current_game row, trying blank update", error);
+    const fallback = await db.from("current_game").upsert({
+      id: "main",
+      teams: null,
+      selected_winner_index: null,
+      results_saved: false,
+      generated_at: null,
+      updated_by: currentUser?.id || null
+    });
+    if(fallback.error){
+      alert("Could not clear teams: " + fallback.error.message);
+      return;
+    }
+  }
+
+  renderAll();
+  updateTeamsDetailsOpenState();
+}
+
+function updateTeamsDetailsOpenState(){
+  const details = document.getElementById("teamsDetails");
+  if(!details) return;
+  details.open = !!state.currentGame;
+}
+
 function renderTeams(){
   const out = document.getElementById("teamsOutput");
   const resultMessage = document.getElementById("resultMessage");
