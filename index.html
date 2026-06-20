@@ -277,22 +277,6 @@
 
 
 
-<div id="checkEmailModal" class="modal-backdrop" onclick="closeModal(event, 'checkEmailModal')">
-  <div class="modal-card" onclick="event.stopPropagation()">
-    <div class="row" style="justify-content:space-between;align-items:center">
-      <h2 style="margin:0">Check your email</h2>
-      <button class="btn-secondary" style="width:auto" onclick="hideModal('checkEmailModal')">Close</button>
-    </div>
-    <div class="notice" style="margin-top:12px;line-height:1.45">
-      Account created. Please check your email and click the confirmation link before signing in.
-    </div>
-    <div class="small" id="checkEmailAddressLine" style="margin-top:10px"></div>
-    <div style="margin-top:14px">
-      <button class="btn" onclick="hideModal('checkEmailModal')">Continue</button>
-    </div>
-  </div>
-</div>
-
 <div id="authConfirmedModal" class="modal-backdrop" onclick="closeModal(event, 'authConfirmedModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
     <div class="row" style="justify-content:space-between;align-items:center">
@@ -302,8 +286,9 @@
     <div class="notice" style="margin-top:12px;line-height:1.45">
       Thank you for confirming your account. You can continue using the app and mark attendance.
     </div>
+    <div class="small" style="margin-top:10px">If this opened in a new tab, you can continue here or return to your original app tab.</div>
     <div style="margin-top:14px">
-      <button class="btn" onclick="hideModal(\'authConfirmedModal\')">Continue</button>
+      <button class="btn" type="button" onclick="hideModal('authConfirmedModal')">Continue</button>
     </div>
   </div>
 </div>

@@ -462,3 +462,14 @@ Changes:
 - the account-confirmed popup button now says **Continue**
 - **Continue** only closes the popup; it no longer opens the sign-in section
 - updated account-confirmed wording for cases where Supabase already signs the user in after confirmation
+
+
+## v4.28 confirmation-message cleanup and new-tab handling
+
+Changes:
+- removed the extra **Check your email** popup
+- account-created/check-email message remains in the sign-in section
+- fixed the confirmation popup **Continue** button so it closes the popup
+- confirmation popup now includes a note for cases where the email opens in a new tab
+- added cross-tab auth confirmation refresh using localStorage/BroadcastChannel
+  - if the confirmation opens in a second tab, the original app tab can refresh its auth state automatically

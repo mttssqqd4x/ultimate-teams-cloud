@@ -34,6 +34,43 @@ const state = {
 document.addEventListener("DOMContentLoaded", init);
 
 
+
+function notifyOtherTabsAuthConfirmed(){
+  try{
+    localStorage.setItem("ultimateTeamsAuthConfirmedAt", String(Date.now()));
+    window.dispatchEvent(new StorageEvent("storage", { key: "ultimateTeamsAuthConfirmedAt", newValue: String(Date.now()) }));
+  }catch(e){}
+  try{
+    const channel = new BroadcastChannel("ultimate-teams-auth");
+    channel.postMessage({ type: "auth-confirmed", at: Date.now() });
+    channel.close();
+  }catch(e){}
+}
+
+function listenForAuthConfirmedFromOtherTab(){
+  const handle = async () => {
+    try{
+      const { data } = await db.auth.getSession();
+      currentUser = data?.session?.user || currentUser;
+      await afterAuthChange();
+      showAuthConfirmedMessage();
+    }catch(e){
+      console.warn("Auth confirmed refresh failed", e);
+    }
+  };
+
+  window.addEventListener("storage", e => {
+    if(e.key === "ultimateTeamsAuthConfirmedAt") handle();
+  });
+
+  try{
+    const channel = new BroadcastChannel("ultimate-teams-auth");
+    channel.onmessage = e => {
+      if(e.data?.type === "auth-confirmed") handle();
+    };
+  }catch(e){}
+}
+
 async function completeAuthRedirectIfNeeded(){
   const params = new URLSearchParams(window.location.search || "");
   const hash = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
@@ -51,6 +88,7 @@ async function completeAuthRedirectIfNeeded(){
       window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
     }catch(e){}
 
+    notifyOtherTabsAuthConfirmed();
     setTimeout(() => showAuthConfirmedMessage(), 300);
   }
 }
@@ -73,6 +111,7 @@ async function init(){
   db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   subscribeToCurrentGameUpdates();
+  listenForAuthConfirmedFromOtherTab();
   await completeAuthRedirectIfNeeded();
 
   const { data } = await db.auth.getSession();
@@ -258,12 +297,6 @@ function updateAuthButtons(){
   if(signedIn) hideSignInBox();
 }
 
-function showCheckEmailMessage(email){
-  const line = document.getElementById("checkEmailAddressLine");
-  if(line) line.textContent = email ? `Confirmation email sent to ${email}.` : "";
-  showModal("checkEmailModal");
-}
-
 async function signUp(){
   const firstName = (document.getElementById("authFirstName")?.value || "").trim();
   const lastName = (document.getElementById("authLastName")?.value || "").trim();
@@ -300,7 +333,6 @@ async function signUp(){
   const signInEmail = document.getElementById("authEmail");
   if(signInEmail) signInEmail.value = email;
   setAuthMessage("Account created. Check your email to confirm your account, then return to the app and sign in.");
-  showCheckEmailMessage(email);
 }
 async function signIn(){
   const email = document.getElementById("authEmail")?.value.trim();
@@ -1633,7 +1665,6 @@ function clearModalSearch(id){
 }
 function hideAllModals(){
   ["ratingsModal", "editPlayerModal", "winLossModal"].forEach(hideModal);
-  hideModal("checkEmailModal");
 }
 
 function openWinLossModal(show = true){
