@@ -14,7 +14,7 @@
     .modal-backdrop.modal-open{display:flex!important}
     #editPlayerDetailsModal{z-index:10050}
     .modal-card{width:min(760px,100%);max-height:85vh;overflow:auto;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px}
-    .edit-player-choice{width:100%;text-align:left;background:rgba(255,255,255,.03);color:inherit;border:1px solid var(--border);cursor:pointer;font:inherit}
+    .edit-player-choice{width:100%;display:flex;justify-content:space-between;gap:10px;align-items:center;text-align:left;background:rgba(255,255,255,.03);color:inherit;border:1px solid var(--border);border-radius:14px;padding:12px;cursor:pointer;font:inherit}
     .edit-player-choice:hover{filter:brightness(1.12)}
 
   
@@ -279,7 +279,7 @@
       <h2 style="margin:0">Select Player to Edit</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('editPlayerModal')">Close</button>
     </div>
-    <div class="small" style="margin-top:10px" id="editPlayerHelp">Search for a player, then tap their name to edit.</div>
+    <div class="small" style="margin-top:10px" id="editPlayerHelp">Search for a player, then tap Edit.</div>
     <div class="toolbar-3" style="margin-top:10px">
       <input id="editPlayerSearch" placeholder="Search players..." oninput="openEditPlayerModal(false)">
       <span></span>
@@ -315,7 +315,7 @@
         <button class="btn-danger admin-only-inline" onclick="deleteEditedPlayer()">Delete Player</button>
       </div>
       <div style="margin-top:10px">
-        <button class="btn-secondary" onclick="hideModal('editPlayerDetailsModal'); openEditPlayerModal(true)">Choose Different Player</button>
+        <button class="btn-secondary" onclick="hideModal('editPlayerDetailsModal')">Back to Player List</button>
       </div>
     </div>
   </div>

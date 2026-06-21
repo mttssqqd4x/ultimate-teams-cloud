@@ -2297,6 +2297,7 @@ function openRatingsModal(show = true){
 }
 
 let selectedEditPlayerId = null;
+
 function openEditPlayerModal(show = true){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
 
@@ -2308,54 +2309,67 @@ function openEditPlayerModal(show = true){
     .filter(p => !search || p.fullName.toLowerCase().includes(search))
     .sort(comparePlayersByLastName);
 
-  list.innerHTML = players.length ? players.map(p => `
-    <button type="button" class="player clickable edit-player-choice" data-edit-player-id="${escapeHtml(String(p.id))}">
-      <div>
-        <div class="player-name">${escapeHtml(p.fullName)}</div>
-        <div class="small">${isAdmin() ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}` : "Tap to edit name"}</div>
+  list.innerHTML = players.length ? players.map(p => {
+    const id = String(p.id).replace(/'/g, "\\'");
+    const ratingLine = isAdmin()
+      ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}`
+      : "Name edit only";
+    return `
+      <div class="player">
+        <div style="min-width:0">
+          <div class="player-name">${escapeHtml(p.fullName)}</div>
+          <div class="small">${escapeHtml(ratingLine)}</div>
+        </div>
+        <button type="button" class="btn-secondary" style="width:auto;min-width:78px" onclick="event.stopPropagation(); selectPlayerForEdit('${id}')">Edit</button>
       </div>
-      <div class="small">Edit</div>
-    </button>
-  `).join("") : '<div class="small">No players match that search.</div>';
-
-  list.querySelectorAll("[data-edit-player-id]").forEach(btn => {
-    btn.addEventListener("click", () => selectPlayerForEdit(btn.getAttribute("data-edit-player-id")));
-  });
+    `;
+  }).join("") : '<div class="small">No players match that search.</div>';
 
   const help = document.getElementById("editPlayerHelp");
   if(help) help.textContent = isAdmin()
-    ? "Search for a player, then tap their name to edit names and ratings."
-    : "Search for a player, then tap their name to edit the name. Ratings are locked.";
+    ? "Search for a player, then tap the Edit button to edit names and ratings."
+    : "Search for a player, then tap the Edit button to edit the name. Ratings are locked.";
 
   updateRoleVisibility();
   if(show) showModal("editPlayerModal");
 }
+
 function selectPlayerForEdit(id){
   const p = playerById(id) || state.players.find(x => String(x.id) === String(id));
-  if(!p){ alert("Could not find that player. Refresh and try again."); return; }
+  if(!p){
+    alert("Could not find that player. Please refresh and try again.");
+    return;
+  }
   selectedEditPlayerId = p.id;
 
-  setValue("editFirstName", p.firstName);
-  setValue("editLastName", p.lastName);
-  setValue("editHandling", Number(p.handling).toFixed(1));
-  setValue("editCutting", Number(p.cutting).toFixed(1));
-  setValue("editDefense", Number(p.defense).toFixed(1));
-  setValue("editWinLoss", Number(p.winLossRating).toFixed(2));
+  const firstEl = document.getElementById("editFirstName");
+  const lastEl = document.getElementById("editLastName");
+  const handlingEl = document.getElementById("editHandling");
+  const cuttingEl = document.getElementById("editCutting");
+  const defenseEl = document.getElementById("editDefense");
+  const winLossEl = document.getElementById("editWinLoss");
 
-  ["editHandling", "editCutting", "editDefense", "editWinLoss"].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.disabled = !isAdmin();
-  });
+  if(!firstEl || !lastEl || !handlingEl || !cuttingEl || !defenseEl || !winLossEl){
+    alert("Edit popup fields did not load. Please refresh the page.");
+    return;
+  }
+
+  firstEl.value = p.firstName || "";
+  lastEl.value = p.lastName || "";
+  handlingEl.value = Number(p.handling).toFixed(1);
+  cuttingEl.value = Number(p.cutting).toFixed(1);
+  defenseEl.value = Number(p.defense).toFixed(1);
+  winLossEl.value = Number(p.winLossRating).toFixed(2);
+
+  [handlingEl, cuttingEl, defenseEl, winLossEl].forEach(el => el.disabled = !isAdmin());
 
   const status = document.getElementById("editPlayerStatus");
   if(status) status.textContent = `${p.fullName} · ${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}`;
 
   updateRoleVisibility();
-
-  // Show the edit popup on top of the selector instead of closing/switching modals first.
-  // This is more reliable on mobile browsers and prevents the selection popup from eating the transition.
   showModal("editPlayerDetailsModal");
 }
+
 async function saveEditedPlayer(){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
   const p = playerById(selectedEditPlayerId);
@@ -2387,6 +2401,7 @@ async function saveEditedPlayer(){
   if(updated) selectPlayerForEdit(updated.id);
   alert("Player updated.");
 }
+
 async function deleteEditedPlayer(){
   if(!isAdmin()){ alert("Admin only."); return; }
   const p = playerById(selectedEditPlayerId);
@@ -2400,7 +2415,7 @@ async function deleteEditedPlayer(){
   hideModal("editPlayerDetailsModal");
   await loadCloudData();
   renderAll();
-  openEditPlayerModal(true);
+  openEditPlayerModal(false);
 }
 
 function normalizeName(str){

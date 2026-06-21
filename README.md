@@ -571,20 +571,12 @@ Required setup:
    ```
 
 
-## v4.35 stable edit-player popup patch
+## v4.37 edit-player button fix
 
 Changes:
-- rebuilt from v4.33 stable base to restore player/captain/admin permissions
-- fixed v4.34 helper-function regression
-- Edit Player now opens a player-selection popup first
-- tapping a player opens a separate edit popup
-- Win/Loss record badges are green for winning records, red for losing records, and neutral for tied records
-
-
-## v4.36 edit-player popup reliability fix
-
-Changes:
-- player choices in Edit Player are now real buttons with direct click handlers
-- selecting a player opens the edit popup on top of the selector instead of switching modals
-- added a higher z-index for the edit-details popup so it appears reliably on mobile
-- keeps v4.35 permission fixes and Win/Loss green/red/neutral badges
+- rebuilt from v4.33 stable base
+- Edit Player list now uses a separate visible Edit button for each player
+- Edit button uses direct inline click handling instead of relying on row/list click listeners
+- selecting a player opens a separate edit popup
+- keeps player/captain/admin permissions
+- keeps Win/Loss green/red/neutral badges
