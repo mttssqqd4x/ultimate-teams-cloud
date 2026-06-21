@@ -268,3 +268,22 @@ create policy "push_subscriptions_update_own" on public.push_subscriptions
 
 create policy "push_subscriptions_delete_own" on public.push_subscriptions
   for delete using (auth.uid() = user_id);
+
+
+-- v4.33: Track one-time player/captain information emails.
+create table if not exists public.app_info_emails_sent (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  email_type text not null check (email_type in ('player','captain')),
+  sent_at timestamptz not null default now(),
+  primary key (user_id, email_type)
+);
+
+alter table public.app_info_emails_sent enable row level security;
+
+-- v4.33: Allow current signed-in clients to notice when their profile role changes.
+do $$
+begin
+  alter publication supabase_realtime add table public.profiles;
+exception
+  when duplicate_object then null;
+end $$;

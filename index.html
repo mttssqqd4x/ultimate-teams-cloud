@@ -359,6 +359,37 @@
   </div>
 </div>
 
+
+<div id="accountCreatedModal" class="modal-backdrop" onclick="closeModal(event, 'accountCreatedModal')">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="margin:0">Account created</h2>
+      <button class="btn-secondary" style="width:auto" onclick="hideModal('accountCreatedModal')">Close</button>
+    </div>
+    <div class="notice" style="margin-top:12px;line-height:1.45">
+      Thank you for creating an account. Please check your email for basic information on how to use the app as a player.
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn" type="button" onclick="hideModal('accountCreatedModal')">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div id="captainWelcomeModal" class="modal-backdrop" onclick="closeModal(event, 'captainWelcomeModal')">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="margin:0">You’re a captain</h2>
+      <button class="btn-secondary" style="width:auto" onclick="hideModal('captainWelcomeModal')">Close</button>
+    </div>
+    <div class="notice" style="margin-top:12px;line-height:1.45">
+      You’ve become a captain. Please check your email for basic information on how to use the app as a captain.
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn" type="button" onclick="hideModal('captainWelcomeModal')">Continue</button>
+    </div>
+  </div>
+</div>
+
 <div id="signOutConfirmModal" class="modal-backdrop" onclick="closeModal(event, 'signOutConfirmModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
     <div class="row" style="justify-content:space-between;align-items:center">
@@ -382,7 +413,7 @@
       <button class="btn-secondary" style="width:auto" onclick="hideModal('authConfirmedModal')">Close</button>
     </div>
     <div class="notice" style="margin-top:12px;line-height:1.45">
-      Thank you for confirming your account. You can continue using the app and mark attendance.
+      Your account is ready. You can continue using the app and mark attendance.
     </div>
     <div class="small" style="margin-top:10px">If this opened in a new tab, you can continue here or return to your original app tab.</div>
     <div style="margin-top:14px">

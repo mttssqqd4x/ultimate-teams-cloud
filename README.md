@@ -544,3 +544,28 @@ Changes:
 - kept sign-out inside the Account popup
 - kept sign-out confirmation before actually signing out
 - improved Safari notification enable flow so the app keeps the toggle on immediately after permission is granted
+
+
+## v4.33 no-confirmation signup and instructional emails
+
+Changes:
+- signup flow now supports Supabase projects with Confirm Email disabled
+- new players are automatically signed in after account creation when Confirm Email is off
+- after account creation, the app shows a thank-you popup telling the player to check email for basic instructions
+- added a Supabase Edge Function: `send-app-info-email`
+- the player information email calls them "players," not "users"
+- when a player becomes a captain, the app shows a captain popup and sends a captain instruction email
+- added `app_info_emails_sent` so player/captain instruction emails only send once per person
+- added profile role realtime listening so an open app can notice a role upgrade
+
+Required setup:
+1. In Supabase Auth settings, disable Confirm Email for the Email provider.
+2. Run the updated `setup_supabase.sql`.
+3. Add Edge Function secrets:
+   - `RESEND_API_KEY`
+   - `APP_EMAIL_FROM`, for example `NM Ultimate Teams <no-reply@nmultimateteams.app>`
+   - `APP_URL`, for example `https://nmultimateteams.app`
+4. Deploy the new function:
+   ```bash
+   npx supabase functions deploy send-app-info-email --project-ref fsdqkozqjshqooqwvmhq
+   ```

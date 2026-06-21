@@ -9,6 +9,7 @@ let db = null;
 let currentUser = null;
 let profile = { role: "guest", email: "Guest" };
 let currentGameChannel = null;
+let profileChannel = null;
 let liveRefreshTimer = null;
 
 const state = {
@@ -156,14 +157,92 @@ function scheduleLiveRefresh(){
 }
 
 async function afterAuthChange(){
-  if(currentUser) await loadProfile();
-  else profile = { role: "guest", email: "Guest" };
+  if(currentUser){
+    await loadProfile();
+    subscribeToProfileUpdates();
+  }else{
+    profile = { role: "guest", email: "Guest" };
+    unsubscribeFromProfileUpdates();
+  }
 
   updateAuthButtons();
   await loadCloudData();
   renderAll();
+  await handleRoleMilestones();
   showPage("main");
 }
+
+
+async function sendAppInfoEmail(emailType){
+  if(!currentUser) return false;
+  try{
+    const { data, error } = await db.functions.invoke("send-app-info-email", {
+      body: { type: emailType }
+    });
+
+    if(error){
+      console.warn("App info email failed", error);
+      return false;
+    }
+
+    console.log("App info email result", data);
+    return true;
+  }catch(e){
+    console.warn("App info email failed", e);
+    return false;
+  }
+}
+
+function showAccountCreatedMessage(){
+  showModal("accountCreatedModal");
+}
+
+function showCaptainWelcomeMessage(){
+  showModal("captainWelcomeModal");
+}
+
+async function handleRoleMilestones(){
+  if(!currentUser) return;
+
+  if(normalizedRole() === "captain"){
+    const key = `ultimateTeamsCaptainWelcomeShown_${currentUser.id}`;
+    if(!localStorage.getItem(key)){
+      localStorage.setItem(key, "1");
+      await sendAppInfoEmail("captain");
+      showCaptainWelcomeMessage();
+    }
+  }
+}
+
+function subscribeToProfileUpdates(){
+  if(!db) return;
+  unsubscribeFromProfileUpdates();
+  if(!currentUser) return;
+
+  profileChannel = db
+    .channel(`profile-live-${currentUser.id}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${currentUser.id}` },
+      async payload => {
+        profile = payload.new || profile;
+        updateAuthButtons();
+        await loadCloudData();
+        renderAll();
+        await handleRoleMilestones();
+        if(normalizedRole() === "captain") showCaptainWelcomeMessage();
+      }
+    )
+    .subscribe(status => console.log("Profile live updates:", status));
+}
+
+function unsubscribeFromProfileUpdates(){
+  if(profileChannel && db){
+    db.removeChannel(profileChannel);
+  }
+  profileChannel = null;
+}
+
 
 async function loadProfile(){
   const { data, error } = await db.from("profiles").select("*").eq("id", currentUser.id).maybeSingle();
@@ -315,11 +394,10 @@ async function signUp(){
 
   const fullName = `${firstName} ${lastName}`.trim();
 
-  const { error } = await db.auth.signUp({
+  const { data, error } = await db.auth.signUp({
     email,
     password,
     options: {
-      emailRedirectTo: APP_AUTH_REDIRECT_URL,
       data: {
         first_name: firstName,
         last_name: lastName,
@@ -330,10 +408,27 @@ async function signUp(){
 
   if(error){ setAuthMessage(error.message); return; }
 
-  showSignInSection();
-  const signInEmail = document.getElementById("authEmail");
-  if(signInEmail) signInEmail.value = email;
-  setAuthMessage("Account created. Check your email to confirm your account, then return to the app and sign in.");
+  let session = data?.session || null;
+
+  if(!session){
+    const signInRes = await db.auth.signInWithPassword({ email, password });
+    if(signInRes.error){
+      showSignInSection();
+      const signInEmail = document.getElementById("authEmail");
+      if(signInEmail) signInEmail.value = email;
+      setAuthMessage("Account created, but Supabase still requires email confirmation. Turn off Confirm Email in Supabase to auto sign in new players.");
+      return;
+    }
+    session = signInRes.data?.session || null;
+  }
+
+  const sessionRes = await db.auth.getSession();
+  currentUser = sessionRes.data?.session?.user || session?.user || data?.user || null;
+
+  await afterAuthChange();
+  await sendAppInfoEmail("player");
+  showAccountCreatedMessage();
+  setAuthMessage("");
 }
 async function signIn(){
   const email = document.getElementById("authEmail")?.value.trim();
@@ -342,6 +437,7 @@ async function signIn(){
   const { error } = await db.auth.signInWithPassword({ email, password });
   if(error){ setAuthMessage(error.message); return; }
   hideSignInBox();
+  await afterAuthChange();
 }
 async 
 function openAccountModal(){
@@ -2131,7 +2227,7 @@ function clearModalSearch(id){
   if(el) el.value = "";
 }
 function hideAllModals(){
-  ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal", "accountModal"].forEach(hideModal);
+  ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal", "accountModal", "accountCreatedModal", "captainWelcomeModal"].forEach(hideModal);
 }
 
 function openWinLossModal(show = true){
