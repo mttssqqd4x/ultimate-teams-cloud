@@ -569,3 +569,14 @@ Required setup:
    ```bash
    npx supabase functions deploy send-app-info-email --project-ref fsdqkozqjshqooqwvmhq
    ```
+
+
+## v4.34 edit-player selector and record colors
+
+Changes:
+- Edit Player now opens a player-selection popup first
+- tapping a player opens a separate edit popup for that player
+- fixed the player-selection flow so it works better on phone screens
+- Win/Loss record badges are green when wins are greater than losses
+- Win/Loss record badges are red when losses are greater than wins
+- tied records use a neutral badge

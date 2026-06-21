@@ -2227,7 +2227,7 @@ function clearModalSearch(id){
   if(el) el.value = "";
 }
 function hideAllModals(){
-  ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal", "accountModal", "accountCreatedModal", "captainWelcomeModal"].forEach(hideModal);
+  ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal", "accountModal", "accountCreatedModal", "captainWelcomeModal", "editPlayerDetailsModal"].forEach(hideModal);
 }
 
 function openWinLossModal(show = true){
@@ -2253,7 +2253,10 @@ function openWinLossModal(show = true){
     const wins = Number(p.wins || 0);
     const losses = Number(p.losses || 0);
     const winPct = games ? ((wins / games) * 100).toFixed(1) + "%" : "No record";
-    const badgeClass = games ? "record-pill" : "record-pill-no-border";
+    let badgeClass = "record-pill-no-border";
+    if(games && wins > losses) badgeClass = "record-pill record-pill-winning";
+    else if(games && losses > wins) badgeClass = "record-pill record-pill-losing";
+    else if(games) badgeClass = "record-pill record-pill-even";
 
     return `
       <div class="player">
@@ -2294,8 +2297,11 @@ function openRatingsModal(show = true){
 }
 
 let selectedEditPlayerId = null;
+
 function openEditPlayerModal(show = true){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+
+  selectedEditPlayerId = null;
 
   const list = document.getElementById("editPlayerModalList");
   if(!list) return;
@@ -2309,28 +2315,28 @@ function openEditPlayerModal(show = true){
     <div class="player clickable" onclick="selectPlayerForEdit('${p.id}')">
       <div>
         <div class="player-name">${escapeHtml(p.fullName)}</div>
-        <div class="small">${isAdmin() ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}` : "Name edit only"}</div>
+        <div class="small">${isAdmin() ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}` : "Tap to edit name"}</div>
       </div>
+      <div class="small">Edit</div>
     </div>
   `).join("") : '<div class="small">No players match that search.</div>';
 
   const help = document.getElementById("editPlayerHelp");
   if(help) help.textContent = isAdmin()
-    ? "Admins can edit names and ratings."
-    : "Captains can edit player names only. Ratings are locked.";
+    ? "Search for a player, then tap their name to edit names and ratings."
+    : "Search for a player, then tap their name to edit the name. Ratings are locked.";
 
   updateRoleVisibility();
   if(show) showModal("editPlayerModal");
 }
+
 function selectPlayerForEdit(id){
   const p = playerById(id);
   if(!p) return;
   selectedEditPlayerId = p.id;
 
-  const empty = document.getElementById("editPlayerFormEmpty");
-  const form = document.getElementById("editPlayerForm");
-  if(empty) empty.style.display = "none";
-  if(form) form.style.display = "block";
+  hideModal("editPlayerModal");
+  showModal("editPlayerDetailsModal");
 
   setValue("editFirstName", p.firstName);
   setValue("editLastName", p.lastName);
@@ -2345,8 +2351,11 @@ function selectPlayerForEdit(id){
   });
 
   const status = document.getElementById("editPlayerStatus");
-  if(status) status.textContent = `${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}`;
+  if(status) status.textContent = `${p.fullName} · ${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}`;
+
+  updateRoleVisibility();
 }
+
 async function saveEditedPlayer(){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
   const p = playerById(selectedEditPlayerId);
@@ -2374,39 +2383,25 @@ async function saveEditedPlayer(){
 
   await loadCloudData();
   renderAll();
-  openEditPlayerModal(false);
-  selectPlayerForEdit(p.id);
+  const updated = playerById(p.id);
+  if(updated) selectPlayerForEdit(updated.id);
   alert("Player updated.");
 }
+
 async function deleteEditedPlayer(){
   if(!isAdmin()){ alert("Admin only."); return; }
   const p = playerById(selectedEditPlayerId);
   if(!p){ alert("Select a player first."); return; }
+
   if(!confirm(`Delete ${p.fullName}? This cannot be undone.`)) return;
+
   const { error } = await db.from("players").delete().eq("id", p.id);
   if(error){ alert(error.message); return; }
+
   selectedEditPlayerId = null;
+  hideModal("editPlayerDetailsModal");
   await loadCloudData();
   renderAll();
-  openEditPlayerModal(false);
+  openEditPlayerModal(true);
 }
 
-function normalizeName(str){
-  return String(str || "").trim().replace(/\s+/g, " ");
-}
-function splitName(full){
-  const parts = normalizeName(full).split(" ").filter(Boolean);
-  return { first: parts[0] || "", last: parts.slice(1).join(" ") };
-}
-function setValue(id, value){
-  const el = document.getElementById(id);
-  if(el) el.value = value ?? "";
-}
-function escapeHtml(str){
-  return String(str ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
