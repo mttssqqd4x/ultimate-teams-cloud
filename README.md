@@ -571,12 +571,12 @@ Required setup:
    ```
 
 
-## v4.37 edit-player button fix
+## v4.38 inline dropdown player editing
 
 Changes:
 - rebuilt from v4.33 stable base
-- Edit Player list now uses a separate visible Edit button for each player
-- Edit button uses direct inline click handling instead of relying on row/list click listeners
-- selecting a player opens a separate edit popup
+- removed the separate Edit Player details popup
+- each player in Edit Player now has a native dropdown under their name
+- Save Changes and Delete Player are inside each player's dropdown
 - keeps player/captain/admin permissions
 - keeps Win/Loss green/red/neutral badges

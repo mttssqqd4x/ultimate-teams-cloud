@@ -2227,7 +2227,7 @@ function clearModalSearch(id){
   if(el) el.value = "";
 }
 function hideAllModals(){
-  ["ratingsModal", "editPlayerModal", "editPlayerDetailsModal", "winLossModal", "signOutConfirmModal", "accountModal", "accountCreatedModal", "captainWelcomeModal"].forEach(hideModal);
+  ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal", "accountModal", "accountCreatedModal", "captainWelcomeModal"].forEach(hideModal);
 }
 
 function openWinLossModal(show = true){
@@ -2298,6 +2298,10 @@ function openRatingsModal(show = true){
 
 let selectedEditPlayerId = null;
 
+function editDomId(prefix, id){
+  return `${prefix}-${String(id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
 function openEditPlayerModal(show = true){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
 
@@ -2310,73 +2314,76 @@ function openEditPlayerModal(show = true){
     .sort(comparePlayersByLastName);
 
   list.innerHTML = players.length ? players.map(p => {
-    const id = String(p.id).replace(/'/g, "\\'");
+    const id = String(p.id);
+    const safe = editDomId("edit", id);
     const ratingLine = isAdmin()
       ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}`
       : "Name edit only";
     return `
-      <div class="player">
-        <div style="min-width:0">
-          <div class="player-name">${escapeHtml(p.fullName)}</div>
-          <div class="small">${escapeHtml(ratingLine)}</div>
+      <details class="edit-player-details" data-player-id="${escapeHtml(id)}">
+        <summary>
+          <div class="row" style="justify-content:space-between;align-items:center;gap:12px">
+            <div style="min-width:0">
+              <div class="player-name">${escapeHtml(p.fullName)}</div>
+              <div class="small">${escapeHtml(ratingLine)} · ${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}</div>
+            </div>
+            <div class="small">Tap to edit</div>
+          </div>
+        </summary>
+
+        <div class="inline-edit-form" data-edit-form-for="${escapeHtml(id)}">
+          <div class="grid grid-2">
+            <div><label>First Name</label><input id="${safe}-first" value="${escapeHtml(p.firstName || "")}"></div>
+            <div><label>Last Name</label><input id="${safe}-last" value="${escapeHtml(p.lastName || "")}"></div>
+          </div>
+          <div class="grid grid-4 admin-rating-fields" style="margin-top:10px">
+            <div><label>Handling</label><input id="${safe}-handling" type="number" step="0.5" value="${Number(p.handling).toFixed(1)}" ${isAdmin() ? "" : "disabled"}></div>
+            <div><label>Cutting</label><input id="${safe}-cutting" type="number" step="0.5" value="${Number(p.cutting).toFixed(1)}" ${isAdmin() ? "" : "disabled"}></div>
+            <div><label>Defense</label><input id="${safe}-defense" type="number" step="0.5" value="${Number(p.defense).toFixed(1)}" ${isAdmin() ? "" : "disabled"}></div>
+            <div><label>Win/Loss</label><input id="${safe}-winloss" type="number" step="0.01" value="${Number(p.winLossRating).toFixed(2)}" ${isAdmin() ? "" : "disabled"}></div>
+          </div>
+          <div class="toolbar" style="margin-top:10px">
+            <button class="btn" type="button" data-save-player-id="${escapeHtml(id)}">Save Changes</button>
+            ${isAdmin() ? `<button class="btn-danger" type="button" data-delete-player-id="${escapeHtml(id)}">Delete Player</button>` : ""}
+          </div>
         </div>
-        <button type="button" class="btn-secondary" style="width:auto;min-width:78px" onclick="event.stopPropagation(); selectPlayerForEdit('${id}')">Edit</button>
-      </div>
+      </details>
     `;
   }).join("") : '<div class="small">No players match that search.</div>';
 
+  list.querySelectorAll("[data-save-player-id]").forEach(btn => {
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await saveInlineEditedPlayer(btn.getAttribute("data-save-player-id"));
+    });
+  });
+
+  list.querySelectorAll("[data-delete-player-id]").forEach(btn => {
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await deleteInlineEditedPlayer(btn.getAttribute("data-delete-player-id"));
+    });
+  });
+
   const help = document.getElementById("editPlayerHelp");
   if(help) help.textContent = isAdmin()
-    ? "Search for a player, then tap the Edit button to edit names and ratings."
-    : "Search for a player, then tap the Edit button to edit the name. Ratings are locked.";
+    ? "Tap a player name to open the dropdown. Admins can edit names and ratings."
+    : "Tap a player name to open the dropdown. Captains can edit player names only. Ratings are locked.";
 
   updateRoleVisibility();
   if(show) showModal("editPlayerModal");
 }
 
-function selectPlayerForEdit(id){
-  const p = playerById(id) || state.players.find(x => String(x.id) === String(id));
-  if(!p){
-    alert("Could not find that player. Please refresh and try again.");
-    return;
-  }
-  selectedEditPlayerId = p.id;
-
-  const firstEl = document.getElementById("editFirstName");
-  const lastEl = document.getElementById("editLastName");
-  const handlingEl = document.getElementById("editHandling");
-  const cuttingEl = document.getElementById("editCutting");
-  const defenseEl = document.getElementById("editDefense");
-  const winLossEl = document.getElementById("editWinLoss");
-
-  if(!firstEl || !lastEl || !handlingEl || !cuttingEl || !defenseEl || !winLossEl){
-    alert("Edit popup fields did not load. Please refresh the page.");
-    return;
-  }
-
-  firstEl.value = p.firstName || "";
-  lastEl.value = p.lastName || "";
-  handlingEl.value = Number(p.handling).toFixed(1);
-  cuttingEl.value = Number(p.cutting).toFixed(1);
-  defenseEl.value = Number(p.defense).toFixed(1);
-  winLossEl.value = Number(p.winLossRating).toFixed(2);
-
-  [handlingEl, cuttingEl, defenseEl, winLossEl].forEach(el => el.disabled = !isAdmin());
-
-  const status = document.getElementById("editPlayerStatus");
-  if(status) status.textContent = `${p.fullName} · ${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}`;
-
-  updateRoleVisibility();
-  showModal("editPlayerDetailsModal");
-}
-
-async function saveEditedPlayer(){
+async function saveInlineEditedPlayer(playerId){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
-  const p = playerById(selectedEditPlayerId);
-  if(!p){ alert("Select a player first."); return; }
+  const p = playerById(playerId) || state.players.find(x => String(x.id) === String(playerId));
+  if(!p){ alert("Could not find that player. Refresh and try again."); return; }
 
-  const first = (document.getElementById("editFirstName")?.value || "").trim();
-  const last = (document.getElementById("editLastName")?.value || "").trim();
+  const safe = editDomId("edit", p.id);
+  const first = (document.getElementById(`${safe}-first`)?.value || "").trim();
+  const last = (document.getElementById(`${safe}-last`)?.value || "").trim();
   if(!first && !last){ alert("Enter a valid player name."); return; }
 
   const payload = {
@@ -2386,10 +2393,10 @@ async function saveEditedPlayer(){
   };
 
   if(isAdmin()){
-    payload.handling = Number(document.getElementById("editHandling")?.value || 0);
-    payload.cutting = Number(document.getElementById("editCutting")?.value || 0);
-    payload.defense = Number(document.getElementById("editDefense")?.value || 0);
-    payload.win_loss = Number(document.getElementById("editWinLoss")?.value || 0);
+    payload.handling = Number(document.getElementById(`${safe}-handling`)?.value || 0);
+    payload.cutting = Number(document.getElementById(`${safe}-cutting`)?.value || 0);
+    payload.defense = Number(document.getElementById(`${safe}-defense`)?.value || 0);
+    payload.win_loss = Number(document.getElementById(`${safe}-winloss`)?.value || 0);
   }
 
   const { error } = await db.from("players").update(payload).eq("id", p.id);
@@ -2397,25 +2404,40 @@ async function saveEditedPlayer(){
 
   await loadCloudData();
   renderAll();
-  const updated = playerById(p.id);
-  if(updated) selectPlayerForEdit(updated.id);
+  openEditPlayerModal(false);
+
+  const details = document.querySelector(`[data-player-id="${CSS.escape(String(p.id))}"]`);
+  if(details) details.open = true;
+
   alert("Player updated.");
 }
 
-async function deleteEditedPlayer(){
+async function deleteInlineEditedPlayer(playerId){
   if(!isAdmin()){ alert("Admin only."); return; }
-  const p = playerById(selectedEditPlayerId);
-  if(!p){ alert("Select a player first."); return; }
+  const p = playerById(playerId) || state.players.find(x => String(x.id) === String(playerId));
+  if(!p){ alert("Could not find that player. Refresh and try again."); return; }
   if(!confirm(`Delete ${p.fullName}? This cannot be undone.`)) return;
 
   const { error } = await db.from("players").delete().eq("id", p.id);
   if(error){ alert(error.message); return; }
 
-  selectedEditPlayerId = null;
-  hideModal("editPlayerDetailsModal");
   await loadCloudData();
   renderAll();
   openEditPlayerModal(false);
+}
+
+// Backward-compatible names kept in case old cached buttons are still present briefly.
+function selectPlayerForEdit(id){
+  const details = document.querySelector(`[data-player-id="${CSS.escape(String(id))}"]`);
+  if(details) details.open = true;
+}
+async function saveEditedPlayer(){
+  if(selectedEditPlayerId) return saveInlineEditedPlayer(selectedEditPlayerId);
+  alert("Open a player dropdown and use Save Changes there.");
+}
+async function deleteEditedPlayer(){
+  if(selectedEditPlayerId) return deleteInlineEditedPlayer(selectedEditPlayerId);
+  alert("Open a player dropdown and use Delete Player there.");
 }
 
 function normalizeName(str){
