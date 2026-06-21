@@ -2302,6 +2302,20 @@ function editDomId(prefix, id){
   return `${prefix}-${String(id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
+function reopenInlineEditDropdown(playerId){
+  const targetId = String(playerId);
+  const list = document.getElementById("editPlayerModalList");
+  if(!list) return;
+
+  list.querySelectorAll("[data-player-id]").forEach(details => {
+    const isTarget = String(details.getAttribute("data-player-id")) === targetId;
+    details.open = isTarget;
+    if(isTarget){
+      setTimeout(() => details.scrollIntoView({ block: "center", behavior: "smooth" }), 50);
+    }
+  });
+}
+
 function openEditPlayerModal(show = true){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
 
@@ -2404,10 +2418,11 @@ async function saveInlineEditedPlayer(playerId){
 
   await loadCloudData();
   renderAll();
-  openEditPlayerModal(false);
 
-  const details = document.querySelector(`[data-player-id="${CSS.escape(String(p.id))}"]`);
-  if(details) details.open = true;
+  // Rebuild the Edit Player list, force the popup to stay open, and reopen this player's dropdown.
+  openEditPlayerModal(false);
+  showModal("editPlayerModal");
+  reopenInlineEditDropdown(p.id);
 
   alert("Player updated.");
 }
@@ -2423,13 +2438,16 @@ async function deleteInlineEditedPlayer(playerId){
 
   await loadCloudData();
   renderAll();
+
   openEditPlayerModal(false);
+  showModal("editPlayerModal");
+
+  alert("Player deleted.");
 }
 
 // Backward-compatible names kept in case old cached buttons are still present briefly.
 function selectPlayerForEdit(id){
-  const details = document.querySelector(`[data-player-id="${CSS.escape(String(id))}"]`);
-  if(details) details.open = true;
+  reopenInlineEditDropdown(id);
 }
 async function saveEditedPlayer(){
   if(selectedEditPlayerId) return saveInlineEditedPlayer(selectedEditPlayerId);

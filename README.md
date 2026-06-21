@@ -580,3 +580,13 @@ Changes:
 - Save Changes and Delete Player are inside each player's dropdown
 - keeps player/captain/admin permissions
 - keeps Win/Loss green/red/neutral badges
+
+
+## v4.39 inline edit save stability fix
+
+Changes:
+- fixed Edit Player dropdown crash after saving changes
+- removed CSS.escape dependency from the inline edit reopen logic
+- after saving, the Edit Player popup is forced back open and the edited player's dropdown reopens
+- delete flow also keeps the Edit Player popup open
+- keeps v4.38 inline dropdown editing and Win/Loss green/red/neutral badges
