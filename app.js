@@ -2308,11 +2308,7 @@ function reopenInlineEditDropdown(playerId){
   if(!list) return;
 
   list.querySelectorAll("[data-player-id]").forEach(details => {
-    const isTarget = String(details.getAttribute("data-player-id")) === targetId;
-    details.open = isTarget;
-    if(isTarget){
-      setTimeout(() => details.scrollIntoView({ block: "center", behavior: "smooth" }), 50);
-    }
+    details.open = String(details.getAttribute("data-player-id")) === targetId;
   });
 }
 
@@ -2360,6 +2356,7 @@ function openEditPlayerModal(show = true){
             <button class="btn" type="button" data-save-player-id="${escapeHtml(id)}">Save Changes</button>
             ${isAdmin() ? `<button class="btn-danger" type="button" data-delete-player-id="${escapeHtml(id)}">Delete Player</button>` : ""}
           </div>
+          <div class="small inline-edit-save-status" id="${safe}-status"></div>
         </div>
       </details>
     `;
@@ -2396,6 +2393,9 @@ async function saveInlineEditedPlayer(playerId){
   if(!p){ alert("Could not find that player. Refresh and try again."); return; }
 
   const safe = editDomId("edit", p.id);
+  const statusEl = document.getElementById(`${safe}-status`);
+  const saveBtn = document.querySelector(`[data-save-player-id="${String(p.id).replace(/"/g, '\\"')}"]`);
+
   const first = (document.getElementById(`${safe}-first`)?.value || "").trim();
   const last = (document.getElementById(`${safe}-last`)?.value || "").trim();
   if(!first && !last){ alert("Enter a valid player name."); return; }
@@ -2413,18 +2413,52 @@ async function saveInlineEditedPlayer(playerId){
     payload.win_loss = Number(document.getElementById(`${safe}-winloss`)?.value || 0);
   }
 
+  if(statusEl) statusEl.textContent = "Saving...";
+  if(saveBtn) saveBtn.disabled = true;
+
   const { error } = await db.from("players").update(payload).eq("id", p.id);
-  if(error){ alert(error.message); return; }
 
-  await loadCloudData();
-  renderAll();
+  if(saveBtn) saveBtn.disabled = false;
 
-  // Rebuild the Edit Player list, force the popup to stay open, and reopen this player's dropdown.
-  openEditPlayerModal(false);
-  showModal("editPlayerModal");
-  reopenInlineEditDropdown(p.id);
+  if(error){
+    if(statusEl) statusEl.textContent = `Save failed: ${error.message}`;
+    alert(error.message);
+    return;
+  }
 
-  alert("Player updated.");
+  // iOS Safari was crashing when this flow reloaded all data, re-rendered the whole app,
+  // reopened the modal, scrolled the dropdown, and then showed alert().
+  // Keep it stable by updating only the local object and the visible open dropdown.
+  p.firstName = first;
+  p.lastName = last;
+  p.fullName = `${first} ${last}`.trim();
+
+  if(isAdmin()){
+    p.handling = payload.handling;
+    p.cutting = payload.cutting;
+    p.defense = payload.defense;
+    p.winLossRating = payload.win_loss;
+  }
+
+  const details = document.getElementById(`${safe}-first`)?.closest("details");
+  if(details){
+    const nameEl = details.querySelector(".player-name");
+    const smallEl = details.querySelector("summary .small");
+    if(nameEl) nameEl.textContent = p.fullName;
+    if(smallEl){
+      const ratingLine = isAdmin()
+        ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}`
+        : "Name edit only";
+      smallEl.textContent = `${ratingLine} · ${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}`;
+    }
+    details.open = true;
+  }
+
+  if(statusEl) statusEl.textContent = "Saved.";
+  setTimeout(() => {
+    const currentStatus = document.getElementById(`${safe}-status`);
+    if(currentStatus && currentStatus.textContent === "Saved.") currentStatus.textContent = "";
+  }, 2500);
 }
 
 async function deleteInlineEditedPlayer(playerId){
@@ -2436,11 +2470,10 @@ async function deleteInlineEditedPlayer(playerId){
   const { error } = await db.from("players").delete().eq("id", p.id);
   if(error){ alert(error.message); return; }
 
-  await loadCloudData();
-  renderAll();
-
-  openEditPlayerModal(false);
-  showModal("editPlayerModal");
+  state.players = state.players.filter(x => String(x.id) !== String(p.id));
+  const safe = editDomId("edit", p.id);
+  const details = document.getElementById(`${safe}-first`)?.closest("details");
+  if(details) details.remove();
 
   alert("Player deleted.");
 }

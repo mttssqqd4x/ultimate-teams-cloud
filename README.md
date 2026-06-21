@@ -590,3 +590,15 @@ Changes:
 - after saving, the Edit Player popup is forced back open and the edited player's dropdown reopens
 - delete flow also keeps the Edit Player popup open
 - keeps v4.38 inline dropdown editing and Win/Loss green/red/neutral badges
+
+
+## v4.40 iOS Safari inline edit save fix
+
+Changes:
+- changed Edit Player save so it no longer reloads all cloud data after saving
+- changed Edit Player save so it no longer re-renders the whole app after saving
+- removed the post-save alert popup and replaced it with an inline "Saved." message
+- removed smooth scrolling after save
+- updates the open player dropdown in place after saving
+- delete removes the player row in place
+- intended to prevent iOS Safari from closing/crashing the Edit Player popup
