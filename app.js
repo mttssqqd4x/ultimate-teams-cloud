@@ -3,6 +3,7 @@ const CONFIG = window.ULTIMATE_TEAMS_CONFIG || {};
 const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
+const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
 
 let db = null;
 let currentUser = null;
@@ -443,6 +444,196 @@ function hydrateGame(rawTeams){
   };
 }
 
+
+function urlBase64ToUint8Array(base64String){
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for(let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+function pushSupported(){
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+function vapidConfigured(){
+  return VAPID_PUBLIC_KEY && !VAPID_PUBLIC_KEY.includes("PASTE_");
+}
+
+async function getServiceWorkerRegistration(){
+  if(!("serviceWorker" in navigator)) return null;
+  try{
+    return await navigator.serviceWorker.register("./service-worker.js");
+  }catch(e){
+    console.warn("Service worker registration failed", e);
+    return await navigator.serviceWorker.ready.catch(() => null);
+  }
+}
+
+async function enablePushNotifications(){
+  if(!currentUser){
+    alert("Sign in before enabling notifications.");
+    toggleSignInBox();
+    return;
+  }
+
+  if(!pushSupported()){
+    setPushStatus("Push notifications are not supported in this browser.");
+    return;
+  }
+
+  if(!vapidConfigured()){
+    setPushStatus("Push notifications are not configured yet. Add your VAPID public key to config.js.");
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if(permission !== "granted"){
+    setPushStatus("Notifications are not enabled. Browser permission is currently: " + permission + ".");
+    updateNotificationUi();
+    return;
+  }
+
+  const registration = await getServiceWorkerRegistration();
+  if(!registration){
+    setPushStatus("Could not register the service worker for notifications.");
+    return;
+  }
+
+  let subscription = await registration.pushManager.getSubscription();
+  if(!subscription){
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+
+  const json = subscription.toJSON();
+  const { error } = await db.from("push_subscriptions").upsert({
+    user_id: currentUser.id,
+    endpoint: json.endpoint,
+    p256dh: json.keys?.p256dh || "",
+    auth: json.keys?.auth || "",
+    user_agent: navigator.userAgent,
+    updated_at: new Date().toISOString()
+  }, { onConflict: "endpoint" });
+
+  if(error){
+    setPushStatus("Could not save notification subscription: " + error.message);
+    return;
+  }
+
+  setPushStatus("Notifications enabled.");
+  updateNotificationUi();
+}
+
+async function disablePushNotifications(){
+  if(!currentUser){
+    setPushStatus("Sign in first.");
+    return;
+  }
+
+  if(pushSupported()){
+    const registration = await navigator.serviceWorker.ready.catch(() => null);
+    const subscription = registration ? await registration.pushManager.getSubscription() : null;
+    if(subscription){
+      await subscription.unsubscribe().catch(() => {});
+      await db.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+    }
+  }
+
+  await db.from("push_subscriptions").delete().eq("user_id", currentUser.id);
+  setPushStatus("Notifications disabled.");
+  updateNotificationUi();
+}
+
+function setPushStatus(message){
+  const el = document.getElementById("pushStatus");
+  if(el) el.textContent = message || "";
+}
+
+async function updateNotificationUi(){
+  const box = document.getElementById("pushNotificationsBox");
+  if(!box) return;
+
+  if(!currentUser){
+    box.style.display = "none";
+    return;
+  }
+
+  box.style.display = "";
+
+  const enableBtn = document.getElementById("pushEnableBtn");
+  const disableBtn = document.getElementById("pushDisableBtn");
+
+  if(!pushSupported()){
+    setPushStatus("Push notifications are not supported in this browser.");
+    if(enableBtn) enableBtn.disabled = true;
+    if(disableBtn) disableBtn.disabled = true;
+    return;
+  }
+
+  if(!vapidConfigured()){
+    setPushStatus("Push notifications are not configured yet.");
+    if(enableBtn) enableBtn.disabled = true;
+    if(disableBtn) disableBtn.disabled = false;
+    return;
+  }
+
+  const permission = Notification.permission;
+  if(permission === "denied"){
+    setPushStatus("Notifications are blocked in browser settings.");
+    if(enableBtn) enableBtn.disabled = true;
+    if(disableBtn) disableBtn.disabled = false;
+    return;
+  }
+
+  let subscribed = false;
+  try{
+    const registration = await navigator.serviceWorker.ready;
+    subscribed = !!(await registration.pushManager.getSubscription());
+  }catch(e){}
+
+  if(subscribed){
+    setPushStatus("Notifications enabled.");
+    if(enableBtn) enableBtn.disabled = true;
+    if(disableBtn) disableBtn.disabled = false;
+  }else{
+    setPushStatus(permission === "granted" ? "Notifications allowed, but this device is not subscribed yet." : "Notifications are off for this device.");
+    if(enableBtn) enableBtn.disabled = false;
+    if(disableBtn) disableBtn.disabled = false;
+  }
+}
+
+async function askAdminWhetherToSendTeamNotification(){
+  if(!isAdmin()) return false;
+  return confirm("Send a push notification to signed-in users that new teams were generated?");
+}
+
+async function sendTeamGeneratedNotification(){
+  if(!isAdmin()) return;
+  try{
+    const { data, error } = await db.functions.invoke("send-team-notification", {
+      body: {
+        title: "New teams are ready",
+        body: "New ultimate teams have been generated.",
+        url: window.location.origin + window.location.pathname
+      }
+    });
+
+    if(error){
+      alert("Teams were generated, but the push notification failed: " + (error.message || error));
+      return;
+    }
+
+    console.log("Push notification result", data);
+  }catch(e){
+    alert("Teams were generated, but the push notification failed: " + (e?.message || e));
+  }
+}
+
 function renderAll(){
   updateNavVisibility();
   updateRoleVisibility();
@@ -454,6 +645,7 @@ function renderAll(){
   renderTeams();
   syncSettingsForm();
   updateTeamsDetailsOpenState();
+  updateNotificationUi();
 }
 
 function updateStats(){
@@ -1163,9 +1355,10 @@ async function generateTeamsButton(){
     await savePairingsOnlyForCurrentGame();
   }
 
-  await generateGame();
+  const sendPush = await askAdminWhetherToSendTeamNotification();
+  await generateGame(sendPush);
 }
-async function generateGame(){
+async function generateGame(sendPushNotification = false){
   if(!canGenerateTeams()){ alert("Only captains/admins can generate teams."); return; }
   const players = presentPlayers();
   const numTeams = Math.max(2, Number(document.getElementById("numTeams")?.value || 2));
@@ -1185,6 +1378,7 @@ async function generateGame(){
   state.selectedWinnerIndex = null;
   state.resultsSavedForCurrentGame = false;
   await saveCurrentGameToDb(false);
+  if(sendPushNotification) await sendTeamGeneratedNotification();
   renderAll();
   updateTeamsDetailsOpenState();
   window.scrollTo({ top: 0, behavior: "smooth" });

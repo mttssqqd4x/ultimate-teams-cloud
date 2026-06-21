@@ -1,0 +1,4 @@
+project_id = "fsdqkozqkshqwvmhq"
+
+[functions.send-team-notification]
+verify_jwt = true

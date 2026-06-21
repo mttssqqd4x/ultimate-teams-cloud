@@ -504,3 +504,32 @@ Changes:
 Notes:
 - Backup JSON does not include Supabase Auth users, passwords, or email confirmation data.
 - Backup JSON does not include the separate historical `games` log.
+
+
+## v4.31 web push notifications
+
+Changes:
+- added signed-in-user web push notification opt-in under Attendance → Team Notifications
+- added Supabase table `push_subscriptions`
+- added service-worker push and notification-click handlers
+- added admin-only prompt when generating teams: choose whether to send a push notification
+- added Supabase Edge Function: `send-team-notification`
+- only users who are signed in and opt in on their device can receive push notifications
+
+Setup required:
+1. Generate VAPID keys:
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+2. Put the VAPID public key in `config.js`:
+   ```js
+   VAPID_PUBLIC_KEY: "YOUR_PUBLIC_KEY"
+   ```
+3. Run the updated `setup_supabase.sql` in Supabase.
+4. Deploy the Edge Function in `supabase/functions/send-team-notification`.
+5. Add Edge Function secrets in Supabase:
+   - `VAPID_PUBLIC_KEY`
+   - `VAPID_PRIVATE_KEY`
+   - `VAPID_SUBJECT`, for example `mailto:samschra44@gmail.com`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+6. Users sign in and tap **Enable Notifications** on each device that should receive notifications.
