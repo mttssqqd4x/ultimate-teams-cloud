@@ -206,6 +206,8 @@
       <label>Backup / Restore</label>
       <div class="toolbar">
         <button class="btn-secondary" type="button" onclick="downloadBackupJson()">Export Backup JSON</button>
+        <button class="btn-secondary" type="button" onclick="document.getElementById('importBackupJsonInput').click()">Import Backup JSON</button>
+        <input id="importBackupJsonInput" type="file" accept="application/json,.json" style="display:none" onchange="importBackupJsonFile(event)">
         <button class="btn-secondary" type="button" onclick="downloadRatingsCsv()">Download Ratings CSV</button>
       </div>
 
@@ -276,6 +278,23 @@
 
 
 
+
+
+<div id="signOutConfirmModal" class="modal-backdrop" onclick="closeModal(event, 'signOutConfirmModal')">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="margin:0">Sign out?</h2>
+      <button class="btn-secondary" style="width:auto" onclick="hideModal('signOutConfirmModal')">Close</button>
+    </div>
+    <div class="notice" style="margin-top:12px;line-height:1.45">
+      Are you sure you want to sign out?
+    </div>
+    <div class="toolbar" style="margin-top:14px">
+      <button class="btn-secondary" type="button" onclick="hideModal('signOutConfirmModal')">Cancel</button>
+      <button class="btn-danger" type="button" onclick="confirmSignOut()">Yes, sign out</button>
+    </div>
+  </div>
+</div>
 
 <div id="authConfirmedModal" class="modal-backdrop" onclick="closeModal(event, 'authConfirmedModal')">
   <div class="modal-card" onclick="event.stopPropagation()">

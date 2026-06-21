@@ -343,6 +343,11 @@ async function signIn(){
   hideSignInBox();
 }
 async function signOut(){
+  showModal("signOutConfirmModal");
+}
+
+async function confirmSignOut(){
+  hideModal("signOutConfirmModal");
   await db.auth.signOut();
   currentUser = null;
   profile = { role: "guest", email: "Guest" };
@@ -1600,6 +1605,203 @@ function downloadBlob(filename, content, type){
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+async function importBackupJsonFile(event){
+  if(!isAdmin()){ alert("Admin only."); return; }
+
+  const input = event?.target;
+  const file = input?.files?.[0];
+  if(!file) return;
+
+  try{
+    const text = await file.text();
+    const backup = JSON.parse(text);
+
+    const summary = summarizeBackupJson(backup);
+    if(!summary.valid){
+      alert("This does not look like a valid Ultimate Teams backup JSON file.");
+      return;
+    }
+
+    const ok = confirm(
+      "Restore backup JSON?\n\n" +
+      summary.message +
+      "\n\nThis will replace current players, attendance, pair rules, teammate history, settings, and current game state. This cannot be undone unless you export the current data first."
+    );
+    if(!ok) return;
+
+    await restoreBackupJson(backup);
+    alert("Backup restored.");
+    await loadCloudData();
+    renderAll();
+  }catch(e){
+    console.error(e);
+    alert("Could not import backup JSON: " + (e?.message || e));
+  }finally{
+    if(input) input.value = "";
+  }
+}
+
+function summarizeBackupJson(backup){
+  const playerCount = Array.isArray(backup?.players) ? backup.players.length : 0;
+  const pairRuleCount = Array.isArray(backup?.pairRules) ? backup.pairRules.length : 0;
+  const historyCount = backup?.history && typeof backup.history === "object" ? Object.keys(backup.history).length : 0;
+  const hasSettings = !!backup?.settings;
+  const hasCurrentGame = !!backup?.currentGame;
+
+  return {
+    valid: Array.isArray(backup?.players),
+    message:
+      `Players: ${playerCount}\n` +
+      `Pair rules: ${pairRuleCount}\n` +
+      `Teammate history entries: ${historyCount}\n` +
+      `Settings: ${hasSettings ? "yes" : "no"}\n` +
+      `Current game: ${hasCurrentGame ? "yes" : "no"}`
+  };
+}
+
+function backupPlayerToRow(p){
+  return {
+    id: p.id,
+    first_name: p.firstName || p.first_name || "",
+    last_name: p.lastName || p.last_name || "",
+    handling: Number(p.handling || 0),
+    cutting: Number(p.cutting || 0),
+    defense: Number(p.defense || 0),
+    win_loss: Number(p.winLossRating ?? p.win_loss ?? 0),
+    active: p.active !== false,
+    injury_pct: Number(p.injuryPct ?? p.injury_pct ?? 1),
+    temporary: !!p.temporary,
+    games_played: Number(p.gamesPlayed ?? p.games_played ?? 0),
+    wins: Number(p.wins || 0),
+    losses: Number(p.losses || 0),
+    updated_at: new Date().toISOString()
+  };
+}
+
+function backupTeamsToSerializableTeams(backup){
+  const teams = backup?.currentGame?.teams;
+  if(!Array.isArray(teams)) return [];
+
+  return teams.map(team => (Array.isArray(team) ? team : []).map(p => {
+    if(typeof p === "string") return { id: p, fullName: backupPlayerNameById(backup, p) || p };
+    const id = p.id || p.player_id || "";
+    return { id, fullName: p.fullName || p.full_name || backupPlayerNameById(backup, id) || id };
+  }).filter(x => x.id));
+}
+
+function backupPlayerNameById(backup, id){
+  const p = (backup?.players || []).find(x => String(x.id) === String(id));
+  if(!p) return "";
+  return p.fullName || p.full_name || `${p.firstName || p.first_name || ""} ${p.lastName || p.last_name || ""}`.trim();
+}
+
+async function restoreBackupJson(backup){
+  if(!Array.isArray(backup?.players)) throw new Error("Backup is missing players.");
+
+  const players = backup.players.map(backupPlayerToRow).filter(p => p.id && (p.first_name || p.last_name));
+  if(!players.length) throw new Error("Backup has no valid players.");
+
+  // Clear dependent data first. Deleting players will cascade some rows, but explicit clears keep restore predictable.
+  await db.from("current_game").upsert({ id: "main", teams: [], selected_winner_index: null, results_saved: true, generated_at: new Date().toISOString(), updated_by: currentUser?.id || null }, { onConflict: "id" });
+  await db.from("attendance").delete().not("player_id", "is", null);
+  await db.from("pair_rules").delete().not("id", "is", null);
+  await db.from("teammate_history").delete().not("player_a", "is", null);
+  await db.from("rating_history").delete().not("id", "is", null);
+  await db.from("players").delete().not("id", "is", null);
+
+  // Restore players in chunks.
+  for(const chunk of chunkArray(players, 100)){
+    const { error } = await db.from("players").insert(chunk);
+    if(error) throw error;
+  }
+
+  // Restore attendance from player.attending flags.
+  const attendanceRows = backup.players
+    .filter(p => p.id)
+    .map(p => ({
+      player_id: p.id,
+      present: !!p.attending,
+      updated_at: new Date().toISOString(),
+      updated_by: currentUser?.id || null
+    }));
+
+  for(const chunk of chunkArray(attendanceRows, 100)){
+    const { error } = await db.from("attendance").upsert(chunk, { onConflict: "player_id" });
+    if(error) throw error;
+  }
+
+  // Restore pair rules. Try with created_by if column exists; fallback without it.
+  const pairRuleRows = (backup.pairRules || []).filter(r => r.player1Id && r.player2Id).map(r => ({
+    id: r.id || undefined,
+    player1_id: r.player1Id,
+    player2_id: r.player2Id,
+    rule_type: r.type || r.rule_type || "together",
+    strength: Number(r.strength || 1),
+    created_by: r.createdBy || r.created_by || null
+  }));
+
+  if(pairRuleRows.length){
+    let { error } = await db.from("pair_rules").insert(pairRuleRows);
+    if(error){
+      const fallbackRows = pairRuleRows.map(({ created_by, ...rest }) => rest);
+      const fallback = await db.from("pair_rules").insert(fallbackRows);
+      if(fallback.error) throw fallback.error;
+    }
+  }
+
+  // Restore teammate history.
+  const historyRows = [];
+  if(backup.history && typeof backup.history === "object"){
+    Object.entries(backup.history).forEach(([key, count]) => {
+      const [a, b] = String(key).split("|");
+      if(a && b) historyRows.push({ player_a: a, player_b: b, count: Number(count || 0) });
+    });
+  }
+
+  for(const chunk of chunkArray(historyRows, 100)){
+    const { error } = await db.from("teammate_history").upsert(chunk, { onConflict: "player_a,player_b" });
+    if(error) throw error;
+  }
+
+  // Restore settings.
+  if(backup.settings){
+    const s = backup.settings;
+    const { error } = await db.from("settings").upsert({
+      id: "main",
+      weight_handling: Number(s.weightHandling ?? 0.35),
+      weight_cutting: Number(s.weightCutting ?? 0.35),
+      weight_defense: Number(s.weightDefense ?? 0.30),
+      k_factor: Number(s.kFactor ?? 0.08),
+      repeat_weight: Number(s.repeatWeight ?? 4),
+      prioritize_handler_separation: !!s.prioritizeHandlerSeparation,
+      handler_separation_boost: Number(s.handlerSeparationBoost ?? 2),
+      prioritize_elite_balance: !!s.prioritizeEliteBalance,
+      elite_balance_boost: Number(s.eliteBalanceBoost ?? 2),
+      updated_at: new Date().toISOString()
+    }, { onConflict: "id" });
+    if(error) throw error;
+  }
+
+  // Restore current game state.
+  const currentTeams = backupTeamsToSerializableTeams(backup);
+  const { error: gameError } = await db.from("current_game").upsert({
+    id: "main",
+    teams: currentTeams,
+    selected_winner_index: backup.selectedWinnerIndex ?? null,
+    results_saved: !!backup.resultsSavedForCurrentGame,
+    generated_at: new Date().toISOString(),
+    updated_by: currentUser?.id || null
+  }, { onConflict: "id" });
+  if(gameError) throw gameError;
+}
+
+function chunkArray(items, size){
+  const chunks = [];
+  for(let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
 function downloadBackupJson(){
   if(!isAdmin()){ alert("Admin only."); return; }
   downloadBlob(`${getDatePrefix()}_ultimate-teams-backup.json`, JSON.stringify(state, null, 2), "application/json");
@@ -1664,7 +1866,7 @@ function clearModalSearch(id){
   if(el) el.value = "";
 }
 function hideAllModals(){
-  ["ratingsModal", "editPlayerModal", "winLossModal"].forEach(hideModal);
+  ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal"].forEach(hideModal);
 }
 
 function openWinLossModal(show = true){

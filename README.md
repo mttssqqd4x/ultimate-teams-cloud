@@ -481,3 +481,26 @@ Changes:
 - regular signed-in users no longer see visual differences between active and inactive players in Attendance
 - inactive players are still available for attendance marking
 - captains/admins still see inactive styling and the Inactive label for roster management
+
+
+## v4.30 backup import and sign-out confirmation
+
+Changes:
+- added **Import Backup JSON** on the Data page
+- JSON restore is admin-only
+- restore asks for confirmation before replacing current data
+- restore imports:
+  - players and ratings
+  - active/inactive status
+  - injury percent and temporary flag
+  - games played, wins, losses, Win/Loss rating
+  - attendance flags
+  - pair rules
+  - teammate history
+  - algorithm/settings
+  - current generated game
+- added a confirmation popup before signing out
+
+Notes:
+- Backup JSON does not include Supabase Auth users, passwords, or email confirmation data.
+- Backup JSON does not include the separate historical `games` log.
