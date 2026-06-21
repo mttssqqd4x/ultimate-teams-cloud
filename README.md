@@ -473,3 +473,11 @@ Changes:
 - confirmation popup now includes a note for cases where the email opens in a new tab
 - added cross-tab auth confirmation refresh using localStorage/BroadcastChannel
   - if the confirmation opens in a second tab, the original app tab can refresh its auth state automatically
+
+
+## v4.29 hide inactive status from regular users
+
+Changes:
+- regular signed-in users no longer see visual differences between active and inactive players in Attendance
+- inactive players are still available for attendance marking
+- captains/admins still see inactive styling and the Inactive label for roster management

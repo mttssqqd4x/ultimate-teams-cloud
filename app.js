@@ -682,7 +682,7 @@ function renderPlayers(){
 
   players.forEach(p => {
     const row = document.createElement("div");
-    row.className = "player clickable" + (p.attending ? " attend-on" : "") + (!p.active ? " inactive" : "") + (p.temporary ? " temp" : "");
+    row.className = "player clickable" + (p.attending ? " attend-on" : "") + (canManageGames() && !p.active ? " inactive" : "") + (p.temporary ? " temp" : "");
     row.onclick = e => {
       if(e.target.closest("button")) return;
       toggleAttendance(p.id);
@@ -699,7 +699,7 @@ function renderPlayers(){
     row.innerHTML = `
       <div>
         <div class="player-name">${escapeHtml(p.fullName)}${isCurrentSignedInPlayer(p) ? ' <span class="chip">You</span>' : ""}</div>
-        ${!p.active ? '<div class="small">Inactive</div>' : ""}
+        ${canManageGames() && !p.active ? '<div class="small">Inactive</div>' : ""}
       </div>
       ${controls}
     `;
