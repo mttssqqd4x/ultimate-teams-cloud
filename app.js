@@ -2309,14 +2309,18 @@ function openEditPlayerModal(show = true){
     .sort(comparePlayersByLastName);
 
   list.innerHTML = players.length ? players.map(p => `
-    <div class="player clickable" onclick="selectPlayerForEdit('${p.id}')">
+    <button type="button" class="player clickable edit-player-choice" data-edit-player-id="${escapeHtml(String(p.id))}">
       <div>
         <div class="player-name">${escapeHtml(p.fullName)}</div>
         <div class="small">${isAdmin() ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}` : "Tap to edit name"}</div>
       </div>
       <div class="small">Edit</div>
-    </div>
+    </button>
   `).join("") : '<div class="small">No players match that search.</div>';
+
+  list.querySelectorAll("[data-edit-player-id]").forEach(btn => {
+    btn.addEventListener("click", () => selectPlayerForEdit(btn.getAttribute("data-edit-player-id")));
+  });
 
   const help = document.getElementById("editPlayerHelp");
   if(help) help.textContent = isAdmin()
@@ -2327,12 +2331,9 @@ function openEditPlayerModal(show = true){
   if(show) showModal("editPlayerModal");
 }
 function selectPlayerForEdit(id){
-  const p = playerById(id);
-  if(!p) return;
+  const p = playerById(id) || state.players.find(x => String(x.id) === String(id));
+  if(!p){ alert("Could not find that player. Refresh and try again."); return; }
   selectedEditPlayerId = p.id;
-
-  hideModal("editPlayerModal");
-  showModal("editPlayerDetailsModal");
 
   setValue("editFirstName", p.firstName);
   setValue("editLastName", p.lastName);
@@ -2350,6 +2351,10 @@ function selectPlayerForEdit(id){
   if(status) status.textContent = `${p.fullName} · ${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}`;
 
   updateRoleVisibility();
+
+  // Show the edit popup on top of the selector instead of closing/switching modals first.
+  // This is more reliable on mobile browsers and prevents the selection popup from eating the transition.
+  showModal("editPlayerDetailsModal");
 }
 async function saveEditedPlayer(){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
