@@ -2227,7 +2227,7 @@ function clearModalSearch(id){
   if(el) el.value = "";
 }
 function hideAllModals(){
-  ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal", "accountModal", "accountCreatedModal", "captainWelcomeModal", "editPlayerDetailsModal"].forEach(hideModal);
+  ["ratingsModal", "editPlayerModal", "editPlayerDetailsModal", "winLossModal", "signOutConfirmModal", "accountModal", "accountCreatedModal", "captainWelcomeModal"].forEach(hideModal);
 }
 
 function openWinLossModal(show = true){
@@ -2297,11 +2297,8 @@ function openRatingsModal(show = true){
 }
 
 let selectedEditPlayerId = null;
-
 function openEditPlayerModal(show = true){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
-
-  selectedEditPlayerId = null;
 
   const list = document.getElementById("editPlayerModalList");
   if(!list) return;
@@ -2329,7 +2326,6 @@ function openEditPlayerModal(show = true){
   updateRoleVisibility();
   if(show) showModal("editPlayerModal");
 }
-
 function selectPlayerForEdit(id){
   const p = playerById(id);
   if(!p) return;
@@ -2355,7 +2351,6 @@ function selectPlayerForEdit(id){
 
   updateRoleVisibility();
 }
-
 async function saveEditedPlayer(){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
   const p = playerById(selectedEditPlayerId);
@@ -2387,12 +2382,10 @@ async function saveEditedPlayer(){
   if(updated) selectPlayerForEdit(updated.id);
   alert("Player updated.");
 }
-
 async function deleteEditedPlayer(){
   if(!isAdmin()){ alert("Admin only."); return; }
   const p = playerById(selectedEditPlayerId);
   if(!p){ alert("Select a player first."); return; }
-
   if(!confirm(`Delete ${p.fullName}? This cannot be undone.`)) return;
 
   const { error } = await db.from("players").delete().eq("id", p.id);
@@ -2405,3 +2398,22 @@ async function deleteEditedPlayer(){
   openEditPlayerModal(true);
 }
 
+function normalizeName(str){
+  return String(str || "").trim().replace(/\s+/g, " ");
+}
+function splitName(full){
+  const parts = normalizeName(full).split(" ").filter(Boolean);
+  return { first: parts[0] || "", last: parts.slice(1).join(" ") };
+}
+function setValue(id, value){
+  const el = document.getElementById(id);
+  if(el) el.value = value ?? "";
+}
+function escapeHtml(str){
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}

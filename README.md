@@ -571,12 +571,11 @@ Required setup:
    ```
 
 
-## v4.34 edit-player selector and record colors
+## v4.35 stable edit-player popup patch
 
 Changes:
+- rebuilt from v4.33 stable base to restore player/captain/admin permissions
+- fixed v4.34 helper-function regression
 - Edit Player now opens a player-selection popup first
-- tapping a player opens a separate edit popup for that player
-- fixed the player-selection flow so it works better on phone screens
-- Win/Loss record badges are green when wins are greater than losses
-- Win/Loss record badges are red when losses are greater than wins
-- tied records use a neutral badge
+- tapping a player opens a separate edit popup
+- Win/Loss record badges are green for winning records, red for losing records, and neutral for tied records
