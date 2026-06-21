@@ -285,15 +285,15 @@ function hideSignInBox(){
 function updateAuthButtons(){
   const signedIn = !!currentUser;
   const signInBtn = document.getElementById("showSignInBtn");
-  const signOutBtn = document.getElementById("signOutBtn");
+  const accountBtn = document.getElementById("accountBtn");
 
   if(signInBtn){
     signInBtn.classList.toggle("hidden", signedIn);
     signInBtn.style.display = signedIn ? "none" : "";
   }
-  if(signOutBtn){
-    signOutBtn.classList.toggle("hidden", !signedIn);
-    signOutBtn.style.display = signedIn ? "" : "none";
+  if(accountBtn){
+    accountBtn.classList.toggle("hidden", !signedIn);
+    accountBtn.style.display = signedIn ? "" : "none";
   }
   if(signedIn) hideSignInBox();
 }
@@ -343,12 +343,25 @@ async function signIn(){
   if(error){ setAuthMessage(error.message); return; }
   hideSignInBox();
 }
-async function signOut(){
+async 
+function openAccountModal(){
+  if(!currentUser){
+    toggleSignInBox();
+    return;
+  }
+  const emailLine = document.getElementById("accountEmailLine");
+  if(emailLine) emailLine.textContent = `Signed in as ${currentUser.email || profile?.email || "user"}`;
+  showModal("accountModal");
+  updateNotificationUi();
+}
+
+function signOut(){
   showModal("signOutConfirmModal");
 }
 
 async function confirmSignOut(){
   hideModal("signOutConfirmModal");
+  hideModal("accountModal");
   await db.auth.signOut();
   currentUser = null;
   profile = { role: "guest", email: "Guest" };
@@ -476,31 +489,43 @@ async function enablePushNotifications(){
   if(!currentUser){
     alert("Sign in before enabling notifications.");
     toggleSignInBox();
-    return;
+    return false;
   }
+
+  const toggle = document.getElementById("pushToggle");
 
   if(!pushSupported()){
     setPushStatus("Push notifications are not supported in this browser.");
-    return;
+    if(toggle) toggle.checked = false;
+    return false;
   }
 
   if(!vapidConfigured()){
     setPushStatus("Push notifications are not configured yet. Add your VAPID public key to config.js.");
-    return;
+    if(toggle) toggle.checked = false;
+    return false;
   }
 
   const permission = await Notification.requestPermission();
   if(permission !== "granted"){
     setPushStatus("Notifications are not enabled. Browser permission is currently: " + permission + ".");
-    updateNotificationUi();
-    return;
+    if(toggle) toggle.checked = false;
+    await updateNotificationUi(false);
+    return false;
   }
+
+  setPushStatus("Turning notifications on...");
 
   const registration = await getServiceWorkerRegistration();
   if(!registration){
     setPushStatus("Could not register the service worker for notifications.");
-    return;
+    if(toggle) toggle.checked = false;
+    return false;
   }
+
+  try{
+    if(navigator.serviceWorker?.ready) await navigator.serviceWorker.ready;
+  }catch(e){}
 
   let subscription = await registration.pushManager.getSubscription();
   if(!subscription){
@@ -522,22 +547,33 @@ async function enablePushNotifications(){
 
   if(error){
     setPushStatus("Could not save notification subscription: " + error.message);
-    return;
+    if(toggle) toggle.checked = false;
+    return false;
   }
 
   setPushStatus("Notifications enabled.");
-  updateNotificationUi();
+  if(toggle){
+    toggle.checked = true;
+    toggle.disabled = false;
+  }
+
+  // Safari can report the subscription a moment late after the permission prompt.
+  setTimeout(() => updateNotificationUi(true), 500);
+  return true;
 }
 
 async function disablePushNotifications(){
   if(!currentUser){
     setPushStatus("Sign in first.");
-    return;
+    return false;
   }
+
+  const toggle = document.getElementById("pushToggle");
+  setPushStatus("Turning notifications off...");
 
   if(pushSupported()){
     const registration = await navigator.serviceWorker.ready.catch(() => null);
-    const subscription = registration ? await registration.pushManager.getSubscription() : null;
+    const subscription = registration ? await subscriptionFromRegistration(registration) : null;
     if(subscription){
       await subscription.unsubscribe().catch(() => {});
       await db.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
@@ -546,7 +582,23 @@ async function disablePushNotifications(){
 
   await db.from("push_subscriptions").delete().eq("user_id", currentUser.id);
   setPushStatus("Notifications disabled.");
-  updateNotificationUi();
+  if(toggle){
+    toggle.checked = false;
+    toggle.disabled = false;
+  }
+  setTimeout(() => updateNotificationUi(false), 250);
+  return true;
+}
+
+async function togglePushNotificationsFromSwitch(toggle){
+  if(!toggle) return;
+  toggle.disabled = true;
+
+  const desired = !!toggle.checked;
+  const ok = desired ? await enablePushNotifications() : await disablePushNotifications();
+
+  if(!ok) toggle.checked = !desired;
+  toggle.disabled = false;
 }
 
 function setPushStatus(message){
@@ -554,8 +606,18 @@ function setPushStatus(message){
   if(el) el.textContent = message || "";
 }
 
-async function updateNotificationUi(){
+async function subscriptionFromRegistration(registration){
+  if(!registration?.pushManager) return null;
+  try{
+    return await registration.pushManager.getSubscription();
+  }catch(e){
+    return null;
+  }
+}
+
+async function updateNotificationUi(forceSubscribed = null){
   const box = document.getElementById("pushNotificationsBox");
+  const toggle = document.getElementById("pushToggle");
   if(!box) return;
 
   if(!currentUser){
@@ -565,45 +627,54 @@ async function updateNotificationUi(){
 
   box.style.display = "";
 
-  const enableBtn = document.getElementById("pushEnableBtn");
-  const disableBtn = document.getElementById("pushDisableBtn");
-
   if(!pushSupported()){
     setPushStatus("Push notifications are not supported in this browser.");
-    if(enableBtn) enableBtn.disabled = true;
-    if(disableBtn) disableBtn.disabled = true;
+    if(toggle){
+      toggle.checked = false;
+      toggle.disabled = true;
+    }
     return;
   }
 
   if(!vapidConfigured()){
     setPushStatus("Push notifications are not configured yet.");
-    if(enableBtn) enableBtn.disabled = true;
-    if(disableBtn) disableBtn.disabled = false;
+    if(toggle){
+      toggle.checked = false;
+      toggle.disabled = true;
+    }
     return;
   }
 
   const permission = Notification.permission;
   if(permission === "denied"){
     setPushStatus("Notifications are blocked in browser settings.");
-    if(enableBtn) enableBtn.disabled = true;
-    if(disableBtn) disableBtn.disabled = false;
+    if(toggle){
+      toggle.checked = false;
+      toggle.disabled = true;
+    }
     return;
   }
 
-  let subscribed = false;
-  try{
-    const registration = await navigator.serviceWorker.ready;
-    subscribed = !!(await registration.pushManager.getSubscription());
-  }catch(e){}
+  let subscribed = forceSubscribed === true;
+  if(forceSubscribed !== true){
+    try{
+      const registration = await getServiceWorkerRegistration();
+      const subscription = registration ? await subscriptionFromRegistration(registration) : null;
+      subscribed = !!subscription;
+    }catch(e){
+      subscribed = false;
+    }
+  }
+
+  if(toggle){
+    toggle.checked = subscribed;
+    toggle.disabled = false;
+  }
 
   if(subscribed){
     setPushStatus("Notifications enabled.");
-    if(enableBtn) enableBtn.disabled = true;
-    if(disableBtn) disableBtn.disabled = false;
   }else{
     setPushStatus(permission === "granted" ? "Notifications allowed, but this device is not subscribed yet." : "Notifications are off for this device.");
-    if(enableBtn) enableBtn.disabled = false;
-    if(disableBtn) disableBtn.disabled = false;
   }
 }
 
@@ -2060,7 +2131,7 @@ function clearModalSearch(id){
   if(el) el.value = "";
 }
 function hideAllModals(){
-  ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal"].forEach(hideModal);
+  ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal", "accountModal"].forEach(hideModal);
 }
 
 function openWinLossModal(show = true){

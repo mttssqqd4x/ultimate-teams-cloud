@@ -60,11 +60,56 @@
       vertical-align:middle;
     }
 
+
+    .switch{
+      position:relative;
+      display:inline-block;
+      width:54px;
+      height:30px;
+      margin:0;
+    }
+    .switch input{
+      opacity:0;
+      width:0;
+      height:0;
+      position:absolute;
+    }
+    .slider{
+      position:absolute;
+      cursor:pointer;
+      inset:0;
+      background:#374151;
+      border-radius:999px;
+      transition:.2s;
+      border:1px solid var(--border);
+    }
+    .slider:before{
+      position:absolute;
+      content:"";
+      height:24px;
+      width:24px;
+      left:2px;
+      top:2px;
+      background:white;
+      border-radius:50%;
+      transition:.2s;
+    }
+    .switch input:checked + .slider{
+      background:var(--accent);
+    }
+    .switch input:checked + .slider:before{
+      transform:translateX(24px);
+    }
+    .switch input:disabled + .slider{
+      opacity:.55;
+      cursor:not-allowed;
+    }
+
   </style>
 </head>
 <body>
 <div class="app">
-  <div class="topbar"><h1 style="margin:0;flex:1">Ultimate Teams</h1><button id="mainTabBtn" class="btn-secondary tab-active" style="width:auto" onclick="showPage('main')">Main</button><button id="dataTabBtn" class="btn-secondary" style="width:auto" onclick="showPage('data')">Data</button><button id="showSignInBtn" class="btn-secondary" style="width:auto" type="button" onclick="toggleSignInBox(event)">Sign in</button><button id="signOutBtn" class="btn-secondary hidden" style="width:auto" onclick="signOut()">Sign out</button></div>
+  <div class="topbar"><h1 style="margin:0;flex:1">Ultimate Teams</h1><button id="mainTabBtn" class="btn-secondary tab-active" style="width:auto" onclick="showPage('main')">Main</button><button id="dataTabBtn" class="btn-secondary" style="width:auto" onclick="showPage('data')">Data</button><button id="showSignInBtn" class="btn-secondary" style="width:auto" type="button" onclick="toggleSignInBox(event)">Sign in</button><button id="accountBtn" class="btn-secondary hidden" style="width:auto" onclick="openAccountModal()">Account</button></div>
   <div id="authPage" class="card hidden" style="display:none">
     <div id="authSignInSection">
       <h2>Sign in</h2>
@@ -105,17 +150,6 @@
         <button id="clearTeamsBtn" class="btn-danger admin-only" type="button" onclick="clearCurrentTeams()">Clear Teams</button>
 </div><div id="resultMessage" class="small" style="margin-top:8px"></div></details></div>
     <div class="card signed-in-only" id="attendanceCard"><details open><summary><span class="summary-title">Attendance</span><span></span></summary>
-<div class="subbox signed-in-only" id="pushNotificationsBox">
-  <details>
-    <summary><span class="muted-inline">Team Notifications</span><span></span></summary>
-    <div class="small" style="margin-top:10px">Get a notification when new teams are generated.</div>
-    <div class="toolbar" style="margin-top:10px">
-      <button class="btn-secondary" id="pushEnableBtn" type="button" onclick="enablePushNotifications()">Enable Notifications</button>
-      <button class="btn-secondary" id="pushDisableBtn" type="button" onclick="disablePushNotifications()">Disable Notifications</button>
-    </div>
-    <div class="small" id="pushStatus" style="margin-top:8px"></div>
-  </details>
-</div>
 <div class="subbox"><details><summary><span class="muted-inline">Present Players</span><span class="muted-inline" id="presentCount"></span></summary><div id="presentPlayersList" class="present-list" style="margin-top:10px"></div></details></div><div class="subbox" id="tempPlayerBox"><details><summary><span class="muted-inline">Add One-Time Player</span><span></span></summary><div class="grid grid-2" style="margin-top:10px"><div><label>New Player Full Name</label><input id="tempName" placeholder="Mike Jones"></div><div><label>Rate Like</label><select id="tempLike" onchange="loadTempRatingsFromLike()"></select></div></div><div class="grid grid-3" style="margin-top:10px"><div><label>Handling</label><input id="tempHandling" type="number" step="0.1" value="3"></div><div><label>Cutting</label><input id="tempCutting" type="number" step="0.1" value="3"></div><div><label>Defense</label><input id="tempDefense" type="number" step="0.1" value="3"></div></div><div style="margin-top:10px"><button class="btn" onclick="addTempPlayer()">Add One-Time Player</button></div></details></div><div class="subbox" id="pairRulesBox"><details><summary><span class="muted-inline">Pair Rules</span><span></span></summary><div class="grid grid-4" style="margin-top:10px"><div><label>Player 1</label><select id="pairP1"></select></div><div><label>Player 2</label><select id="pairP2"></select></div><div><label>Rule</label><select id="pairType"><option value="apart">Apart</option><option value="together">Together</option></select></div><div><label>Strength</label><input id="pairStrength" type="number" min="0.1" max="5" step="0.1" value="1.0"></div></div><div style="margin-top:10px" class="section-actions"><button class="btn" onclick="addPairRule()">Add Pair Rule</button><button class="btn-secondary" onclick="lockPair()">Lock Pair</button><button class="btn-danger" onclick="clearPairRules()">Clear All Pair Rules</button></div><div id="pairRuleList" class="list" style="margin-top:10px"></div></details></div><div id="numTeamsSection" class="captain-admin-only"><div class="grid grid-1" style="margin-top:10px"><div><label>Number Of Teams</label><input id="numTeams" data-captain-admin-only="true" type="number" min="2" value="3"></div></div></div><div style="margin-top:10px" class="grid grid-2"><button id="toggleInactiveBtn" class="btn-secondary captain-admin-only" onclick="toggleShowInactive()">Show Inactive Players</button><button class="btn-warn captain-admin-only" onclick="clearAttendance()">Clear Attendance</button></div><div class="search-row" style="margin-top:10px"><div><label>Search Players</label><input id="playerSearch" type="text" placeholder="Search by name..." oninput="renderPlayers()"></div><div><label>&nbsp;</label><button class="btn-secondary" style="width:auto" onclick="clearPlayerSearch()">Clear</button></div></div><div id="playerList" class="list" style="margin-top:10px"></div></details></div>
   </div>
   
@@ -291,6 +325,39 @@
 
 
 
+
+
+<div id="accountModal" class="modal-backdrop" onclick="closeModal(event, 'accountModal')">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="margin:0">Account</h2>
+      <button class="btn-secondary" style="width:auto" onclick="hideModal('accountModal')">Close</button>
+    </div>
+
+    <div class="notice" style="margin-top:12px;line-height:1.45">
+      <div id="accountEmailLine">Signed in</div>
+    </div>
+
+    <div class="subbox" id="pushNotificationsBox" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div>
+          <div class="player-name">Team notifications</div>
+          <div class="small">Get notified when new teams are generated.</div>
+        </div>
+        <label class="switch" aria-label="Team notifications">
+          <input id="pushToggle" type="checkbox" onchange="togglePushNotificationsFromSwitch(this)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="small" id="pushStatus" style="margin-top:8px"></div>
+    </div>
+
+    <div class="toolbar" style="margin-top:14px">
+      <button class="btn-danger" type="button" onclick="signOut()">Sign out</button>
+      <button class="btn-secondary" type="button" onclick="hideModal('accountModal')">Done</button>
+    </div>
+  </div>
+</div>
 
 <div id="signOutConfirmModal" class="modal-backdrop" onclick="closeModal(event, 'signOutConfirmModal')">
   <div class="modal-card" onclick="event.stopPropagation()">

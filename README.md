@@ -533,3 +533,14 @@ Setup required:
    - `VAPID_SUBJECT`, for example `mailto:samschra44@gmail.com`
    - `SUPABASE_SERVICE_ROLE_KEY`
 6. Users sign in and tap **Enable Notifications** on each device that should receive notifications.
+
+
+## v4.32 account menu and notification toggle
+
+Changes:
+- replaced the top-bar **Sign out** button with an **Account** button
+- moved team notification controls into the Account popup
+- changed notifications to a simple on/off toggle
+- kept sign-out inside the Account popup
+- kept sign-out confirmation before actually signing out
+- improved Safari notification enable flow so the app keeps the toggle on immediately after permission is granted
