@@ -602,3 +602,20 @@ Changes:
 - updates the open player dropdown in place after saving
 - delete removes the player row in place
 - intended to prevent iOS Safari from closing/crashing the Edit Player popup
+
+
+## v4.41 settings and results-save repair
+
+Changes:
+- fixed Save Settings flow and added a visible save status
+- restored Elite Balance Boost as an editable setting
+- added typical ranges/help text for algorithm settings
+- added SQL migration lines for existing settings tables that are missing newer columns
+- added a results-save policy for captains/admins on existing Supabase projects
+- improved game-results save flow with stronger error handling
+- verified ELO-style Win/Loss logic:
+  - team strength = team overall sum
+  - expected win = 1 / (1 + 10^((opponent - team) / 4))
+  - winner rating increases by K * (1 - expected)
+  - loser rating decreases by K * (0 - expected)
+  - players get games/wins/losses updated

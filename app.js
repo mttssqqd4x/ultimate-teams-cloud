@@ -1365,7 +1365,9 @@ function teamStats(team){
   };
 }
 function expectedWinProb(teamStrength, oppStrength){
-  return 1 / (1 + Math.pow(10, ((oppStrength - teamStrength) / 4)));
+  const a = Number(teamStrength || 0);
+  const b = Number(oppStrength || 0);
+  return 1 / (1 + Math.pow(10, ((b - a) / 4)));
 }
 function pairKey(a, b){
   return String(a) < String(b) ? `${a}|${b}` : `${b}|${a}`;
@@ -1653,64 +1655,101 @@ function selectWinner(teamIndex){
 async function saveResults(){
   if(!canManageGames()){ alert("Captain/admin only."); return; }
   if(!state.currentGame){ alert("Generate teams first."); return; }
-  if(state.selectedWinnerIndex === null){ alert("Tap the winning team first."); return; }
+  if(state.selectedWinnerIndex === null || state.selectedWinnerIndex === undefined){ alert("Tap the winning team first."); return; }
+  if(!state.currentGame.teams?.[state.selectedWinnerIndex]){ alert("Winning team selection is invalid."); return; }
   if(state.resultsSavedForCurrentGame && !confirm("Results already saved. Save again anyway?")) return;
 
-  const winner = state.currentGame.teams[state.selectedWinnerIndex];
-  const losers = state.currentGame.teams.filter((_, i) => i !== state.selectedWinnerIndex);
-  const winnerStrength = teamStats(winner).overall;
-  const updates = new Map();
-
-  state.currentGame.teams.flat().forEach(p => updates.set(p.id, { ...p }));
-
-  losers.forEach(loserTeam => {
-    const loserStrength = teamStats(loserTeam).overall;
-    const winnerExpected = expectedWinProb(winnerStrength, loserStrength);
-    const loserExpected = expectedWinProb(loserStrength, winnerStrength);
-    const scaledK = Number(state.settings.kFactor || 0.08) / Math.max(1, losers.length);
-
-    const winnerDelta = scaledK * (1 - winnerExpected);
-    const loserDelta = scaledK * (0 - loserExpected);
-
-    winner.forEach(p => updates.get(p.id).winLossRating += winnerDelta);
-    loserTeam.forEach(p => updates.get(p.id).winLossRating += loserDelta);
-  });
-
-  state.currentGame.teams.forEach((team, idx) => {
-    team.forEach(p => {
-      const u = updates.get(p.id);
-      u.gamesPlayed = Number(u.gamesPlayed || 0) + 1;
-      if(idx === state.selectedWinnerIndex) u.wins = Number(u.wins || 0) + 1;
-      else u.losses = Number(u.losses || 0) + 1;
-    });
-  });
-
-  for(const p of updates.values()){
-    const { error } = await db.from("players").update({
-      win_loss: p.winLossRating,
-      games_played: p.gamesPlayed,
-      wins: p.wins,
-      losses: p.losses,
-      updated_at: new Date().toISOString()
-    }).eq("id", p.id);
-    if(error){ alert(error.message); return; }
-
-    await db.from("rating_history").insert({ player_id: p.id, value: p.winLossRating });
-  }
-
-  await addCurrentTeamsToHistory();
-  await db.from("games").insert({
-    teams: serializableTeams(),
-    winner_team_index: state.selectedWinnerIndex,
-    created_by: currentUser?.id || null
-  });
-
-  state.resultsSavedForCurrentGame = true;
-  await saveCurrentGameToDb(true);
-  await loadCloudData();
-  renderAll();
+  const saveBtn = document.querySelector("#saveResultsWrap .btn-success");
   const msg = document.getElementById("resultMessage");
-  if(msg) msg.textContent = "Results saved.";
+  if(saveBtn) saveBtn.disabled = true;
+  if(msg) msg.textContent = "Saving results...";
+
+  try{
+    const winner = state.currentGame.teams[state.selectedWinnerIndex];
+    const losers = state.currentGame.teams.filter((_, i) => i !== state.selectedWinnerIndex);
+    if(!winner?.length || !losers.length){
+      alert("Results require at least one winning team and one losing team.");
+      if(msg) msg.textContent = "";
+      return;
+    }
+
+    const winnerStrength = teamStats(winner).overall;
+    const updates = new Map();
+
+    state.currentGame.teams.flat().forEach(p => {
+      if(p?.id) updates.set(p.id, { ...p });
+    });
+
+    losers.forEach(loserTeam => {
+      const loserStrength = teamStats(loserTeam).overall;
+      const winnerExpected = expectedWinProb(winnerStrength, loserStrength);
+      const loserExpected = expectedWinProb(loserStrength, winnerStrength);
+      const scaledK = Number(state.settings.kFactor || 0.08) / Math.max(1, losers.length);
+
+      const winnerDelta = scaledK * (1 - winnerExpected);
+      const loserDelta = scaledK * (0 - loserExpected);
+
+      winner.forEach(p => {
+        const u = updates.get(p.id);
+        if(u) u.winLossRating = Number(u.winLossRating || 0) + winnerDelta;
+      });
+      loserTeam.forEach(p => {
+        const u = updates.get(p.id);
+        if(u) u.winLossRating = Number(u.winLossRating || 0) + loserDelta;
+      });
+    });
+
+    state.currentGame.teams.forEach((team, idx) => {
+      team.forEach(p => {
+        const u = updates.get(p.id);
+        if(!u) return;
+        u.gamesPlayed = Number(u.gamesPlayed || 0) + 1;
+        if(idx === state.selectedWinnerIndex) u.wins = Number(u.wins || 0) + 1;
+        else u.losses = Number(u.losses || 0) + 1;
+      });
+    });
+
+    for(const p of updates.values()){
+      const { error } = await db.from("players").update({
+        win_loss: Number(p.winLossRating || 0),
+        games_played: Number(p.gamesPlayed || 0),
+        wins: Number(p.wins || 0),
+        losses: Number(p.losses || 0),
+        updated_at: new Date().toISOString()
+      }).eq("id", p.id);
+      if(error) throw error;
+
+      const hist = await db.from("rating_history").insert({ player_id: p.id, value: Number(p.winLossRating || 0) });
+      if(hist.error) console.warn("Could not save rating history", hist.error);
+    }
+
+    await addCurrentTeamsToHistory();
+
+    const gameInsert = await db.from("games").insert({
+      teams: serializableTeams(),
+      winner_team_index: state.selectedWinnerIndex,
+      created_by: currentUser?.id || null
+    });
+    if(gameInsert.error) throw gameInsert.error;
+
+    state.resultsSavedForCurrentGame = true;
+    await saveCurrentGameToDb(true);
+
+    state.players = state.players.map(p => updates.get(p.id) || p);
+
+    await loadCloudData();
+    renderAll();
+
+    const finalMsg = document.getElementById("resultMessage");
+    if(finalMsg) finalMsg.textContent = "Results saved. Records and Win/Loss ratings updated.";
+  }catch(error){
+    console.error("saveResults failed", error);
+    if(msg) msg.textContent = "Results save failed.";
+    alert("Results save failed: " + (error?.message || error));
+  }finally{
+    const currentSaveBtn = document.querySelector("#saveResultsWrap .btn-success");
+    if(currentSaveBtn) currentSaveBtn.disabled = false;
+  }
 }
 
 async function savePairingsOnlyForCurrentGame(){
@@ -1759,6 +1798,7 @@ function syncSettingsForm(){
   setValue("kFactor", s.kFactor);
   setValue("repeatWeight", s.repeatWeight);
   setValue("handlerSeparationBoost", s.handlerSeparationBoost);
+  setValue("eliteBalanceBoost", s.eliteBalanceBoost);
   updateBoolButtons();
 }
 function updateBoolButtons(){
@@ -1778,18 +1818,25 @@ function toggleSettingBool(key){
   state.settings[key] = !state.settings[key];
   updateBoolButtons();
 }
-async function saveSettings(){
-  if(!isAdmin()){ alert("Admin only."); return; }
-
+function readNumberSetting(id, fallback){
+  const el = document.getElementById(id);
+  const n = Number(el?.value);
+  return Number.isFinite(n) ? n : fallback;
+}
+function normalizeSettingsBeforeSave(){
   const s = state.settings;
-  s.weightHandling = Number(document.getElementById("weightHandling")?.value || 0.35);
-  s.weightCutting = Number(document.getElementById("weightCutting")?.value || 0.35);
-  s.weightDefense = Number(document.getElementById("weightDefense")?.value || 0.30);
-  s.kFactor = Number(document.getElementById("kFactor")?.value || 0.08);
-  s.repeatWeight = Number(document.getElementById("repeatWeight")?.value || 4);
-  s.handlerSeparationBoost = Number(document.getElementById("handlerSeparationBoost")?.value || 2);
 
-  const { error } = await db.from("settings").upsert({
+  s.weightHandling = readNumberSetting("weightHandling", 0.35);
+  s.weightCutting = readNumberSetting("weightCutting", 0.35);
+  s.weightDefense = readNumberSetting("weightDefense", 0.30);
+  s.kFactor = readNumberSetting("kFactor", 0.08);
+  s.repeatWeight = readNumberSetting("repeatWeight", 4);
+  s.handlerSeparationBoost = readNumberSetting("handlerSeparationBoost", 2);
+  s.eliteBalanceBoost = readNumberSetting("eliteBalanceBoost", 2);
+}
+function settingsPayload(includeEliteBoost = true){
+  const s = state.settings;
+  const payload = {
     id: "main",
     weight_handling: s.weightHandling,
     weight_cutting: s.weightCutting,
@@ -1799,12 +1846,48 @@ async function saveSettings(){
     prioritize_handler_separation: s.prioritizeHandlerSeparation,
     handler_separation_boost: s.handlerSeparationBoost,
     prioritize_elite_balance: s.prioritizeEliteBalance,
-    elite_balance_boost: s.eliteBalanceBoost,
     updated_at: new Date().toISOString()
-  });
+  };
+  if(includeEliteBoost) payload.elite_balance_boost = s.eliteBalanceBoost;
+  return payload;
+}
+function looksLikeMissingEliteBoostColumn(error){
+  const msg = String(error?.message || error?.details || error?.hint || "").toLowerCase();
+  return msg.includes("elite_balance_boost") || msg.includes("schema cache") || msg.includes("column");
+}
+async function saveSettings(){
+  if(!isAdmin()){ alert("Admin only."); return; }
 
-  if(error) alert(error.message);
-  else alert("Settings saved.");
+  normalizeSettingsBeforeSave();
+
+  const status = document.getElementById("settingsSaveStatus");
+  if(status) status.textContent = "Saving settings...";
+
+  let { error } = await db.from("settings").upsert(settingsPayload(true), { onConflict: "id" });
+
+  if(error && looksLikeMissingEliteBoostColumn(error)){
+    const retry = await db.from("settings").upsert(settingsPayload(false), { onConflict: "id" });
+    if(retry.error){
+      if(status) status.textContent = "Settings save failed.";
+      alert("Settings save failed: " + retry.error.message);
+      return;
+    }
+    if(status) status.textContent = "Settings saved, except Elite Balance Boost. Run the v4.41 SQL migration once.";
+    alert("Settings saved, but Elite Balance Boost could not be saved because the settings table is missing the elite_balance_boost column. Run the v4.41 setup_supabase.sql once.");
+    return;
+  }
+
+  if(error){
+    if(status) status.textContent = "Settings save failed.";
+    alert("Settings save failed: " + error.message);
+    return;
+  }
+
+  if(status) status.textContent = "Settings saved.";
+  setTimeout(() => {
+    const currentStatus = document.getElementById("settingsSaveStatus");
+    if(currentStatus && currentStatus.textContent === "Settings saved.") currentStatus.textContent = "";
+  }, 2500);
 }
 
 function parseCsv(text){

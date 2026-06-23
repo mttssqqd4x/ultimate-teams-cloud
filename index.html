@@ -238,15 +238,19 @@
 
       <div class="hr"></div>
 
-      <div class="grid grid-3">
-        <div><label>Handling Weight</label><input id="weightHandling" type="number" step="0.01" value="0.35"></div>
-        <div><label>Cutting Weight</label><input id="weightCutting" type="number" step="0.01" value="0.35"></div>
-        <div><label>Defense Weight</label><input id="weightDefense" type="number" step="0.01" value="0.30"></div>
+      <div class="notice" style="margin-bottom:10px;line-height:1.45">
+        <strong>Typical ranges:</strong> rating weights usually total about 1.00; K-Factor 0.02-0.20; anti-repeat 0-10; handler/elite boosts 0-5.
       </div>
-      <div class="grid grid-3" style="margin-top:10px">
-        <div><label>K-Factor</label><input id="kFactor" type="number" step="0.01" value="0.08"></div>
-        <div><label>Anti-Repeat Strength</label><input id="repeatWeight" type="number" step="0.5" value="4"></div>
-        <div><label>Handler Separation Boost</label><input id="handlerSeparationBoost" type="number" step="0.5" value="2"></div>
+      <div class="grid grid-3">
+        <div><label>Handling Weight</label><input id="weightHandling" type="number" min="0" max="1" step="0.01" value="0.35"><div class="small">Typical 0.25-0.45. Default 0.35.</div></div>
+        <div><label>Cutting Weight</label><input id="weightCutting" type="number" min="0" max="1" step="0.01" value="0.35"><div class="small">Typical 0.25-0.45. Default 0.35.</div></div>
+        <div><label>Defense Weight</label><input id="weightDefense" type="number" min="0" max="1" step="0.01" value="0.30"><div class="small">Typical 0.20-0.40. Default 0.30.</div></div>
+      </div>
+      <div class="grid grid-4" style="margin-top:10px">
+        <div><label>K-Factor</label><input id="kFactor" type="number" min="0" max="1" step="0.01" value="0.08"><div class="small">Typical 0.02-0.20. Higher = ratings move faster.</div></div>
+        <div><label>Anti-Repeat Strength</label><input id="repeatWeight" type="number" min="0" max="20" step="0.5" value="4"><div class="small">Typical 2-8. Higher = fewer repeat teammates.</div></div>
+        <div><label>Handler Separation Boost</label><input id="handlerSeparationBoost" type="number" min="0" max="10" step="0.5" value="2"><div class="small">Typical 1-4. Used when handler separation is on.</div></div>
+        <div><label>Elite Balance Boost</label><input id="eliteBalanceBoost" type="number" min="0" max="10" step="0.5" value="2"><div class="small">Typical 1-4. Used when elite balance is on.</div></div>
       </div>
       <div class="toolbar" style="margin-top:10px">
         <button id="handlerSeparationBtn" class="btn-secondary" type="button" onclick="toggleSettingBool('prioritizeHandlerSeparation')">Handler Separation: Off</button>
@@ -254,6 +258,7 @@
       </div>
       <div style="margin-top:10px">
         <button class="btn" type="button" onclick="saveSettings()">Save Settings</button>
+        <div id="settingsSaveStatus" class="small" style="margin-top:8px"></div>
       </div>
 
       <div class="hr"></div>
@@ -416,7 +421,7 @@
       <h2 style="margin:0">Win/Loss Records</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('winLossModal')">Close</button>
     </div>
-    <div class="small" style="margin-top:10px">Sorted by games played, most first. Players with a record are circled in green.</div>
+    <div class="small" style="margin-top:10px">Sorted by games played, most first. Winning records are green, losing records are red, and tied records are neutral.</div>
     <div class="toolbar-3" style="margin-top:10px">
       <input id="winLossSearch" placeholder="Search players..." oninput="openWinLossModal(false)">
       <span></span>

@@ -287,3 +287,23 @@ begin
 exception
   when duplicate_object then null;
 end $$;
+
+
+
+-- v4.41 settings + results-save migration for existing projects
+alter table public.settings add column if not exists elite_balance_boost numeric not null default 2.0;
+alter table public.settings add column if not exists prioritize_elite_balance boolean not null default false;
+alter table public.settings add column if not exists handler_separation_boost numeric not null default 2.0;
+alter table public.settings add column if not exists prioritize_handler_separation boolean not null default false;
+alter table public.settings add column if not exists repeat_weight numeric not null default 4.0;
+alter table public.settings add column if not exists k_factor numeric not null default .08;
+alter table public.settings add column if not exists weight_handling numeric not null default .35;
+alter table public.settings add column if not exists weight_cutting numeric not null default .35;
+alter table public.settings add column if not exists weight_defense numeric not null default .30;
+
+-- Allows captains/admins to save game results, which updates games/wins/losses/win_loss.
+drop policy if exists players_update_captain_results on public.players;
+create policy players_update_captain_results on public.players
+for update to authenticated
+using(public.can_manage_games())
+with check(public.can_manage_games());
