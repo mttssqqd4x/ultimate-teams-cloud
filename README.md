@@ -658,3 +658,11 @@ Changes:
 - removed the extra start-time line above the teams
 - version is shown only at the bottom of the Data page
 - version label now says "Version" instead of "App version"
+
+
+## v4.46 Data-page-only version label
+
+Changes:
+- removed the misplaced version label from the main page
+- moved Version into the Data page content
+- label now shows "Version: v4.46"
