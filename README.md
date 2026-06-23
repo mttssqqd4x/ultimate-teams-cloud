@@ -648,3 +648,13 @@ Changes:
 - start time is forced to Mountain Time and labeled MT
 - if an older current game has no stored generated_at value, the app shows "Started time unavailable"
 - added the app version at the bottom of the Data page
+
+
+## v4.45 start-time and version display cleanup
+
+Changes:
+- start time is no longer forced to Mountain Time
+- start time now uses the viewer's device/browser local time
+- removed the extra start-time line above the teams
+- version is shown only at the bottom of the Data page
+- version label now says "Version" instead of "App version"

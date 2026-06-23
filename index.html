@@ -27,9 +27,6 @@
     body:not(.role-ready) #toggleInactiveBtn {
       display: none !important;
     }
-
-  
-    .game-start-line{margin-bottom:10px;font-weight:700;color:var(--accent)}
     .app-version-line{margin-top:16px;text-align:center;color:var(--muted);font-size:12px}
     .record-row{display:flex;justify-content:space-between;gap:12px;align-items:center}
     .record-pill{border-radius:999px;padding:3px 9px;font-weight:700;white-space:nowrap;border:2px solid #6b7280}
@@ -400,8 +397,7 @@
     </div>
   </div>
 </div>
-
-<div id="appVersionLine" class="app-version-line"></div>
+<div id="dataAppVersionLine" class="app-version-line"></div>
 <div id="authConfirmedModal" class="modal-backdrop" onclick="closeModal(event, 'authConfirmedModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
     <div class="row" style="justify-content:space-between;align-items:center">

@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "v4.44";
+const APP_VERSION = "v4.45";
 
 let db = null;
 let currentUser = null;
@@ -822,8 +822,8 @@ function renderAll(){
 }
 
 function updateAppVersionLine(){
-  const el = document.getElementById("appVersionLine");
-  if(el) el.textContent = `App version: ${APP_VERSION}`;
+  const el = document.getElementById("dataAppVersionLine");
+  if(el) el.textContent = `Version: ${APP_VERSION}`;
 }
 
 function updateStats(){
@@ -1663,11 +1663,7 @@ function formatGameStartTime(value){
   if(!value) return "";
   const d = new Date(value);
   if(Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Denver",
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(d) + " MT";
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function updateGameStartTime(){
@@ -1727,7 +1723,6 @@ function renderTeams(){
   });
 
   out.innerHTML = "";
-  out.appendChild(startLine);
   out.appendChild(wrap);
 }
 function selectWinner(teamIndex){
