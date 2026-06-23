@@ -1203,28 +1203,53 @@ function loadTempRatingsFromLike(){
   setValue("tempDefense", src.defense);
 }
 
-async function addTempPlayer(){
-  if(!canManageGames()){ alert("Captain/admin only."); return; }
+function readAddPlayerForm(){
   const fullName = normalizeName(document.getElementById("tempName")?.value || "");
-  if(!fullName){ alert("Enter a player name."); return; }
+  if(!fullName) return { error: "Enter a player name." };
   const { first, last } = splitName(fullName);
-
-  const payload = {
-    first_name: first,
-    last_name: last,
+  return {
+    first,
+    last,
     handling: Number(document.getElementById("tempHandling")?.value || 3),
     cutting: Number(document.getElementById("tempCutting")?.value || 3),
-    defense: Number(document.getElementById("tempDefense")?.value || 3),
+    defense: Number(document.getElementById("tempDefense")?.value || 3)
+  };
+}
+
+function setAddPlayerStatus(message){
+  const status = document.getElementById("addPlayerStatus");
+  if(status) status.textContent = message || "";
+}
+
+async function insertPlayerFromAddForm({ temporary }){
+  if(!canManageGames()){ alert("Captain/admin only."); return; }
+
+  const form = readAddPlayerForm();
+  if(form.error){ alert(form.error); return; }
+
+  setAddPlayerStatus(temporary ? "Adding one-time player..." : "Adding permanent player...");
+
+  const payload = {
+    first_name: form.first,
+    last_name: form.last,
+    handling: form.handling,
+    cutting: form.cutting,
+    defense: form.defense,
     win_loss: 0,
     active: true,
     injury_pct: 1,
-    temporary: true,
+    temporary: !!temporary,
     updated_at: new Date().toISOString()
   };
 
   const { data, error } = await db.from("players").insert(payload).select().single();
-  if(error){ alert(error.message); return; }
+  if(error){
+    setAddPlayerStatus("Add failed.");
+    alert(error.message);
+    return;
+  }
 
+  // Since this section is inside Attendance, add the new player to today's present list.
   await db.from("attendance").upsert({
     player_id: data.id,
     present: true,
@@ -1235,6 +1260,20 @@ async function addTempPlayer(){
   document.getElementById("tempName").value = "";
   await loadCloudData();
   renderAll();
+
+  setAddPlayerStatus(temporary ? "One-time player added." : "Player added permanently and marked present.");
+  setTimeout(() => {
+    const status = document.getElementById("addPlayerStatus");
+    if(status && (status.textContent === "One-time player added." || status.textContent === "Player added permanently and marked present.")) status.textContent = "";
+  }, 3000);
+}
+
+async function addTempPlayer(){
+  await insertPlayerFromAddForm({ temporary: true });
+}
+
+async function addPermanentPlayer(){
+  await insertPlayerFromAddForm({ temporary: false });
 }
 
 function visiblePairRules(){

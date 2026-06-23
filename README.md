@@ -619,3 +619,13 @@ Changes:
   - winner rating increases by K * (1 - expected)
   - loser rating decreases by K * (0 - expected)
   - players get games/wins/losses updated
+
+
+## v4.42 Add Player section
+
+Changes:
+- renamed the Attendance subsection from "Add One-Time Player" to "Add Player"
+- kept the Add One-Time Player button for temporary/sub players
+- added a new Add Player button that adds the player permanently to the roster
+- permanent Add Player also marks the player present for the current game
+- both buttons use the same name, ratings, and Rate Like fields
