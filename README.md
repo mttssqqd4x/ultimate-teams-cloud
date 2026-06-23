@@ -629,3 +629,22 @@ Changes:
 - added a new Add Player button that adds the player permanently to the roster
 - permanent Add Player also marks the player present for the current game
 - both buttons use the same name, ratings, and Rate Like fields
+
+
+## v4.43 Current Game start time
+
+Changes:
+- added the generated/start time next to the Current Game title
+- uses the current_game.generated_at value already stored in Supabase
+- generating new teams sets the start time
+- selecting a winner or saving results no longer resets the start time
+- backup restore preserves the current game start time when available
+
+
+## v4.44 visible game start time and app version
+
+Changes:
+- Current Game start time now displays beside the title and also above the teams
+- start time is forced to Mountain Time and labeled MT
+- if an older current game has no stored generated_at value, the app shows "Started time unavailable"
+- added the app version at the bottom of the Data page

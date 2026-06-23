@@ -4,6 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
+const APP_VERSION = "v4.44";
 
 let db = null;
 let currentUser = null;
@@ -28,6 +29,7 @@ const state = {
     eliteBalanceBoost: 2
   },
   currentGame: null,
+  currentGameGeneratedAt: null,
   selectedWinnerIndex: null,
   resultsSavedForCurrentGame: false,
   showInactive: false
@@ -532,10 +534,12 @@ async function loadCloudData(){
 
   if(gameRes.data?.teams && Array.isArray(gameRes.data.teams) && gameRes.data.teams.length){
     state.currentGame = hydrateGame(gameRes.data.teams);
+    state.currentGameGeneratedAt = gameRes.data.generated_at || null;
     state.selectedWinnerIndex = gameRes.data.selected_winner_index;
     state.resultsSavedForCurrentGame = !!gameRes.data.results_saved;
   } else {
     state.currentGame = null;
+    state.currentGameGeneratedAt = null;
     state.selectedWinnerIndex = null;
     state.resultsSavedForCurrentGame = false;
   }
@@ -812,7 +816,14 @@ function renderAll(){
   renderTeams();
   syncSettingsForm();
   updateTeamsDetailsOpenState();
+  updateGameStartTime();
+  updateAppVersionLine();
   updateNotificationUi();
+}
+
+function updateAppVersionLine(){
+  const el = document.getElementById("appVersionLine");
+  if(el) el.textContent = `App version: ${APP_VERSION}`;
 }
 
 function updateStats(){
@@ -1582,6 +1593,7 @@ async function generateGame(sendPushNotification = false){
     if(!best || candidate.score < best.score) best = candidate;
   }
 
+  state.currentGameGeneratedAt = new Date().toISOString();
   state.currentGame = { teams: best.teams };
   state.selectedWinnerIndex = null;
   state.resultsSavedForCurrentGame = false;
@@ -1595,12 +1607,15 @@ function serializableTeams(){
   return (state.currentGame?.teams || []).map(team => team.map(p => ({ id: p.id, fullName: p.fullName })));
 }
 async function saveCurrentGameToDb(saved){
+  if(state.currentGame && !state.currentGameGeneratedAt){
+    state.currentGameGeneratedAt = new Date().toISOString();
+  }
   const { error } = await db.from("current_game").upsert({
     id: "main",
     teams: serializableTeams(),
     selected_winner_index: state.selectedWinnerIndex,
     results_saved: !!saved,
-    generated_at: new Date().toISOString(),
+    generated_at: state.currentGameGeneratedAt || new Date().toISOString(),
     updated_by: currentUser?.id || null
   });
   if(error) alert(error.message);
@@ -1616,6 +1631,7 @@ async function clearCurrentTeams(){
   if(!confirm("Clear the currently generated teams? This does not change player ratings or attendance.")) return;
 
   state.currentGame = null;
+  state.currentGameGeneratedAt = null;
   state.selectedWinnerIndex = null;
   state.resultsSavedForCurrentGame = false;
 
@@ -1643,7 +1659,30 @@ function updateTeamsDetailsOpenState(){
   details.open = !!state.currentGame;
 }
 
+function formatGameStartTime(value){
+  if(!value) return "";
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Denver",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(d) + " MT";
+}
+
+function updateGameStartTime(){
+  const el = document.getElementById("gameStartTime");
+  if(!el) return;
+  if(!state.currentGame){
+    el.textContent = "";
+    return;
+  }
+  const time = formatGameStartTime(state.currentGameGeneratedAt);
+  el.textContent = time ? `Started ${time}` : "Started time unavailable";
+}
+
 function renderTeams(){
+  updateGameStartTime();
   const out = document.getElementById("teamsOutput");
   const resultMessage = document.getElementById("resultMessage");
   if(resultMessage) resultMessage.textContent = "";
@@ -1653,6 +1692,11 @@ function renderTeams(){
     out.innerHTML = '<div class="small">No game generated yet.</div>';
     return;
   }
+
+  const startTime = formatGameStartTime(state.currentGameGeneratedAt);
+  const startLine = document.createElement("div");
+  startLine.className = "game-start-line";
+  startLine.textContent = startTime ? `Started ${startTime}` : "Started time unavailable";
 
   const wrap = document.createElement("div");
   wrap.className = "grid grid-3";
@@ -1683,6 +1727,7 @@ function renderTeams(){
   });
 
   out.innerHTML = "";
+  out.appendChild(startLine);
   out.appendChild(wrap);
 }
 function selectWinner(teamIndex){
@@ -2273,7 +2318,7 @@ async function restoreBackupJson(backup){
     teams: currentTeams,
     selected_winner_index: backup.selectedWinnerIndex ?? null,
     results_saved: !!backup.resultsSavedForCurrentGame,
-    generated_at: new Date().toISOString(),
+    generated_at: backup.currentGameGeneratedAt || new Date().toISOString(),
     updated_by: currentUser?.id || null
   }, { onConflict: "id" });
   if(gameError) throw gameError;
