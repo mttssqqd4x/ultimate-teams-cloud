@@ -666,3 +666,11 @@ Changes:
 - removed the misplaced version label from the main page
 - moved Version into the Data page content
 - label now shows "Version: v4.46"
+
+
+## v4.47 Data page version visibility fix
+
+Changes:
+- fixed the missing Version label on the Data page
+- moved Version into a normal visible Data page card instead of a captain/admin-only hidden card
+- shows "Version: v4.47"
