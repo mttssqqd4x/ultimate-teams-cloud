@@ -134,6 +134,14 @@
     .history-card .team-line{margin-top:6px;font-size:13px;color:var(--muted)}
     .pill-admin{display:inline-block;border:1px solid var(--warn);color:var(--warn);border-radius:999px;padding:2px 7px;font-size:11px;margin-left:6px}
 
+
+    .modal-header-sticky{position:sticky;top:-14px;z-index:10;background:var(--card);padding:0 0 10px;margin:0 0 4px;border-bottom:1px solid var(--border)}
+    .edit-active-toggle{width:auto;min-width:82px;flex:0 0 auto;padding:8px 10px;font-size:12px}
+    .late-add-player-list{max-height:260px;overflow:auto;margin-top:10px;border:1px solid var(--border);border-radius:12px;padding:8px;background:rgba(255,255,255,.02)}
+    .late-add-player-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;border-bottom:1px solid rgba(255,255,255,.06)}
+    .late-add-player-row:last-child{border-bottom:0}
+    .late-add-player-row button{width:auto;min-width:74px}
+
 </style>
 </head>
 <body>
@@ -304,7 +312,7 @@
 
 <div id="editPlayerModal" class="modal-backdrop" onclick="closeModal(event, 'editPlayerModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
-    <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
       <h2 style="margin:0">Edit Player</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('editPlayerModal')">Close</button>
     </div>

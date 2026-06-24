@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.9.5";
+const APP_VERSION = "4.9.6";
 
 let db = null;
 let currentUser = null;
@@ -2593,7 +2593,7 @@ function makeDynamicModal(id, title, bodyHtml, footerHtml = ""){
   modal.onclick = e => { if(e.target === modal) modal.remove(); };
   modal.innerHTML = `
     <div class="modal-card" onclick="event.stopPropagation()">
-      <div class="row" style="justify-content:space-between;align-items:center;gap:10px">
+      <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center;gap:10px">
         <h2 style="margin:0">${escapeHtml(title)}</h2>
         <button class="btn-secondary" style="width:auto" type="button" onclick="document.getElementById('${id}')?.remove()">Close</button>
       </div>
@@ -2735,19 +2735,42 @@ function openLateAddModal(){
   if(!canManageGames()){ alert("Captain/admin only."); return; }
   if(!state.currentGame){ alert("Generate teams first."); return; }
   if(state.resultsSavedForCurrentGame){ alert("This game already has saved results. Late add is only available before results are saved."); return; }
-  const inGame = currentGamePlayerIds();
-  const available = state.players.filter(p => !inGame.has(String(p.id))).sort(comparePlayersByLastName);
+
   const teamOptions = (state.currentGame.teams || []).map((_, idx) => `<option value="${idx}">Team ${idx + 1}</option>`).join("");
-  const playerOptions = '<option value="">Add new player...</option>' + available.map(p => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.fullName)}</option>`).join("");
   const likeOptions = '<option value="">Select...</option>' + state.players.slice().sort(comparePlayersByLastName).map(p => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.fullName)}</option>`).join("");
+
   const body = `
-    <div class="notice">Add a player after teams were generated. The player will be marked present and added to the selected team. Results must not already be saved.</div>
-    <div class="grid grid-2" style="margin-top:10px">
-      <div><label>Team</label><select id="lateAddTeam">${teamOptions}</select></div>
-      <div><label>Existing Player</label><select id="lateAddExisting">${playerOptions}</select></div>
-    </div>
+    <div class="notice">Add a player after teams were generated. The player will be marked present, made active if needed, and added to the selected team. Results must not already be saved.</div>
+
+    <div style="margin-top:10px"><label>Team</label><select id="lateAddTeam">${teamOptions}</select></div>
+
     <div class="hr"></div>
-    <div class="small">For a new player, leave Existing Player as "Add new player".</div>
+    <div class="player-name">Choose existing player</div>
+    <input id="lateAddExisting" type="hidden" value="">
+    <div id="lateAddSelectedExisting" class="small" style="margin-top:6px">No existing player selected. Choose one below, or add a new player.</div>
+
+    <div class="modal-sort-row">
+      <label for="lateAddExistingSort">Sort by</label>
+      <select id="lateAddExistingSort" onchange="renderLateAddExistingList()">
+        <option value="az" selected>Name A-Z</option>
+        <option value="za">Name Z-A</option>
+        <option value="ratingDesc">Overall rating high-low</option>
+        <option value="ratingAsc">Overall rating low-high</option>
+        <option value="winLossDesc">Win/Loss rating high-low</option>
+        <option value="winLossAsc">Win/Loss rating low-high</option>
+        <option value="activeFirst">Active first</option>
+        <option value="inactiveFirst">Inactive first</option>
+      </select>
+    </div>
+    <div class="modal-search-row">
+      <div class="modal-search-input-wrap"><input id="lateAddExistingSearch" placeholder="Search existing players..." oninput="renderLateAddExistingList()"></div>
+      <button class="btn-secondary modal-search-clear" type="button" onclick="clearLateAddExistingSearch()">Clear</button>
+    </div>
+    <div id="lateAddExistingList" class="late-add-player-list"></div>
+
+    <div class="hr"></div>
+    <div class="player-name">Or add new player</div>
+    <div class="small">Leave existing player unselected to add a new one.</div>
     <div class="grid grid-2" style="margin-top:10px">
       <div><label>New Player Full Name</label><input id="lateAddName" placeholder="Mike Jones"></div>
       <div><label>Rate Like</label><select id="lateAddLike" onchange="loadLateAddRatingsFromLike()">${likeOptions}</select></div>
@@ -2758,9 +2781,72 @@ function openLateAddModal(){
       <div><label>Defense</label><input id="lateAddDefense" type="number" step="0.1" value="3"></div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input id="lateAddTemporary" type="checkbox" checked style="width:auto"> One-time player</label>
-    <div class="toolbar" style="margin-top:12px"><button class="btn" type="button" onclick="lateAddPlayerToCurrentGame()">Add To Team</button></div>
+    <div class="toolbar" style="margin-top:12px">
+      <button class="btn" type="button" onclick="lateAddPlayerToCurrentGame()">Add To Team</button>
+      <button class="btn-secondary" type="button" onclick="clearLateAddExistingPlayer()">Clear Selected Existing</button>
+    </div>
     <div id="lateAddStatus" class="small" style="margin-top:8px"></div>`;
+
   makeDynamicModal("lateAddModal", "Late Add Player", body);
+  renderLateAddExistingList();
+}
+
+
+function lateAddAvailableExistingPlayers(){
+  const inGame = currentGamePlayerIds();
+  return state.players.filter(p => !inGame.has(String(p.id)));
+}
+
+function renderLateAddExistingList(){
+  const list = document.getElementById("lateAddExistingList");
+  if(!list) return;
+
+  const search = (document.getElementById("lateAddExistingSearch")?.value || "").trim().toLowerCase();
+  const sortMode = document.getElementById("lateAddExistingSort")?.value || "az";
+  const selectedId = document.getElementById("lateAddExisting")?.value || "";
+
+  const players = sortPlayersForModal(
+    lateAddAvailableExistingPlayers().filter(p => !search || p.fullName.toLowerCase().includes(search)),
+    sortMode
+  );
+
+  if(!players.length){
+    list.innerHTML = '<div class="small">No available players match that search.</div>';
+    return;
+  }
+
+  list.innerHTML = players.map(p => {
+    const selected = String(p.id) === String(selectedId);
+    const status = p.active ? "Active" : "Inactive";
+    return `<div class="late-add-player-row">
+      <div style="min-width:0">
+        <div class="player-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.fullName)}</div>
+        <div class="small">${status} · Overall ${overall(p).toFixed(2)} · W/L ${Number(p.winLossRating || 0).toFixed(2)}</div>
+      </div>
+      <button class="${selected ? "btn" : "btn-secondary"}" type="button" onclick="selectLateAddExistingPlayer('${escapeHtml(String(p.id))}')">${selected ? "Selected" : "Select"}</button>
+    </div>`;
+  }).join("");
+}
+
+function selectLateAddExistingPlayer(playerId){
+  const p = playerById(playerId);
+  if(!p) return;
+  setValue("lateAddExisting", p.id);
+  const label = document.getElementById("lateAddSelectedExisting");
+  if(label) label.textContent = `Selected existing player: ${p.fullName}${p.active ? "" : " (will be made active)"}`;
+  renderLateAddExistingList();
+}
+
+function clearLateAddExistingPlayer(){
+  setValue("lateAddExisting", "");
+  const label = document.getElementById("lateAddSelectedExisting");
+  if(label) label.textContent = "No existing player selected. Choose one below, or add a new player.";
+  renderLateAddExistingList();
+}
+
+function clearLateAddExistingSearch(){
+  setValue("lateAddExistingSearch", "");
+  renderLateAddExistingList();
 }
 
 function loadLateAddRatingsFromLike(){
@@ -2783,8 +2869,10 @@ async function lateAddPlayerToCurrentGame(){
   if(existingId){
     player = playerById(existingId);
     if(!player){ alert("Existing player not found. Refresh and try again."); return; }
-    const { error } = await db.from("attendance").upsert({ player_id: player.id, present: true, updated_at: new Date().toISOString(), updated_by: currentUser?.id || null }, { onConflict:"player_id" });
+    const { error } = await saveAttendanceFromApp(player.id, true);
     if(error){ alert(error.message); return; }
+    player.active = true;
+    player.attending = true;
   }else{
     const fullName = normalizeName(document.getElementById("lateAddName")?.value || "");
     if(!fullName){ alert("Enter a new player name or choose an existing player."); return; }
@@ -3101,7 +3189,7 @@ function openEditPlayerModal(show = true){
         <summary>
           <div class="row" style="justify-content:space-between;align-items:center;gap:8px;width:100%">
             <div class="player-name" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.fullName)}</div>
-            <div class="small" style="white-space:nowrap">${p.active ? "Active" : "Inactive"}</div>
+            <button class="btn-secondary edit-active-toggle" type="button" data-toggle-player-active-id="${escapeHtml(id)}">${p.active ? "Active" : "Inactive"}</button>
           </div>
         </summary>
 
@@ -3139,6 +3227,14 @@ function openEditPlayerModal(show = true){
     `;
   }).join("") : '<div class="small">No players match that search.</div>';
 
+  list.querySelectorAll("[data-toggle-player-active-id]").forEach(btn => {
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await toggleInlinePlayerActive(btn.getAttribute("data-toggle-player-active-id"));
+    });
+  });
+
   list.querySelectorAll("[data-save-player-id]").forEach(btn => {
     btn.addEventListener("click", async (event) => {
       event.preventDefault();
@@ -3160,6 +3256,45 @@ function openEditPlayerModal(show = true){
 
   updateRoleVisibility();
   if(show) showModal("editPlayerModal");
+}
+
+
+async function toggleInlinePlayerActive(playerId){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  const p = playerById(playerId) || state.players.find(x => String(x.id) === String(playerId));
+  if(!p){ alert("Could not find that player. Refresh and try again."); return; }
+
+  const next = !p.active;
+  const safe = editDomId("edit", p.id);
+  const btn = document.querySelector(`[data-toggle-player-active-id="${String(p.id).replace(/"/g, '\\"')}"]`);
+  const oldText = btn?.textContent;
+
+  if(btn){
+    btn.disabled = true;
+    btn.textContent = next ? "Active..." : "Inactive...";
+  }
+
+  const { error } = await db.from("players")
+    .update({ active: next, updated_at: new Date().toISOString() })
+    .eq("id", p.id);
+
+  if(btn) btn.disabled = false;
+
+  if(error){
+    if(btn) btn.textContent = oldText || (p.active ? "Active" : "Inactive");
+    alert(error.message);
+    return;
+  }
+
+  p.active = next;
+
+  const activeSelect = document.getElementById(`${safe}-active`);
+  if(activeSelect) activeSelect.value = next ? "true" : "false";
+
+  document.querySelectorAll(`[data-toggle-player-active-id="${String(p.id).replace(/"/g, '\\"')}"]`).forEach(el => {
+    el.textContent = next ? "Active" : "Inactive";
+    el.disabled = false;
+  });
 }
 
 async function saveInlineEditedPlayer(playerId){
@@ -3226,14 +3361,9 @@ async function saveInlineEditedPlayer(playerId){
   const details = document.getElementById(`${safe}-first`)?.closest("details");
   if(details){
     const nameEl = details.querySelector(".player-name");
-    const smallEl = details.querySelector("summary .small");
+    const activeBtn = details.querySelector("[data-toggle-player-active-id]");
     if(nameEl) nameEl.textContent = p.fullName;
-    if(smallEl){
-      const ratingLine = isAdmin()
-        ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}`
-        : "Name edit";
-      smallEl.textContent = `${ratingLine} · ${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}`;
-    }
+    if(activeBtn) activeBtn.textContent = p.active ? "Active" : "Inactive";
     details.open = true;
   }
 
@@ -3296,6 +3426,11 @@ function escapeHtml(str){
 
 
 Object.assign(window, {
+  toggleInlinePlayerActive,
+  renderLateAddExistingList,
+  selectLateAddExistingPlayer,
+  clearLateAddExistingPlayer,
+  clearLateAddExistingSearch,
   deleteGameFromHistory,
   ensurePlayerSortControls,
   openGameHistoryModal,

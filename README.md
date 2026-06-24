@@ -817,3 +817,15 @@ Changes:
 - logs the deletion in admin audit logs
 - old Undo/Void Last Saved Game now uses the same safer selected-game delete logic
 - added `rating_history.game_id` for cleaner future deletion/audit
+
+
+## 4.9.6 Late Add search and Edit Player active toggle
+
+Changes:
+- late add existing player picker is now a searchable/sortable popup list instead of a long dropdown
+- late add existing player now uses the attendance RPC and automatically makes inactive players active
+- Edit Player list now has a direct Active/Inactive button beside each name
+- tapping the Active/Inactive button does not open the player dropdown
+- saved Edit Player rows stay compact instead of expanding into rating/win-loss text
+- modal headers are sticky so the Close button stays easier to reach while scrolling
+- no Supabase SQL changes
