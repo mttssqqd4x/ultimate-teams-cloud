@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.8.2";
+const APP_VERSION = "4.9.0";
 
 let db = null;
 let currentUser = null;
@@ -795,12 +795,12 @@ async function updateNotificationUi(forceSubscribed = null){
 }
 
 async function askAdminWhetherToSendTeamNotification(){
-  if(!isAdmin()) return false;
+  if(!canManageGames()) return false;
   return confirm("Send a push notification to signed-in users that new teams were generated?");
 }
 
 async function sendTeamGeneratedNotification(){
-  if(!isAdmin()) return;
+  if(!canManageGames()) return;
   try{
     const { data, error } = await db.functions.invoke("send-team-notification", {
       body: {
@@ -1308,8 +1308,9 @@ async function addPermanentPlayer(){
 
 function visiblePairRules(){
   if(!isCaptainOrAdmin()) return [];
+  if(isAdmin()) return state.pairRules;
 
-  // Admin-created rules are hidden in the UI but still loaded into state.pairRules,
+  // Admin-created rules are hidden from captains but still loaded into state.pairRules,
   // so they still apply during team generation. Captain-created rules are visible to
   // all captains/admins and apply to all generated games.
   return state.pairRules.filter(r => r.createdByRole !== "admin");
@@ -1331,16 +1332,50 @@ function renderPairRules(){
     const div = document.createElement("div");
     const locked = Number(r.strength || 0) >= 999;
     const typeLabel = r.type === "together" ? "Together" : "Apart";
+    const ownerLabel = r.createdByRole === "admin" ? '<span class="pill-admin">Admin rule</span>' : '<span class="chip">Captain rule</span>';
+    const canEditRule = isAdmin() || (isCaptain() && r.createdBy === currentUser?.id && r.createdByRole !== "admin");
+    const safe = editDomId("pairrule", r.id);
     div.className = "player " + (r.type === "together" ? "pair-card-together" : "pair-card-apart");
+
+    const editControls = canEditRule ? `
+      <div class="grid grid-3" style="margin-top:10px">
+        <div><label>Rule</label><select id="${safe}-type"><option value="apart" ${r.type === "apart" ? "selected" : ""}>Apart</option><option value="together" ${r.type === "together" ? "selected" : ""}>Together</option></select></div>
+        <div><label>Strength</label><input id="${safe}-strength" type="number" min="0.1" max="999" step="0.1" value="${Number(r.strength || 1)}"></div>
+        <div><label>&nbsp;</label><button class="btn-secondary" type="button" onclick="updatePairRule('${escapeHtml(String(r.id))}')">Save Rule</button></div>
+      </div>` : "";
+
     div.innerHTML = `
-      <div>
-        <div class="player-name">${escapeHtml(p1?.fullName || "Unknown")} ↔ ${escapeHtml(p2?.fullName || "Unknown")}</div>
-        <div class="small">${locked ? "Locked " + typeLabel : typeLabel + " · Strength " + Number(r.strength || 1).toFixed(1)}</div>
+      <div style="width:100%">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px">
+          <div>
+            <div class="player-name">${escapeHtml(p1?.fullName || "Unknown")} ↔ ${escapeHtml(p2?.fullName || "Unknown")} ${ownerLabel}</div>
+            <div class="small">${locked ? "Locked " + typeLabel : typeLabel + " · Strength " + Number(r.strength || 1).toFixed(1)}</div>
+          </div>
+          <div class="toggle-wrap"><button class="btn-danger" onclick="removePairRule('${escapeHtml(String(r.id))}')">Remove</button></div>
+        </div>
+        ${editControls}
       </div>
-      <div class="toggle-wrap"><button class="btn-danger" onclick="removePairRule('${r.id}')">Remove</button></div>
     `;
     box.appendChild(div);
   });
+}
+
+async function updatePairRule(id){
+  if(!canManageGames()) return;
+  const rule = state.pairRules.find(r => String(r.id) === String(id));
+  if(!rule) return;
+  if(isCaptain() && rule.createdBy !== currentUser?.id){
+    alert("You can only edit pair rules that you created.");
+    return;
+  }
+
+  const safe = editDomId("pairrule", rule.id);
+  const type = document.getElementById(`${safe}-type`)?.value || rule.type;
+  const strength = Number(document.getElementById(`${safe}-strength`)?.value || rule.strength || 1);
+  const { error } = await db.from("pair_rules").update({ rule_type: type, strength }).eq("id", rule.id);
+  if(error){ alert(error.message); return; }
+  await loadCloudData();
+  renderAll();
 }
 
 async function addPairRule(){
@@ -1397,14 +1432,14 @@ async function removePairRule(id){
 async function clearPairRules(){
   if(!canManageGames()) return;
   const message = isAdmin()
-    ? "Clear all visible captain pair rules? Hidden admin pair rules will remain."
+    ? "Clear all pair rules, including admin rules and captain rules?"
     : "Clear your pair rules?";
   if(!confirm(message)) return;
 
   let error = null;
   if(isAdmin()){
     const ids = visiblePairRules().map(r => r.id).filter(Boolean);
-    if(!ids.length){ alert("No visible captain pair rules to clear."); return; }
+    if(!ids.length){ alert("No pair rules to clear."); return; }
     const res = await db.from("pair_rules").delete().in("id", ids);
     error = res.error;
   }else{
@@ -2121,7 +2156,7 @@ async function importBackupJsonFile(event){
     const ok = confirm(
       "Restore backup JSON?\n\n" +
       summary.message +
-      "\n\nThis will replace current players, attendance, pair rules, teammate history, settings, and current game state. This cannot be undone unless you export the current data first."
+      "\n\nThis will replace current players, attendance, pair rules, teammate history, game history/audit tables, settings, and current game state. This cannot be undone unless you export the current data first."
     );
     if(!ok) return;
 
@@ -2199,6 +2234,10 @@ async function restoreBackupJson(backup){
 
   // Clear dependent data first. Deleting players will cascade some rows, but explicit clears keep restore predictable.
   await db.from("current_game").upsert({ id: "main", teams: [], selected_winner_index: null, results_saved: true, generated_at: new Date().toISOString(), updated_by: currentUser?.id || null }, { onConflict: "id" });
+  await db.from("game_player_results").delete().not("game_id", "is", null);
+  await db.from("teammate_pair_events").delete().not("id", "is", null);
+  await db.from("games").delete().not("id", "is", null);
+  await db.from("admin_audit_logs").delete().not("id", "is", null);
   await db.from("attendance").delete().not("player_id", "is", null);
   await db.from("pair_rules").delete().not("id", "is", null);
   await db.from("teammate_history").delete().not("player_a", "is", null);
@@ -2278,6 +2317,81 @@ async function restoreBackupJson(backup){
     if(error) throw error;
   }
 
+  // Restore full game/audit history if included in a full backup.
+  const gameRows = (backup.gameHistory || []).map(g => ({
+    id: g.id,
+    played_at: g.played_at,
+    teams: g.teams || [],
+    winner_team_index: g.winner_team_index ?? null,
+    created_by: g.created_by || null
+  })).filter(g => g.id && Array.isArray(g.teams));
+  for(const chunk of chunkArray(gameRows, 100)){
+    let { error } = await db.from("games").insert(chunk);
+    if(error){
+      const fallback = chunk.map(({ created_by, ...rest }) => ({ ...rest, created_by: null }));
+      const retry = await db.from("games").insert(fallback);
+      if(retry.error) throw retry.error;
+    }
+  }
+
+  const gamePlayerRows = (backup.gamePlayerResults || []).filter(r => r.game_id && r.player_id).map(r => ({
+    game_id: r.game_id,
+    player_id: r.player_id,
+    team_idx: Number(r.team_idx ?? 0),
+    old_win_loss: Number(r.old_win_loss ?? 0),
+    new_win_loss: Number(r.new_win_loss ?? 0),
+    delta: Number(r.delta ?? 0),
+    old_games_played: Number(r.old_games_played ?? 0),
+    new_games_played: Number(r.new_games_played ?? 0),
+    old_wins: Number(r.old_wins ?? 0),
+    new_wins: Number(r.new_wins ?? 0),
+    old_losses: Number(r.old_losses ?? 0),
+    new_losses: Number(r.new_losses ?? 0),
+    created_at: r.created_at || new Date().toISOString()
+  }));
+  for(const chunk of chunkArray(gamePlayerRows, 100)){
+    const { error } = await db.from("game_player_results").insert(chunk);
+    if(error) throw error;
+  }
+
+  const pairEventRows = (backup.teammatePairEvents || []).filter(r => r.game_id && r.player_a && r.player_b).map(r => ({
+    id: r.id || undefined,
+    game_id: r.game_id,
+    player_a: r.player_a,
+    player_b: r.player_b,
+    source: r.source || "results_saved",
+    created_at: r.created_at || new Date().toISOString(),
+    created_by: r.created_by || null
+  }));
+  for(const chunk of chunkArray(pairEventRows, 100)){
+    let { error } = await db.from("teammate_pair_events").insert(chunk);
+    if(error){
+      const fallback = chunk.map(({ created_by, ...rest }) => ({ ...rest, created_by: null }));
+      const retry = await db.from("teammate_pair_events").insert(fallback);
+      if(retry.error) throw retry.error;
+    }
+  }
+
+  const auditRows = (backup.adminAuditLogs || []).map(r => ({
+    id: r.id || undefined,
+    action: r.action || "restored_log",
+    table_name: r.table_name || null,
+    row_id: r.row_id || null,
+    player_id: r.player_id || null,
+    actor_id: r.actor_id || null,
+    actor_role: r.actor_role || null,
+    details: r.details || {},
+    created_at: r.created_at || new Date().toISOString()
+  })).filter(r => r.action);
+  for(const chunk of chunkArray(auditRows, 100)){
+    let { error } = await db.from("admin_audit_logs").insert(chunk);
+    if(error){
+      const fallback = chunk.map(({ actor_id, player_id, ...rest }) => ({ ...rest, actor_id: null, player_id: null }));
+      const retry = await db.from("admin_audit_logs").insert(fallback);
+      if(retry.error) throw retry.error;
+    }
+  }
+
   // Restore current game state.
   const currentTeams = backupTeamsToSerializableTeams(backup);
   const { error: gameError } = await db.from("current_game").upsert({
@@ -2297,9 +2411,28 @@ function chunkArray(items, size){
   return chunks;
 }
 
-function downloadBackupJson(){
+async function downloadBackupJson(){
   if(!isAdmin()){ alert("Admin only."); return; }
-  downloadBlob(`${getDatePrefix()}_ultimate-teams-backup.json`, JSON.stringify(state, null, 2), "application/json");
+  const [gamesRes, pairEventsRes, gamePlayerRes, auditRes] = await Promise.all([
+    db.from("games").select("*").order("played_at", { ascending:false }),
+    db.from("teammate_pair_events").select("*").order("created_at", { ascending:false }),
+    db.from("game_player_results").select("*"),
+    db.from("admin_audit_logs").select("*").order("created_at", { ascending:false })
+  ]);
+
+  const firstError = gamesRes.error || pairEventsRes.error || gamePlayerRes.error || auditRes.error;
+  if(firstError){ alert("Could not build full backup: " + firstError.message); return; }
+
+  const backup = {
+    ...state,
+    appVersion: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    gameHistory: gamesRes.data || [],
+    teammatePairEvents: pairEventsRes.data || [],
+    gamePlayerResults: gamePlayerRes.data || [],
+    adminAuditLogs: auditRes.data || []
+  };
+  downloadBlob(`${getDatePrefix()}_ultimate-teams-full-backup.json`, JSON.stringify(backup, null, 2), "application/json");
 }
 function downloadRatingsCsv(){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
@@ -2337,6 +2470,239 @@ async function resetHistory(){
   if(error){ alert(error.message); return; }
   await loadCloudData();
   renderAll();
+}
+
+
+function makeDynamicModal(id, title, bodyHtml, footerHtml = ""){
+  let modal = document.getElementById(id);
+  if(modal) modal.remove();
+  modal = document.createElement("div");
+  modal.id = id;
+  modal.className = "modal-backdrop";
+  modal.onclick = e => { if(e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div class="row" style="justify-content:space-between;align-items:center;gap:10px">
+        <h2 style="margin:0">${escapeHtml(title)}</h2>
+        <button class="btn-secondary" style="width:auto" type="button" onclick="document.getElementById('${id}')?.remove()">Close</button>
+      </div>
+      <div style="margin-top:12px">${bodyHtml}</div>
+      ${footerHtml || ""}
+    </div>`;
+  document.body.appendChild(modal);
+  modal.classList.add("modal-open");
+  modal.style.display = "flex";
+  return modal;
+}
+
+function playerDisplayNameFromTeamsPlayer(x){
+  if(!x) return "Unknown";
+  const id = typeof x === "string" ? x : (x.id || x.player_id || "");
+  const p = playerById(id);
+  return p?.fullName || x.fullName || x.full_name || id || "Unknown";
+}
+
+function formatDateTime(value){
+  if(!value) return "";
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString([], { month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit" });
+}
+
+function winnerLabelForGame(game){
+  if(game.winner_team_index === null || game.winner_team_index === undefined) return "Pairings only";
+  return `Winner: Team ${Number(game.winner_team_index) + 1}`;
+}
+
+async function openGameHistoryModal(){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  makeDynamicModal("gameHistoryModal", "Game History", '<div class="small">Loading game history...</div>');
+  const { data, error } = await db.from("games").select("*").order("played_at", { ascending:false }).limit(100);
+  if(error){ makeDynamicModal("gameHistoryModal", "Game History", `<div class="notice">${escapeHtml(error.message)}</div>`); return; }
+  const games = data || [];
+  const body = games.length ? `<div class="mini-table">${games.map(g => {
+    const teams = Array.isArray(g.teams) ? g.teams : [];
+    const teamHtml = teams.map((team, idx) => `<div class="team-line"><strong>Team ${idx + 1}:</strong> ${(Array.isArray(team) ? team : []).map(playerDisplayNameFromTeamsPlayer).map(escapeHtml).join(", ")}</div>`).join("");
+    return `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><strong>${escapeHtml(formatDateTime(g.played_at) || "Game")}</strong><span class="chip">${escapeHtml(winnerLabelForGame(g))}</span></div>${teamHtml}</div>`;
+  }).join("")}</div>` : '<div class="small">No saved games yet.</div>';
+  makeDynamicModal("gameHistoryModal", "Game History", body);
+}
+
+async function openTeammateHistoryModal(){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  makeDynamicModal("teammateHistoryModal", "Teammate History", '<div class="small">Loading teammate history...</div>');
+  const [histRes, eventRes] = await Promise.all([
+    db.from("teammate_history").select("*").order("count", { ascending:false }).limit(100),
+    db.from("teammate_pair_events").select("*").order("created_at", { ascending:false }).limit(50)
+  ]);
+  if(histRes.error || eventRes.error){
+    makeDynamicModal("teammateHistoryModal", "Teammate History", `<div class="notice">${escapeHtml(histRes.error?.message || eventRes.error?.message || "Could not load history.")}</div>`);
+    return;
+  }
+  const counts = histRes.data || [];
+  const recent = eventRes.data || [];
+  const countHtml = counts.length ? counts.map(h => {
+    const a = playerById(h.player_a)?.fullName || h.player_a;
+    const b = playerById(h.player_b)?.fullName || h.player_b;
+    return `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><div>${escapeHtml(a)} ↔ ${escapeHtml(b)}</div><strong>${Number(h.count || 0)}</strong></div></div>`;
+  }).join("") : '<div class="small">No teammate history counts yet.</div>';
+  const recentHtml = recent.length ? recent.map(e => {
+    const a = playerById(e.player_a)?.fullName || e.player_a;
+    const b = playerById(e.player_b)?.fullName || e.player_b;
+    return `<div class="small">${escapeHtml(formatDateTime(e.created_at))}: ${escapeHtml(a)} ↔ ${escapeHtml(b)} · ${escapeHtml(e.source || "")}</div>`;
+  }).join("") : '<div class="small">No recent pairing events yet.</div>';
+  const body = `<h3 style="margin:0 0 8px">Top teammate pairs</h3><div class="mini-table">${countHtml}</div><div class="hr"></div><h3 style="margin:0 0 8px">Recent pairing events</h3>${recentHtml}`;
+  makeDynamicModal("teammateHistoryModal", "Teammate History", body);
+}
+
+async function openAuditLogsModal(){
+  if(!isAdmin()){ alert("Admin only."); return; }
+  makeDynamicModal("auditLogsModal", "Admin Audit Logs", '<div class="small">Loading audit logs...</div>');
+  const { data, error } = await db.from("admin_audit_logs").select("*").order("created_at", { ascending:false }).limit(150);
+  if(error){ makeDynamicModal("auditLogsModal", "Admin Audit Logs", `<div class="notice">${escapeHtml(error.message)}</div>`); return; }
+  const logs = data || [];
+  const body = logs.length ? `<div class="mini-table">${logs.map(log => {
+    const details = log.details ? JSON.stringify(log.details) : "";
+    return `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><strong>${escapeHtml(log.action || "log")}</strong><span class="small">${escapeHtml(formatDateTime(log.created_at))}</span></div><div class="small">Table: ${escapeHtml(log.table_name || "")} · Actor role: ${escapeHtml(log.actor_role || "")}</div><pre style="white-space:pre-wrap;font-size:11px;overflow:auto">${escapeHtml(details)}</pre></div>`;
+  }).join("")}</div>` : '<div class="small">No audit logs yet.</div>';
+  makeDynamicModal("auditLogsModal", "Admin Audit Logs", body);
+}
+
+async function voidLastSavedGame(){
+  if(!isAdmin()){ alert("Admin only."); return; }
+  if(!confirm("Undo/void the most recent saved game? This will reverse stats/Win-Loss changes for games saved with the new audit system and remove its pairing events. This cannot be undone.")) return;
+  try{
+    const { data, error } = await db.rpc("void_last_saved_game");
+    if(error) throw error;
+    await loadCloudData();
+    renderAll();
+    alert(`Last saved game voided. Restored ${data?.restored_players ?? 0} players.`);
+  }catch(e){
+    alert("Could not void last saved game: " + (e?.message || e));
+  }
+}
+
+function currentGamePlayerIds(){
+  const ids = new Set();
+  (state.currentGame?.teams || []).forEach(team => team.forEach(p => ids.add(String(p.id || p.player_id || p))));
+  return ids;
+}
+
+function openLateAddModal(){
+  if(!canManageGames()){ alert("Captain/admin only."); return; }
+  if(!state.currentGame){ alert("Generate teams first."); return; }
+  if(state.resultsSavedForCurrentGame){ alert("This game already has saved results. Late add is only available before results are saved."); return; }
+  const inGame = currentGamePlayerIds();
+  const available = state.players.filter(p => !inGame.has(String(p.id))).sort(comparePlayersByLastName);
+  const teamOptions = (state.currentGame.teams || []).map((_, idx) => `<option value="${idx}">Team ${idx + 1}</option>`).join("");
+  const playerOptions = '<option value="">Add new player...</option>' + available.map(p => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.fullName)}</option>`).join("");
+  const likeOptions = '<option value="">Select...</option>' + state.players.slice().sort(comparePlayersByLastName).map(p => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.fullName)}</option>`).join("");
+  const body = `
+    <div class="notice">Add a player after teams were generated. The player will be marked present and added to the selected team. Results must not already be saved.</div>
+    <div class="grid grid-2" style="margin-top:10px">
+      <div><label>Team</label><select id="lateAddTeam">${teamOptions}</select></div>
+      <div><label>Existing Player</label><select id="lateAddExisting">${playerOptions}</select></div>
+    </div>
+    <div class="hr"></div>
+    <div class="small">For a new player, leave Existing Player as "Add new player".</div>
+    <div class="grid grid-2" style="margin-top:10px">
+      <div><label>New Player Full Name</label><input id="lateAddName" placeholder="Mike Jones"></div>
+      <div><label>Rate Like</label><select id="lateAddLike" onchange="loadLateAddRatingsFromLike()">${likeOptions}</select></div>
+    </div>
+    <div class="grid grid-3" style="margin-top:10px">
+      <div><label>Handling</label><input id="lateAddHandling" type="number" step="0.1" value="3"></div>
+      <div><label>Cutting</label><input id="lateAddCutting" type="number" step="0.1" value="3"></div>
+      <div><label>Defense</label><input id="lateAddDefense" type="number" step="0.1" value="3"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input id="lateAddTemporary" type="checkbox" checked style="width:auto"> One-time player</label>
+    <div class="toolbar" style="margin-top:12px"><button class="btn" type="button" onclick="lateAddPlayerToCurrentGame()">Add To Team</button></div>
+    <div id="lateAddStatus" class="small" style="margin-top:8px"></div>`;
+  makeDynamicModal("lateAddModal", "Late Add Player", body);
+}
+
+function loadLateAddRatingsFromLike(){
+  const src = playerById(document.getElementById("lateAddLike")?.value);
+  if(!src) return;
+  setValue("lateAddHandling", src.handling);
+  setValue("lateAddCutting", src.cutting);
+  setValue("lateAddDefense", src.defense);
+}
+
+async function lateAddPlayerToCurrentGame(){
+  if(!canManageGames() || !state.currentGame) return;
+  const teamIdx = Number(document.getElementById("lateAddTeam")?.value || 0);
+  const status = document.getElementById("lateAddStatus");
+  if(!state.currentGame.teams?.[teamIdx]){ alert("Choose a valid team."); return; }
+  if(state.resultsSavedForCurrentGame){ alert("Results are already saved for this game."); return; }
+
+  let player = null;
+  const existingId = document.getElementById("lateAddExisting")?.value || "";
+  if(existingId){
+    player = playerById(existingId);
+    if(!player){ alert("Existing player not found. Refresh and try again."); return; }
+    const { error } = await db.from("attendance").upsert({ player_id: player.id, present: true, updated_at: new Date().toISOString(), updated_by: currentUser?.id || null }, { onConflict:"player_id" });
+    if(error){ alert(error.message); return; }
+  }else{
+    const fullName = normalizeName(document.getElementById("lateAddName")?.value || "");
+    if(!fullName){ alert("Enter a new player name or choose an existing player."); return; }
+    const { first, last } = splitName(fullName);
+    if(status) status.textContent = "Adding player...";
+    const { data, error } = await db.rpc("add_player_from_app", {
+      p_first_name: first,
+      p_last_name: last,
+      p_handling: Number(document.getElementById("lateAddHandling")?.value || 3),
+      p_cutting: Number(document.getElementById("lateAddCutting")?.value || 3),
+      p_defense: Number(document.getElementById("lateAddDefense")?.value || 3),
+      p_temporary: !!document.getElementById("lateAddTemporary")?.checked,
+      p_mark_present: true
+    });
+    if(error){ alert(error.message); if(status) status.textContent = "Add failed."; return; }
+    await loadCloudData();
+    const newId = data?.player_id || data?.playerId;
+    player = state.players.find(p => String(p.id) === String(newId)) || state.players.find(p => normalizeNameForMatch(p.fullName) === normalizeNameForMatch(fullName));
+    if(!player){ alert("Player was added, but could not be loaded into the game. Refresh and try again."); return; }
+  }
+
+  if(currentGamePlayerIds().has(String(player.id))){ alert("That player is already in the current game."); return; }
+  state.currentGame.teams[teamIdx].push(player);
+  state.resultsSavedForCurrentGame = false;
+  await saveCurrentGameToDb(false);
+  await loadCloudData();
+  renderAll();
+  hideModal("lateAddModal");
+}
+
+function currentSignedInPlayer(){
+  return state.players.find(isCurrentSignedInPlayer) || null;
+}
+
+async function openMyAttendanceHistoryModal(){
+  if(!currentUser){ alert("Sign in first."); return; }
+  const me = currentSignedInPlayer();
+  if(!me){ makeDynamicModal("myAttendanceHistoryModal", "My Attendance History", '<div class="notice">I could not match your account name to a player record. Ask an admin to make your account first/last name match the roster.</div>'); return; }
+  makeDynamicModal("myAttendanceHistoryModal", "My Attendance History", '<div class="small">Loading...</div>');
+  const { data, error } = await db.from("games").select("*").order("played_at", { ascending:false }).limit(200);
+  if(error){ makeDynamicModal("myAttendanceHistoryModal", "My Attendance History", `<div class="notice">${escapeHtml(error.message)}</div>`); return; }
+  const games = (data || []).filter(g => (Array.isArray(g.teams) ? g.teams : []).some(team => (Array.isArray(team) ? team : []).some(x => String(x.id || x.player_id || x) === String(me.id))));
+  const rows = games.map(g => {
+    const myTeamIndex = (g.teams || []).findIndex(team => (team || []).some(x => String(x.id || x.player_id || x) === String(me.id)));
+    const result = g.winner_team_index === null || g.winner_team_index === undefined ? "Pairings only" : (Number(g.winner_team_index) === myTeamIndex ? "Win" : "Loss");
+    return `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><strong>${escapeHtml(formatDateTime(g.played_at))}</strong><span class="chip">${escapeHtml(result)}</span></div><div class="small">Team ${myTeamIndex + 1}</div></div>`;
+  }).join("");
+  makeDynamicModal("myAttendanceHistoryModal", "My Attendance History", rows ? `<div class="notice">Matched player: ${escapeHtml(me.fullName)}</div><div class="mini-table">${rows}</div>` : `<div class="small">No saved games found for ${escapeHtml(me.fullName)}.</div>`);
+}
+
+async function openMyWinLossRecordModal(){
+  if(!currentUser){ alert("Sign in first."); return; }
+  const me = currentSignedInPlayer();
+  if(!me){ makeDynamicModal("myWinLossModal", "My Win/Loss Record", '<div class="notice">I could not match your account name to a player record. Ask an admin to make your account first/last name match the roster.</div>'); return; }
+  makeDynamicModal("myWinLossModal", "My Win/Loss Record", '<div class="small">Loading...</div>');
+  const { data, error } = await db.from("rating_history").select("*").eq("player_id", me.id).order("created_at", { ascending:false }).limit(50);
+  if(error){ makeDynamicModal("myWinLossModal", "My Win/Loss Record", `<div class="notice">${escapeHtml(error.message)}</div>`); return; }
+  const pct = me.gamesPlayed ? ((me.wins / me.gamesPlayed) * 100).toFixed(1) + "%" : "0.0%";
+  const hist = (data || []).map(r => `<div class="small">${escapeHtml(formatDateTime(r.created_at))}: ${Number(r.value || 0).toFixed(2)}</div>`).join("");
+  const body = `<div class="history-card"><div class="player-name">${escapeHtml(me.fullName)}</div><div class="small">Games ${me.gamesPlayed} · Wins ${me.wins} · Losses ${me.losses} · Win % ${pct}</div><div class="small">Current Win/Loss rating: <strong>${Number(me.winLossRating || 0).toFixed(2)}</strong></div></div><div class="hr"></div><h3 style="margin:0 0 8px">Recent rating history</h3>${hist || '<div class="small">No rating history yet.</div>'}`;
+  makeDynamicModal("myWinLossModal", "My Win/Loss Record", body);
 }
 
 function showModal(id){
