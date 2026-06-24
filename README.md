@@ -933,3 +933,12 @@ Changes:
   - teams
   - winner_team_index
 - no Supabase SQL changes
+
+
+## 4.10.4 Game History cache fix
+
+Changes:
+- fixed View Game History error: Cannot access cachedGameHistoryRows410 before initialization
+- moved Game History cache to a window-backed variable so it is available before filters/rendering run
+- kept the 4.10.3 played_at-only query fix
+- no Supabase SQL changes
