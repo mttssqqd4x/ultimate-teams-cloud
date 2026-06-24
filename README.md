@@ -1,4 +1,4 @@
-# Ultimate Teams Cloud v2
+# Ultimate Teams Cloud
 
 This package updates the Supabase cloud app with the access rules you requested.
 
