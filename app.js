@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.10.5";
+const APP_VERSION = "4.10.6";
 
 let db = null;
 let currentUser = null;
@@ -4811,5 +4811,76 @@ async function askAdminWhetherToSendTeamNotification(){
 Object.assign(window, {
   askPushNotificationPopup,
   askAdminWhetherToSendTeamNotification
+});
+
+
+
+/* ===== 4.10.6 Generate Teams loading/prompt fix ===== */
+
+async function sendTeamGeneratedNotification(){
+  if(!canManageGames()) return;
+  try{
+    const teams = serializableTeams().map((team, idx) => ({
+      teamNumber: idx + 1,
+      players: team.map(p => ({ id: p.id, fullName: p.fullName }))
+    }));
+
+    const invokePromise = db.functions.invoke("send-team-notification", {
+      body: {
+        title: "New teams are ready",
+        body: "New ultimate teams have been generated.",
+        url: window.location.origin + window.location.pathname,
+        teams
+      }
+    });
+
+    const { data, error } = typeof withTimeoutPromise === "function"
+      ? await withTimeoutPromise(invokePromise, 12000, "Push notification")
+      : await invokePromise;
+
+    if(error){
+      alert("Teams were generated, but the push notification failed: " + (error.message || error));
+      return;
+    }
+
+    console.log("Push notification result", data);
+  }catch(e){
+    alert("Teams were generated, but the push notification failed: " + (e?.message || e));
+  }
+}
+
+async function generateTeamsButton(){
+  if(!canGenerateTeams()){
+    alert("Only captains/admins can generate teams.");
+    return;
+  }
+
+  try{
+    // Important: ask questions BEFORE showing the loading overlay.
+    // Otherwise the loading overlay can hide the popup and make the app look stuck.
+    if(state.currentGame && !state.resultsSavedForCurrentGame){
+      const continueWithoutResults = await confirmContinueWithoutResults();
+      if(!continueWithoutResults) return;
+
+      await withLoading("Saving current pairings...", async () => {
+        await savePairingsOnlyForCurrentGame();
+      });
+    }
+
+    const sendPush = await askAdminWhetherToSendTeamNotification();
+
+    await withLoading("Generating teams...", async () => {
+      await generateGame(sendPush);
+    });
+  }catch(e){
+    clearLoading();
+    console.error("Generate teams failed", e);
+    alert("Generate teams failed: " + (e?.message || e));
+  }
+}
+
+Object.assign(window, {
+  sendTeamGeneratedNotification,
+  generateTeamsButton
 });
 

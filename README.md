@@ -953,3 +953,13 @@ Changes:
   - No, Don't Send
 - closing the popup or tapping outside it counts as No
 - no Supabase SQL changes
+
+
+## 4.10.6 Generate Teams loading fix
+
+Changes:
+- fixed Generate Teams getting stuck on the loading screen
+- asks the unsaved-results and push-notification questions before showing the loading overlay
+- loading overlay now starts only after the prompt is answered
+- added timeout handling around push notification send so it cannot hang generation indefinitely
+- no Supabase SQL changes
