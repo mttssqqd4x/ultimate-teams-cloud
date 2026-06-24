@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.9.1";
+const APP_VERSION = "4.9.2";
 
 let db = null;
 let currentUser = null;
@@ -900,6 +900,7 @@ function ensureV490FeatureUi(){
 
 function renderAll(){
   ensureV490FeatureUi();
+  ensurePlayerSortControls();
   updateNavVisibility();
   updateRoleVisibility();
   updateStats();
@@ -2808,6 +2809,133 @@ function hideAllModals(){
   ["ratingsModal", "editPlayerModal", "winLossModal", "signOutConfirmModal", "accountModal", "accountCreatedModal", "captainWelcomeModal"].forEach(hideModal);
 }
 
+
+function playerWinPct(p){
+  const games = Number(p?.gamesPlayed || 0);
+  return games ? Number(p?.wins || 0) / games : -1;
+}
+
+function numericPlayerValue(p, mode){
+  switch(mode){
+    case "ratingAsc":
+    case "ratingDesc": return overall(p);
+    case "winLossAsc":
+    case "winLossDesc": return Number(p?.winLossRating || 0);
+    case "winPctAsc":
+    case "winPctDesc": return playerWinPct(p);
+    case "gamesAsc":
+    case "gamesDesc": return Number(p?.gamesPlayed || 0);
+    case "handlingDesc": return Number(p?.handling || 0);
+    case "cuttingDesc": return Number(p?.cutting || 0);
+    case "defenseDesc": return Number(p?.defense || 0);
+    default: return 0;
+  }
+}
+
+function sortPlayersForModal(players, mode = "az"){
+  const list = [...players];
+  const nameCompare = (a, b) => comparePlayersByLastName(a, b) || 0;
+
+  list.sort((a, b) => {
+    switch(mode){
+      case "za":
+        return -nameCompare(a, b);
+
+      case "ratingAsc":
+      case "winLossAsc":
+      case "winPctAsc":
+      case "gamesAsc": {
+        const diff = numericPlayerValue(a, mode) - numericPlayerValue(b, mode);
+        return diff || nameCompare(a, b);
+      }
+
+      case "ratingDesc":
+      case "winLossDesc":
+      case "winPctDesc":
+      case "gamesDesc":
+      case "handlingDesc":
+      case "cuttingDesc":
+      case "defenseDesc": {
+        const diff = numericPlayerValue(b, mode) - numericPlayerValue(a, mode);
+        return diff || nameCompare(a, b);
+      }
+
+      case "activeFirst": {
+        const diff = Number(b.active === true) - Number(a.active === true);
+        return diff || nameCompare(a, b);
+      }
+
+      case "inactiveFirst": {
+        const diff = Number(a.active === true) - Number(b.active === true);
+        return diff || nameCompare(a, b);
+      }
+
+      case "az":
+      default:
+        return nameCompare(a, b);
+    }
+  });
+
+  return list;
+}
+
+function ensurePlayerSortControls(){
+  const options = [
+    ["az", "Name A-Z"],
+    ["za", "Name Z-A"],
+    ["ratingDesc", "Overall rating high-low"],
+    ["ratingAsc", "Overall rating low-high"],
+    ["winLossDesc", "Win/Loss rating high-low"],
+    ["winLossAsc", "Win/Loss rating low-high"],
+    ["winPctDesc", "Win % high-low"],
+    ["winPctAsc", "Win % low-high"],
+    ["gamesDesc", "Games played high-low"],
+    ["gamesAsc", "Games played low-high"],
+    ["handlingDesc", "Handling high-low"],
+    ["cuttingDesc", "Cutting high-low"],
+    ["defenseDesc", "Defense high-low"],
+    ["activeFirst", "Active first"],
+    ["inactiveFirst", "Inactive first"]
+  ];
+
+  const addSort = (modalId, searchInputId, sortId, handlerName, defaultValue = "az") => {
+    if(document.getElementById(sortId)) return;
+    const searchInput = document.getElementById(searchInputId);
+    const searchRow = searchInput?.closest(".modal-search-row");
+    const modal = document.getElementById(modalId);
+    if(!modal || !searchRow) return;
+
+    const row = document.createElement("div");
+    row.className = "modal-sort-row";
+
+    const label = document.createElement("label");
+    label.setAttribute("for", sortId);
+    label.textContent = "Sort by";
+
+    const select = document.createElement("select");
+    select.id = sortId;
+    options.forEach(([value, text]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      if(value === defaultValue) option.selected = true;
+      select.appendChild(option);
+    });
+    select.addEventListener("change", () => {
+      if(typeof window[handlerName] === "function") window[handlerName](false);
+    });
+
+    row.appendChild(label);
+    row.appendChild(select);
+    searchRow.parentElement.insertBefore(row, searchRow);
+  };
+
+  addSort("editPlayerModal", "editPlayerSearch", "editPlayerSort", "openEditPlayerModal", "az");
+  addSort("ratingsModal", "ratingsSearch", "ratingsSort", "openRatingsModal", "az");
+  addSort("winLossModal", "winLossSearch", "winLossSort", "openWinLossModal", "gamesDesc");
+}
+
+
 function openWinLossModal(show = true){
   if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
 
@@ -2815,16 +2943,12 @@ function openWinLossModal(show = true){
   if(!content) return;
 
   const search = (document.getElementById("winLossSearch")?.value || "").trim().toLowerCase();
+  const sortMode = document.getElementById("winLossSort")?.value || "gamesDesc";
 
-  const players = [...state.players]
-    .filter(p => !search || p.fullName.toLowerCase().includes(search))
-    .sort((a, b) => {
-      const games = Number(b.gamesPlayed || 0) - Number(a.gamesPlayed || 0);
-      if(games) return games;
-      const wins = Number(b.wins || 0) - Number(a.wins || 0);
-      if(wins) return wins;
-      return comparePlayersByLastName(a, b);
-    });
+  const players = sortPlayersForModal(
+    state.players.filter(p => !search || p.fullName.toLowerCase().includes(search)),
+    sortMode
+  );
 
   content.innerHTML = players.length ? players.map((p, i) => {
     const games = Number(p.gamesPlayed || 0);
@@ -2858,9 +2982,11 @@ function openRatingsModal(show = true){
   if(!content) return;
 
   const search = (document.getElementById("ratingsSearch")?.value || "").trim().toLowerCase();
-  const players = [...state.players]
-    .filter(p => !search || p.fullName.toLowerCase().includes(search))
-    .sort(comparePlayersByLastName);
+  const sortMode = document.getElementById("ratingsSort")?.value || "az";
+  const players = sortPlayersForModal(
+    state.players.filter(p => !search || p.fullName.toLowerCase().includes(search)),
+    sortMode
+  );
 
   content.innerHTML = players.length ? players.map((p, i) => `
     <div class="player">
@@ -2897,9 +3023,11 @@ function openEditPlayerModal(show = true){
   if(!list) return;
 
   const search = (document.getElementById("editPlayerSearch")?.value || "").trim().toLowerCase();
-  const players = [...state.players]
-    .filter(p => !search || p.fullName.toLowerCase().includes(search))
-    .sort(comparePlayersByLastName);
+  const sortMode = document.getElementById("editPlayerSort")?.value || "az";
+  const players = sortPlayersForModal(
+    state.players.filter(p => !search || p.fullName.toLowerCase().includes(search)),
+    sortMode
+  );
 
   list.innerHTML = players.length ? players.map(p => {
     const id = String(p.id);
@@ -3091,6 +3219,7 @@ function escapeHtml(str){
 
 
 Object.assign(window, {
+  ensurePlayerSortControls,
   openGameHistoryModal,
   openTeammateHistoryModal,
   openAuditLogsModal,

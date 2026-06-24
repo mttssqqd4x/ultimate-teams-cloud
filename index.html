@@ -29,6 +29,11 @@
     }
     .app-version-line{margin:18px 0 4px;text-align:center;color:var(--muted);font-size:12px}
     
+
+    .modal-sort-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+    .modal-sort-row label{margin:0;flex:0 0 auto;color:var(--muted);font-size:12px}
+    .modal-sort-row select{flex:1;min-width:0}
+
     .modal-search-row{display:flex;align-items:flex-end;gap:8px;margin-top:10px}
     .modal-search-row .modal-search-input-wrap{flex:1;min-width:0}
     .modal-search-row .modal-search-input-wrap input{width:100%}
@@ -304,6 +309,26 @@
       <button class="btn-secondary" style="width:auto" onclick="hideModal('editPlayerModal')">Close</button>
     </div>
     <div class="small" style="margin-top:10px" id="editPlayerHelp">Tap a player name to open their edit fields underneath.</div>
+    <div class="modal-sort-row">
+      <label for="editPlayerSort">Sort by</label>
+      <select id="editPlayerSort" onchange="openEditPlayerModal(false)">
+        <option value="az">Name A-Z</option>
+        <option value="za">Name Z-A</option>
+        <option value="ratingDesc">Overall rating high-low</option>
+        <option value="ratingAsc">Overall rating low-high</option>
+        <option value="winLossDesc">Win/Loss rating high-low</option>
+        <option value="winLossAsc">Win/Loss rating low-high</option>
+        <option value="winPctDesc">Win % high-low</option>
+        <option value="winPctAsc">Win % low-high</option>
+        <option value="gamesDesc">Games played high-low</option>
+        <option value="gamesAsc">Games played low-high</option>
+        <option value="handlingDesc">Handling high-low</option>
+        <option value="cuttingDesc">Cutting high-low</option>
+        <option value="defenseDesc">Defense high-low</option>
+        <option value="activeFirst">Active first</option>
+        <option value="inactiveFirst">Inactive first</option>
+      </select>
+    </div>
     <div class="modal-search-row">
       <div class="modal-search-input-wrap"><input id="editPlayerSearch" placeholder="Search players..." oninput="openEditPlayerModal(false)"></div>
       <button class="btn-secondary modal-search-clear" type="button" onclick="clearModalSearch('editPlayerSearch'); openEditPlayerModal(false)">Clear</button>
@@ -319,6 +344,26 @@
     <div class="row" style="justify-content:space-between;align-items:center">
       <h2 style="margin:0">Player Ratings</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('ratingsModal')">Close</button>
+    </div>
+    <div class="modal-sort-row">
+      <label for="ratingsSort">Sort by</label>
+      <select id="ratingsSort" onchange="openRatingsModal(false)">
+        <option value="az">Name A-Z</option>
+        <option value="za">Name Z-A</option>
+        <option value="ratingDesc">Overall rating high-low</option>
+        <option value="ratingAsc">Overall rating low-high</option>
+        <option value="winLossDesc">Win/Loss rating high-low</option>
+        <option value="winLossAsc">Win/Loss rating low-high</option>
+        <option value="winPctDesc">Win % high-low</option>
+        <option value="winPctAsc">Win % low-high</option>
+        <option value="gamesDesc">Games played high-low</option>
+        <option value="gamesAsc">Games played low-high</option>
+        <option value="handlingDesc">Handling high-low</option>
+        <option value="cuttingDesc">Cutting high-low</option>
+        <option value="defenseDesc">Defense high-low</option>
+        <option value="activeFirst">Active first</option>
+        <option value="inactiveFirst">Inactive first</option>
+      </select>
     </div>
     <div class="modal-search-row">
       <div class="modal-search-input-wrap"><input id="ratingsSearch" placeholder="Search players..." oninput="openRatingsModal(false)"></div>
@@ -444,6 +489,21 @@
       <button class="btn-secondary" style="width:auto" onclick="hideModal('winLossModal')">Close</button>
     </div>
     <div class="small" style="margin-top:10px">Sorted by games played, most first. Winning records are green, losing records are red, and tied records are neutral.</div>
+    <div class="modal-sort-row">
+      <label for="winLossSort">Sort by</label>
+      <select id="winLossSort" onchange="openWinLossModal(false)">
+        <option value="gamesDesc" selected>Games played high-low</option>
+        <option value="gamesAsc">Games played low-high</option>
+        <option value="winPctDesc">Win % high-low</option>
+        <option value="winPctAsc">Win % low-high</option>
+        <option value="winLossDesc">Win/Loss rating high-low</option>
+        <option value="winLossAsc">Win/Loss rating low-high</option>
+        <option value="az">Name A-Z</option>
+        <option value="za">Name Z-A</option>
+        <option value="ratingDesc">Overall rating high-low</option>
+        <option value="ratingAsc">Overall rating low-high</option>
+      </select>
+    </div>
     <div class="modal-search-row">
       <div class="modal-search-input-wrap"><input id="winLossSearch" placeholder="Search players..." oninput="openWinLossModal(false)"></div>
       <button class="btn-secondary modal-search-clear" type="button" onclick="clearModalSearch('winLossSearch'); openWinLossModal(false)">Clear</button>

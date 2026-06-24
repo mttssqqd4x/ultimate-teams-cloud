@@ -771,3 +771,12 @@ Changes:
 - new 4.9 tools are now created by JavaScript if the deployed/cached index.html is missing them
 - adds stable IDs to the new Data page, Account, and Late Add buttons
 - no Supabase SQL changes from 4.9.0
+
+
+## 4.9.2 Player tool sort controls
+
+Changes:
+- added Sort by controls above player search rows in Edit Player, Player Ratings, and Win/Loss Records
+- sort options include name A-Z/Z-A, overall rating, Win/Loss rating, Win %, games played, handling, cutting, defense, active first, and inactive first
+- sort controls are also injected by JavaScript if a cached/older index.html is missing them
+- no Supabase SQL changes
