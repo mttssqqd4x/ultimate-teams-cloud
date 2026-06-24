@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.9.11";
+const APP_VERSION = "4.10.0";
 
 let db = null;
 let currentUser = null;
@@ -3479,5 +3479,866 @@ Object.assign(window, {
   openLateAddModal,
   openMyAttendanceHistoryModal,
   openMyWinLossRecordModal
+});
+
+
+
+/* ===== 4.10.0 feature additions and workflow improvements ===== */
+
+state.showOnlyAttending = state.showOnlyAttending || false;
+let cachedGameHistoryRows410 = [];
+let cachedAuditLogRows410 = [];
+let selectedManualMovePlayerA = "";
+let selectedManualMovePlayerB = "";
+
+function setLoading(message = "Working..."){
+  const overlay = document.getElementById("loadingOverlay");
+  const msg = document.getElementById("loadingMessage");
+  if(msg) msg.textContent = message;
+  if(overlay) overlay.style.display = "flex";
+}
+
+function clearLoading(){
+  const overlay = document.getElementById("loadingOverlay");
+  if(overlay) overlay.style.display = "none";
+}
+
+async function withLoading(message, fn){
+  setLoading(message);
+  try{
+    return await fn();
+  }finally{
+    clearLoading();
+  }
+}
+
+function injuryBadgeHtml(p){
+  const pct = Math.round(Number(p?.injuryPct ?? 1) * 100);
+  if(pct >= 100) return '<span class="injury-badge injury-good">100%</span>';
+  if(pct >= 70) return `<span class="injury-badge injury-mid">${pct}%</span>`;
+  return `<span class="injury-badge injury-low">${pct}%</span>`;
+}
+
+function toggleShowOnlyAttending(){
+  state.showOnlyAttending = !state.showOnlyAttending;
+  renderPlayers();
+}
+
+function updateShowOnlyAttendingButton(){
+  const btn = document.getElementById("showOnlyAttendingBtn");
+  if(btn) btn.textContent = `Show Only Attending: ${state.showOnlyAttending ? "On" : "Off"}`;
+}
+
+function renderPlayers(){
+  const list = document.getElementById("playerList");
+  if(!list) return;
+  if(isGuest()){ list.innerHTML = '<div class="small">Sign in to mark attendance.</div>'; return; }
+
+  const search = (document.getElementById("playerSearch")?.value || "").trim().toLowerCase();
+  const players = [...state.players]
+    .filter(p => isPlainUserOrGuest() || state.showInactive || p.active || p.attending)
+    .filter(p => !state.showOnlyAttending || p.attending)
+    .filter(p => !search || p.fullName.toLowerCase().includes(search))
+    .sort(compareAttendancePlayers);
+
+  updateShowOnlyAttendingButton();
+
+  if(!players.length){
+    list.innerHTML = '<div class="small">No players match that search.</div>';
+    return;
+  }
+
+  list.innerHTML = "";
+
+  players.forEach(p => {
+    const row = document.createElement("div");
+    row.className = "player clickable" + (p.attending ? " attend-on" : "") + (canManageGames() && !p.active ? " inactive" : "") + (p.temporary ? " temp" : "");
+    row.onclick = e => {
+      if(e.target.closest("button")) return;
+      toggleAttendance(p.id);
+    };
+
+    const controls = canManageGames()
+      ? `<div class="toggle-wrap">
+          <button onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">Injury %</button>
+          ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
+        </div>`
+      : "";
+
+    row.innerHTML = `
+      <div style="min-width:0">
+        <div class="player-name">${escapeHtml(p.fullName)}${isCurrentSignedInPlayer(p) ? ' <span class="chip">You</span>' : ""}${canManageGames() ? injuryBadgeHtml(p) : ""}</div>
+        ${canManageGames() && !p.active ? '<div class="small">Inactive</div>' : ""}
+      </div>
+      ${controls}
+    `;
+    list.appendChild(row);
+  });
+}
+
+function ensureV410FeatureUi(){
+  const saveWrap = document.getElementById("saveResultsWrap");
+  if(saveWrap && !document.getElementById("manualMoveBtn")){
+    const btn = document.createElement("button");
+    btn.id = "manualMoveBtn";
+    btn.className = "btn-secondary";
+    btn.type = "button";
+    btn.textContent = "Manual Move";
+    btn.onclick = openManualMoveModal;
+    const clearBtn = document.getElementById("clearTeamsBtn");
+    if(clearBtn) saveWrap.insertBefore(btn, clearBtn);
+    else saveWrap.appendChild(btn);
+  }
+
+  const grid = document.querySelector("#dataCaptainTools .player-tools-grid");
+  if(grid){
+    const addTool = (id, text, cls, handler) => {
+      if(document.getElementById(id)) return;
+      const b = document.createElement("button");
+      b.id = id;
+      b.className = cls;
+      b.type = "button";
+      b.textContent = text;
+      b.onclick = handler;
+      grid.appendChild(b);
+    };
+    addTool("archiveSeasonBtn", "Archive Season", "btn-secondary admin-only", openArchiveSeasonModal);
+    addTool("manageAccountsBtn", "Manage Accounts", "btn-secondary admin-only", openManageAccountsModal);
+  }
+
+  const selfBox = document.getElementById("selfProfileBox");
+  if(selfBox && !document.getElementById("myProfileBtn")){
+    const toolbar = selfBox.querySelector(".toolbar") || selfBox;
+    const b = document.createElement("button");
+    b.id = "myProfileBtn";
+    b.className = "btn-secondary";
+    b.type = "button";
+    b.textContent = "My Profile";
+    b.onclick = openMyProfileModal;
+    toolbar.insertBefore(b, toolbar.firstChild);
+  }
+
+  const attendanceControls = document.querySelector("#attendanceCard .grid.grid-2");
+  if(attendanceControls && !document.getElementById("showOnlyAttendingBtn")){
+    const b = document.createElement("button");
+    b.id = "showOnlyAttendingBtn";
+    b.className = "btn-secondary";
+    b.type = "button";
+    b.onclick = toggleShowOnlyAttending;
+    attendanceControls.insertBefore(b, attendanceControls.children[1] || null);
+  }
+}
+
+const renderAllBefore410 = renderAll;
+renderAll = function(){
+  ensureV410FeatureUi();
+  renderAllBefore410();
+  ensureV410FeatureUi();
+  updateShowOnlyAttendingButton();
+};
+
+function currentTeamSummary(){
+  return (state.currentGame?.teams || []).map((team, idx) => {
+    const stats = teamStats(team);
+    return { idx, count: team.length, overall: stats.overall };
+  });
+}
+
+function resolveLateAddTeamIndex(player){
+  const raw = document.getElementById("lateAddTeam")?.value ?? "0";
+  const teams = state.currentGame?.teams || [];
+  if(raw === "autoSmallest"){
+    return currentTeamSummary().sort((a,b) => (a.count - b.count) || (a.overall - b.overall))[0]?.idx ?? 0;
+  }
+  if(raw === "autoWeakest"){
+    return currentTeamSummary().sort((a,b) => (a.overall - b.overall) || (a.count - b.count))[0]?.idx ?? 0;
+  }
+  return Number(raw || 0);
+}
+
+function openLateAddModal(){
+  if(!canManageGames()){ alert("Captain/admin only."); return; }
+  if(!state.currentGame){ alert("Generate teams first."); return; }
+  if(state.resultsSavedForCurrentGame){ alert("This game already has saved results. Late add is only available before results are saved."); return; }
+
+  const teamOptions = `<option value="autoSmallest">Auto: smallest team</option>
+    <option value="autoWeakest">Auto: lowest-rated team</option>` +
+    (state.currentGame.teams || []).map((_, idx) => `<option value="${idx}">Team ${idx + 1}</option>`).join("");
+  const likeOptions = '<option value="">Select...</option>' + state.players.slice().sort(comparePlayersByLastName).map(p => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.fullName)}</option>`).join("");
+
+  const body = `
+    <div class="notice">Add a player after teams were generated. The player will be marked present, made active if needed, and added to a team. Results must not already be saved.</div>
+
+    <div style="margin-top:10px"><label>Team</label><select id="lateAddTeam">${teamOptions}</select></div>
+
+    <div class="hr"></div>
+    <div class="player-name">Choose existing player</div>
+    <input id="lateAddExisting" type="hidden" value="">
+    <div id="lateAddSelectedExisting" class="small" style="margin-top:6px">No existing player selected. Choose one below, or add a new player.</div>
+
+    <div class="modal-sort-row">
+      <label for="lateAddExistingSort">Sort by</label>
+      <select id="lateAddExistingSort" onchange="renderLateAddExistingList()">
+        <option value="az" selected>Name A-Z</option>
+        <option value="za">Name Z-A</option>
+        <option value="ratingDesc">Overall rating high-low</option>
+        <option value="ratingAsc">Overall rating low-high</option>
+        <option value="winLossDesc">Win/Loss rating high-low</option>
+        <option value="winLossAsc">Win/Loss rating low-high</option>
+        <option value="activeFirst">Active first</option>
+        <option value="inactiveFirst">Inactive first</option>
+      </select>
+    </div>
+    <div class="modal-search-row">
+      <div class="modal-search-input-wrap"><input id="lateAddExistingSearch" placeholder="Search existing players..." oninput="renderLateAddExistingList()"></div>
+      <button class="btn-secondary modal-search-clear" type="button" onclick="clearLateAddExistingSearch()">Clear</button>
+    </div>
+    <div id="lateAddExistingList" class="late-add-player-list"></div>
+
+    <div class="hr"></div>
+    <div class="player-name">Or add new player</div>
+    <div class="small">Leave existing player unselected to add a new one.</div>
+    <div class="grid grid-2" style="margin-top:10px">
+      <div><label>New Player Full Name</label><input id="lateAddName" placeholder="Mike Jones"></div>
+      <div><label>Rate Like</label><select id="lateAddLike" onchange="loadLateAddRatingsFromLike()">${likeOptions}</select></div>
+    </div>
+    <div class="grid grid-3" style="margin-top:10px">
+      <div><label>Handling</label><input id="lateAddHandling" type="number" step="0.1" value="3"></div>
+      <div><label>Cutting</label><input id="lateAddCutting" type="number" step="0.1" value="3"></div>
+      <div><label>Defense</label><input id="lateAddDefense" type="number" step="0.1" value="3"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input id="lateAddTemporary" type="checkbox" checked style="width:auto"> One-time player</label>
+    <div class="toolbar" style="margin-top:12px">
+      <button class="btn" type="button" onclick="lateAddPlayerToCurrentGame()">Add To Team</button>
+      <button class="btn-secondary" type="button" onclick="clearLateAddExistingPlayer()">Clear Selected Existing</button>
+    </div>
+    <div id="lateAddStatus" class="small" style="margin-top:8px"></div>`;
+
+  makeDynamicModal("lateAddModal", "Late Add Player", body);
+  renderLateAddExistingList();
+}
+
+async function lateAddPlayerToCurrentGame(){
+  if(!canManageGames() || !state.currentGame) return;
+  const status = document.getElementById("lateAddStatus");
+  if(state.resultsSavedForCurrentGame){ alert("Results are already saved for this game."); return; }
+
+  await withLoading("Adding player...", async () => {
+    let player = null;
+    const existingId = document.getElementById("lateAddExisting")?.value || "";
+    if(existingId){
+      player = playerById(existingId);
+      if(!player) throw new Error("Existing player not found. Refresh and try again.");
+      const { error } = await saveAttendanceFromApp(player.id, true);
+      if(error) throw error;
+      player.active = true;
+      player.attending = true;
+    }else{
+      const fullName = normalizeName(document.getElementById("lateAddName")?.value || "");
+      if(!fullName) throw new Error("Enter a new player name or choose an existing player.");
+      const { first, last } = splitName(fullName);
+      if(status) status.textContent = "Adding player...";
+      const { data, error } = await db.rpc("add_player_from_app", {
+        p_first_name: first,
+        p_last_name: last,
+        p_handling: Number(document.getElementById("lateAddHandling")?.value || 3),
+        p_cutting: Number(document.getElementById("lateAddCutting")?.value || 3),
+        p_defense: Number(document.getElementById("lateAddDefense")?.value || 3),
+        p_temporary: !!document.getElementById("lateAddTemporary")?.checked,
+        p_mark_present: true
+      });
+      if(error) throw error;
+      await loadCloudData();
+      const newId = data?.player_id || data?.playerId;
+      player = state.players.find(p => String(p.id) === String(newId)) || state.players.find(p => normalizeNameForMatch(p.fullName) === normalizeNameForMatch(fullName));
+      if(!player) throw new Error("Player was added, but could not be loaded into the game. Refresh and try again.");
+    }
+
+    if(currentGamePlayerIds().has(String(player.id))) throw new Error("That player is already in the current game.");
+    const teamIdx = resolveLateAddTeamIndex(player);
+    if(!state.currentGame.teams?.[teamIdx]) throw new Error("Choose a valid team.");
+    state.currentGame.teams[teamIdx].push(player);
+    state.resultsSavedForCurrentGame = false;
+    await saveCurrentGameToDb(false);
+    await loadCloudData();
+    renderAll();
+    hideModal("lateAddModal");
+  }).catch(e => {
+    if(status) status.textContent = "Add failed.";
+    alert(e?.message || e);
+  });
+}
+
+function teamSelectOptionsForManual(){
+  return (state.currentGame?.teams || []).map((team, idx) => `<option value="${idx}">Team ${idx + 1} (${team.length})</option>`).join("");
+}
+
+function currentGamePlayerOptions(){
+  const rows = [];
+  (state.currentGame?.teams || []).forEach((team, teamIdx) => {
+    (team || []).forEach(p => rows.push(`<option value="${teamIdx}|${escapeHtml(String(p.id))}">Team ${teamIdx + 1} - ${escapeHtml(p.fullName || playerDisplayNameFromTeamsPlayer(p))}</option>`));
+  });
+  return rows.join("");
+}
+
+function openManualMoveModal(){
+  if(!canManageGames()){ alert("Captain/admin only."); return; }
+  if(!state.currentGame){ alert("Generate teams first."); return; }
+  if(state.resultsSavedForCurrentGame){ alert("This game already has saved results. Manual move is only available before results are saved."); return; }
+
+  const body = `
+    <div class="notice">Move one player to another team, or swap two players between teams. This updates the current game but does not change ratings or history until results/pairings are saved.</div>
+    <div class="hr"></div>
+    <h3 style="margin:0 0 8px">Move player</h3>
+    <div class="grid grid-2">
+      <div><label>Player</label><select id="manualMovePlayer">${currentGamePlayerOptions()}</select></div>
+      <div><label>Move to team</label><select id="manualMoveTarget">${teamSelectOptionsForManual()}</select></div>
+    </div>
+    <div class="toolbar" style="margin-top:10px"><button class="btn" type="button" onclick="manualMovePlayer()">Move Player</button></div>
+    <div class="hr"></div>
+    <h3 style="margin:0 0 8px">Swap players</h3>
+    <div class="grid grid-2">
+      <div><label>Player A</label><select id="manualSwapA">${currentGamePlayerOptions()}</select></div>
+      <div><label>Player B</label><select id="manualSwapB">${currentGamePlayerOptions()}</select></div>
+    </div>
+    <div class="toolbar" style="margin-top:10px"><button class="btn-secondary" type="button" onclick="manualSwapPlayers()">Swap Players</button></div>
+    <div id="manualMoveStatus" class="small" style="margin-top:8px"></div>`;
+  makeDynamicModal("manualMoveModal", "Manual Move", body);
+}
+
+function parseTeamPlayerValue(value){
+  const [teamIdx, playerId] = String(value || "").split("|");
+  return { teamIdx: Number(teamIdx), playerId };
+}
+
+async function persistManualTeams(message){
+  await saveCurrentGameToDb(false);
+  renderAll();
+  const el = document.getElementById("manualMoveStatus");
+  if(el) el.textContent = message || "Updated.";
+}
+
+async function manualMovePlayer(){
+  try{
+    const { teamIdx, playerId } = parseTeamPlayerValue(document.getElementById("manualMovePlayer")?.value);
+    const targetIdx = Number(document.getElementById("manualMoveTarget")?.value || 0);
+    const teams = state.currentGame?.teams || [];
+    if(teamIdx === targetIdx) throw new Error("That player is already on that team.");
+    const playerIndex = teams[teamIdx]?.findIndex(p => String(p.id) === String(playerId));
+    if(playerIndex < 0) throw new Error("Player not found.");
+    const [player] = teams[teamIdx].splice(playerIndex, 1);
+    teams[targetIdx].push(player);
+    state.resultsSavedForCurrentGame = false;
+    await persistManualTeams("Player moved.");
+    openManualMoveModal();
+  }catch(e){ alert(e?.message || e); }
+}
+
+async function manualSwapPlayers(){
+  try{
+    const a = parseTeamPlayerValue(document.getElementById("manualSwapA")?.value);
+    const b = parseTeamPlayerValue(document.getElementById("manualSwapB")?.value);
+    if(a.playerId === b.playerId) throw new Error("Choose two different players.");
+    const teams = state.currentGame?.teams || [];
+    const ai = teams[a.teamIdx]?.findIndex(p => String(p.id) === String(a.playerId));
+    const bi = teams[b.teamIdx]?.findIndex(p => String(p.id) === String(b.playerId));
+    if(ai < 0 || bi < 0) throw new Error("Could not find one of those players.");
+    const temp = teams[a.teamIdx][ai];
+    teams[a.teamIdx][ai] = teams[b.teamIdx][bi];
+    teams[b.teamIdx][bi] = temp;
+    state.resultsSavedForCurrentGame = false;
+    await persistManualTeams("Players swapped.");
+    openManualMoveModal();
+  }catch(e){ alert(e?.message || e); }
+}
+
+async function sendTeamGeneratedNotification(){
+  if(!canManageGames()) return;
+  try{
+    const teams = serializableTeams().map((team, idx) => ({
+      teamNumber: idx + 1,
+      players: team.map(p => ({ id: p.id, fullName: p.fullName }))
+    }));
+    const { data, error } = await db.functions.invoke("send-team-notification", {
+      body: {
+        title: "New teams are ready",
+        body: "New ultimate teams have been generated.",
+        url: window.location.origin + window.location.pathname,
+        teams
+      }
+    });
+
+    if(error){
+      alert("Teams were generated, but the push notification failed: " + (error.message || error));
+      return;
+    }
+
+    console.log("Push notification result", data);
+  }catch(e){
+    alert("Teams were generated, but the push notification failed: " + (e?.message || e));
+  }
+}
+
+async function generateTeamsButton(){
+  if(!canGenerateTeams()){ alert("Only captains/admins can generate teams."); return; }
+
+  await withLoading("Generating teams...", async () => {
+    if(state.currentGame && !state.resultsSavedForCurrentGame){
+      const continueWithoutResults = await confirmContinueWithoutResults();
+      if(!continueWithoutResults) return;
+      await savePairingsOnlyForCurrentGame();
+    }
+
+    const sendPush = await askAdminWhetherToSendTeamNotification();
+    await generateGame(sendPush);
+  });
+}
+
+async function saveResults(){
+  if(!canManageGames()){ alert("Captain/admin only."); return; }
+  if(!state.currentGame){ alert("Generate teams first."); return; }
+  if(state.selectedWinnerIndex === null || state.selectedWinnerIndex === undefined){ alert("Tap the winning team first."); return; }
+  if(!state.currentGame.teams?.[state.selectedWinnerIndex]){ alert("Winning team selection is invalid."); return; }
+  if(state.resultsSavedForCurrentGame){
+    alert("Results are already saved for this game. This prevents accidental duplicate stat/rating updates.");
+    return;
+  }
+
+  await withLoading("Saving results...", async () => {
+    const msg = document.getElementById("resultMessage");
+    if(msg) msg.textContent = "Saving results...";
+    const { error } = await db.rpc("save_game_results", {
+      p_winner_team_index: Number(state.selectedWinnerIndex),
+      p_teams: serializableTeams(),
+      p_generated_at: state.currentGameGeneratedAt || null
+    });
+
+    if(error) throw error;
+
+    await loadCloudData();
+    renderAll();
+    const finalMsg = document.getElementById("resultMessage");
+    if(finalMsg) finalMsg.textContent = "Results saved. Records, Win/Loss ratings, game history, and teammate history updated.";
+  }).catch(error => {
+    const msg = document.getElementById("resultMessage");
+    if(msg) msg.textContent = "Results save failed.";
+    alert("Results save failed: " + (error?.message || error));
+  });
+}
+
+function gameIncludesPlayerName(game, query){
+  const q = normalizeNameForMatch(query);
+  if(!q) return true;
+  return (game.teams || []).some(team => (team || []).some(p => normalizeNameForMatch(playerDisplayNameFromTeamsPlayer(p)).includes(q)));
+}
+
+function renderGameHistoryModalRows(){
+  const list = document.getElementById("gameHistoryFilterList");
+  if(!list) return;
+  const playerSearch = document.getElementById("gameHistoryPlayerSearch")?.value || "";
+  const type = document.getElementById("gameHistoryTypeFilter")?.value || "all";
+  const from = document.getElementById("gameHistoryFrom")?.value || "";
+  const to = document.getElementById("gameHistoryTo")?.value || "";
+
+  let games = cachedGameHistoryRows410.slice();
+  if(playerSearch) games = games.filter(g => gameIncludesPlayerName(g, playerSearch));
+  if(type === "results") games = games.filter(g => g.winner_team_index !== null && g.winner_team_index !== undefined);
+  if(type === "pairings") games = games.filter(g => g.winner_team_index === null || g.winner_team_index === undefined);
+  if(from) games = games.filter(g => String(g.played_at || "") >= `${from}T00:00:00`);
+  if(to) games = games.filter(g => String(g.played_at || "") <= `${to}T23:59:59`);
+
+  if(!games.length){
+    list.innerHTML = '<div class="small">No games match those filters.</div>';
+    return;
+  }
+
+  list.innerHTML = `<div class="mini-table">${games.map(g => {
+    const teams = Array.isArray(g.teams) ? g.teams : [];
+    const teamHtml = teams.map((team, idx) => `<div class="team-line"><strong>Team ${idx + 1}:</strong> ${(Array.isArray(team) ? team : []).map(playerDisplayNameFromTeamsPlayer).map(escapeHtml).join(", ")}</div>`).join("");
+    const deleteBtn = isAdmin()
+      ? `<button class="btn-danger" style="width:auto;margin-top:10px" type="button" onclick="deleteGameFromHistory('${escapeHtml(String(g.id))}')">Delete Game</button>`
+      : "";
+    return `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><strong>${escapeHtml(formatDateTime(g.played_at) || "Game")}</strong><span class="chip">${escapeHtml(winnerLabelForGame(g))}</span></div>${teamHtml}${deleteBtn}</div>`;
+  }).join("")}</div>`;
+}
+
+async function openGameHistoryModal(){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  makeDynamicModal("gameHistoryModal", "Game History", '<div class="small">Loading game history...</div>');
+  const { data, error } = await db.from("games").select("*").order("played_at", { ascending:false }).limit(500);
+  if(error){ makeDynamicModal("gameHistoryModal", "Game History", `<div class="notice">${escapeHtml(error.message)}</div>`); return; }
+  cachedGameHistoryRows410 = data || [];
+  const body = `
+    <div class="filter-grid">
+      <div><label>Search player</label><input id="gameHistoryPlayerSearch" placeholder="Player name" oninput="renderGameHistoryModalRows()"></div>
+      <div><label>Type</label><select id="gameHistoryTypeFilter" onchange="renderGameHistoryModalRows()"><option value="all">All games</option><option value="results">Results only</option><option value="pairings">Pairings only</option></select></div>
+      <div><label>From</label><input id="gameHistoryFrom" type="date" onchange="renderGameHistoryModalRows()"></div>
+      <div><label>To</label><input id="gameHistoryTo" type="date" onchange="renderGameHistoryModalRows()"></div>
+      <div><label>&nbsp;</label><button class="btn-secondary" type="button" onclick="setValue('gameHistoryPlayerSearch','');setValue('gameHistoryFrom','');setValue('gameHistoryTo','');setValue('gameHistoryTypeFilter','all');renderGameHistoryModalRows()">Clear Filters</button></div>
+    </div>
+    <div id="gameHistoryFilterList"></div>`;
+  makeDynamicModal("gameHistoryModal", "Game History", body);
+  renderGameHistoryModalRows();
+}
+
+function teammateRowsForPlayer(playerId, counts){
+  return counts
+    .filter(h => String(h.player_a) === String(playerId) || String(h.player_b) === String(playerId))
+    .map(h => {
+      const otherId = String(h.player_a) === String(playerId) ? h.player_b : h.player_a;
+      const other = playerById(otherId)?.fullName || otherId;
+      return { other, count: Number(h.count || 0) };
+    })
+    .sort((a,b) => b.count - a.count || a.other.localeCompare(b.other));
+}
+
+function renderTeammateByPlayer(counts){
+  const select = document.getElementById("teammatePlayerSelect");
+  const out = document.getElementById("teammateByPlayerOutput");
+  if(!select || !out) return;
+  const rows = teammateRowsForPlayer(select.value, counts);
+  out.innerHTML = rows.length
+    ? rows.slice(0, 25).map(r => `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><div>${escapeHtml(r.other)}</div><strong>${r.count}</strong></div></div>`).join("")
+    : '<div class="small">No teammate history for that player yet.</div>';
+}
+
+async function openTeammateHistoryModal(){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  makeDynamicModal("teammateHistoryModal", "Teammate History", '<div class="small">Loading teammate history...</div>');
+  const [histRes, eventRes] = await Promise.all([
+    db.from("teammate_history").select("*").order("count", { ascending:false }).limit(500),
+    db.from("teammate_pair_events").select("*").order("created_at", { ascending:false }).limit(100)
+  ]);
+  if(histRes.error || eventRes.error){
+    makeDynamicModal("teammateHistoryModal", "Teammate History", `<div class="notice">${escapeHtml(histRes.error?.message || eventRes.error?.message || "Could not load history.")}</div>`);
+    return;
+  }
+  const counts = histRes.data || [];
+  const recent = eventRes.data || [];
+  const playerOptions = state.players.slice().sort(comparePlayersByLastName).map(p => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.fullName)}</option>`).join("");
+  const countHtml = counts.length ? counts.slice(0, 100).map(h => {
+    const a = playerById(h.player_a)?.fullName || h.player_a;
+    const b = playerById(h.player_b)?.fullName || h.player_b;
+    return `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><div>${escapeHtml(a)} ↔ ${escapeHtml(b)}</div><strong>${Number(h.count || 0)}</strong></div></div>`;
+  }).join("") : '<div class="small">No teammate history counts yet.</div>';
+  const recentHtml = recent.length ? recent.map(e => {
+    const a = playerById(e.player_a)?.fullName || e.player_a;
+    const b = playerById(e.player_b)?.fullName || e.player_b;
+    return `<div class="small">${escapeHtml(formatDateTime(e.created_at))}: ${escapeHtml(a)} ↔ ${escapeHtml(b)} · ${escapeHtml(e.source || "")}</div>`;
+  }).join("") : '<div class="small">No recent pairing events yet.</div>';
+  const body = `
+    <h3 style="margin:0 0 8px">By player</h3>
+    <div class="grid grid-2">
+      <div><label>Player</label><select id="teammatePlayerSelect" onchange="renderTeammateByPlayer(window.__lastTeammateCounts410 || [])">${playerOptions}</select></div>
+    </div>
+    <div id="teammateByPlayerOutput" class="mini-table" style="margin-top:10px"></div>
+    <div class="hr"></div>
+    <h3 style="margin:0 0 8px">Top teammate pairs</h3><div class="mini-table">${countHtml}</div>
+    <div class="hr"></div><h3 style="margin:0 0 8px">Recent pairing events</h3>${recentHtml}`;
+  window.__lastTeammateCounts410 = counts;
+  makeDynamicModal("teammateHistoryModal", "Teammate History", body);
+  renderTeammateByPlayer(counts);
+}
+
+async function openMyProfileModal(){
+  if(!currentUser){ alert("Sign in first."); return; }
+  const me = currentSignedInPlayer();
+  if(!me){
+    makeDynamicModal("myProfileModal", "My Profile", '<div class="notice">I could not match your account name to a player record. Ask an admin to make your account first/last name match the roster.</div>');
+    return;
+  }
+  const { data, error } = await db.from("teammate_history").select("*").or(`player_a.eq.${me.id},player_b.eq.${me.id}`).order("count", { ascending:false }).limit(10);
+  const top = error ? [] : teammateRowsForPlayer(me.id, data || []);
+  const topHtml = top.length ? top.map(r => `<div class="history-card"><div class="row" style="justify-content:space-between"><div>${escapeHtml(r.other)}</div><strong>${r.count}</strong></div></div>`).join("") : '<div class="small">No teammate history yet.</div>';
+  const pct = me.gamesPlayed ? ((me.wins / me.gamesPlayed) * 100).toFixed(1) + "%" : "0.0%";
+  const body = `
+    <div class="notice">Matched player: ${escapeHtml(me.fullName)}</div>
+    <div class="profile-stat-grid">
+      <div class="profile-stat"><strong>${me.gamesPlayed}</strong><span class="small">Games</span></div>
+      <div class="profile-stat"><strong>${me.wins}-${me.losses}</strong><span class="small">Record</span></div>
+      <div class="profile-stat"><strong>${pct}</strong><span class="small">Win %</span></div>
+    </div>
+    <div class="hr"></div>
+    <h3 style="margin:0 0 8px">Most common teammates</h3>
+    <div class="mini-table">${topHtml}</div>`;
+  makeDynamicModal("myProfileModal", "My Profile", body);
+}
+
+function setupStatus(label, ok, detail = ""){
+  return `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><strong>${escapeHtml(label)}</strong><span class="chip">${ok ? "OK" : "Check"}</span></div>${detail ? `<div class="small">${escapeHtml(detail)}</div>` : ""}</div>`;
+}
+
+async function openSetupChecklistModal(){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  makeDynamicModal("setupChecklistModal", "Setup Checklist", '<div class="small">Checking setup...</div>');
+  const checks = [];
+  checks.push(setupStatus("Supabase URL configured", !!SUPABASE_URL, SUPABASE_URL || "Missing"));
+  checks.push(setupStatus("Supabase key configured", !!SUPABASE_KEY && !SUPABASE_KEY.includes("PASTE_"), SUPABASE_KEY ? "Public key present" : "Missing"));
+  checks.push(setupStatus("Push public key configured", !!VAPID_PUBLIC_KEY, VAPID_PUBLIC_KEY ? "VAPID public key present" : "Missing VAPID public key"));
+  checks.push(setupStatus("Current version", true, APP_VERSION));
+  try{
+    const [cg, att, players, games] = await Promise.all([
+      db.from("current_game").select("id").limit(1),
+      db.from("attendance").select("player_id").limit(1),
+      db.from("players").select("id").limit(1),
+      db.from("games").select("id").limit(1)
+    ]);
+    checks.push(setupStatus("Players table reachable", !players.error, players.error?.message || ""));
+    checks.push(setupStatus("Attendance table reachable", !att.error, att.error?.message || ""));
+    checks.push(setupStatus("Current game table reachable", !cg.error, cg.error?.message || ""));
+    checks.push(setupStatus("Game history table reachable", !games.error, games.error?.message || ""));
+  }catch(e){
+    checks.push(setupStatus("Database check", false, e?.message || String(e)));
+  }
+  checks.push(setupStatus("CNAME file", true, "Package includes CNAME: nmultimateteams.app"));
+  makeDynamicModal("setupChecklistModal", "Setup Checklist", `<div class="mini-table">${checks.join("")}</div>`);
+}
+
+function updateAppVersionLine(){
+  const dataPage = document.getElementById("dataPage");
+  if(!dataPage) return;
+  document.querySelectorAll("#dataVersionCard").forEach(card => card.remove());
+  let el = document.getElementById("dataAppVersionLine");
+  if(!el){
+    el = document.createElement("button");
+    el.id = "dataAppVersionLine";
+    el.className = "app-version-line btn-secondary";
+    el.style.width = "auto";
+    el.style.margin = "18px auto 4px";
+    dataPage.appendChild(el);
+  }else if(el.parentElement !== dataPage){
+    dataPage.appendChild(el);
+  }
+  el.textContent = `Version: ${APP_VERSION}`;
+  el.onclick = openSetupChecklistModal;
+  el.title = "Open setup checklist";
+}
+
+async function openAuditLogsModal(){
+  if(!isAdmin()){ alert("Admin only."); return; }
+  makeDynamicModal("auditLogsModal", "Admin Audit Logs", '<div class="small">Loading audit logs...</div>');
+  const { data, error } = await db.from("admin_audit_logs").select("*").order("created_at", { ascending:false }).limit(500);
+  if(error){ makeDynamicModal("auditLogsModal", "Admin Audit Logs", `<div class="notice">${escapeHtml(error.message)}</div>`); return; }
+  cachedAuditLogRows410 = data || [];
+  const body = `
+    <div class="filter-grid">
+      <div><label>Action</label><select id="auditActionFilter" onchange="renderAuditLogRows()"><option value="">All</option><option value="rating">Rating edits</option><option value="player_added">Player added</option><option value="player_deleted">Player deleted</option><option value="game_deleted">Game deleted</option><option value="void">Voids/deletes</option></select></div>
+      <div><label>Search</label><input id="auditSearch" placeholder="Search details..." oninput="renderAuditLogRows()"></div>
+      <div><label>&nbsp;</label><button class="btn-secondary" type="button" onclick="downloadAuditLogsCsv()">Export CSV</button></div>
+    </div>
+    <div id="auditLogsList"></div>`;
+  makeDynamicModal("auditLogsModal", "Admin Audit Logs", body);
+  renderAuditLogRows();
+}
+
+function renderAuditLogRows(){
+  const list = document.getElementById("auditLogsList");
+  if(!list) return;
+  const action = document.getElementById("auditActionFilter")?.value || "";
+  const search = (document.getElementById("auditSearch")?.value || "").toLowerCase();
+  let logs = cachedAuditLogRows410.slice();
+  if(action){
+    logs = logs.filter(l => String(l.action || "").toLowerCase().includes(action) || String(l.table_name || "").toLowerCase().includes(action));
+  }
+  if(search){
+    logs = logs.filter(l => JSON.stringify(l).toLowerCase().includes(search));
+  }
+  list.innerHTML = logs.length ? `<div class="mini-table">${logs.map(log => {
+    const details = log.details ? JSON.stringify(log.details) : "";
+    return `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><strong>${escapeHtml(log.action || "log")}</strong><span class="small">${escapeHtml(formatDateTime(log.created_at))}</span></div><div class="small">Table: ${escapeHtml(log.table_name || "")} · Actor role: ${escapeHtml(log.actor_role || "")}</div><pre style="white-space:pre-wrap;font-size:11px;overflow:auto">${escapeHtml(details)}</pre></div>`;
+  }).join("")}</div>` : '<div class="small">No audit logs match those filters.</div>';
+}
+
+function downloadAuditLogsCsv(){
+  const rows = [["Created At","Action","Table","Actor Role","Details"], ...cachedAuditLogRows410.map(l => [
+    l.created_at || "", l.action || "", l.table_name || "", l.actor_role || "", JSON.stringify(l.details || {})
+  ])];
+  downloadBlob(`${getDatePrefix()}_admin_audit_logs.csv`, rows.map(r => r.map(escapeCsv).join(",")).join("\n"), "text/csv");
+}
+
+async function openManageAccountsModal(){
+  if(!isAdmin()){ alert("Admin only."); return; }
+  makeDynamicModal("manageAccountsModal", "Manage Accounts", '<div class="small">Loading accounts...</div>');
+  const { data, error } = await db.from("profiles").select("*").order("email");
+  if(error){ makeDynamicModal("manageAccountsModal", "Manage Accounts", `<div class="notice">${escapeHtml(error.message)}</div>`); return; }
+  window.__profiles410 = data || [];
+  const body = `
+    <div class="notice">Admins can change account roles here. Match is based on profile name vs roster name.</div>
+    <div class="modal-search-row">
+      <div class="modal-search-input-wrap"><input id="accountSearch" placeholder="Search accounts..." oninput="renderManageAccountsRows()"></div>
+      <button class="btn-secondary modal-search-clear" type="button" onclick="setValue('accountSearch','');renderManageAccountsRows()">Clear</button>
+    </div>
+    <div id="manageAccountsRows" class="mini-table" style="margin-top:10px"></div>`;
+  makeDynamicModal("manageAccountsModal", "Manage Accounts", body);
+  renderManageAccountsRows();
+}
+
+function renderManageAccountsRows(){
+  const out = document.getElementById("manageAccountsRows");
+  if(!out) return;
+  const q = (document.getElementById("accountSearch")?.value || "").toLowerCase();
+  const rows = (window.__profiles410 || []).filter(p => !q || JSON.stringify(p).toLowerCase().includes(q));
+  out.innerHTML = rows.length ? rows.map(p => {
+    const full = p.full_name || `${p.first_name || ""} ${p.last_name || ""}`.trim();
+    const match = state.players.find(pl => normalizeNameForMatch(pl.fullName) === normalizeNameForMatch(full));
+    return `<div class="history-card">
+      <div class="player-name">${escapeHtml(full || p.email || p.id)}</div>
+      <div class="small">${escapeHtml(p.email || "")}</div>
+      <div class="small">Matched player: ${escapeHtml(match?.fullName || "No roster match")}</div>
+      <div class="toolbar" style="margin-top:8px">
+        <select id="role-${escapeHtml(String(p.id))}" style="max-width:170px">
+          <option value="user" ${p.role === "user" ? "selected" : ""}>user</option>
+          <option value="captain" ${p.role === "captain" ? "selected" : ""}>captain</option>
+          <option value="admin" ${p.role === "admin" ? "selected" : ""}>admin</option>
+        </select>
+        <button class="btn-secondary" type="button" onclick="saveManagedAccountRole('${escapeHtml(String(p.id))}')">Save Role</button>
+      </div>
+    </div>`;
+  }).join("") : '<div class="small">No accounts found.</div>';
+}
+
+async function saveManagedAccountRole(profileId){
+  if(!isAdmin()) return;
+  const role = document.getElementById(`role-${profileId}`)?.value || "user";
+  const { error } = await db.from("profiles").update({ role }).eq("id", profileId);
+  if(error){ alert(error.message); return; }
+  const p = (window.__profiles410 || []).find(x => String(x.id) === String(profileId));
+  if(p) p.role = role;
+  alert("Role saved.");
+  renderManageAccountsRows();
+}
+
+async function openArchiveSeasonModal(){
+  if(!isAdmin()){ alert("Admin only."); return; }
+  const body = `
+    <div class="notice">Archive the current season before resetting stats. This stores player stats, games, teammate history, and settings in Supabase.</div>
+    <div style="margin-top:10px"><label>Season name</label><input id="archiveSeasonName" value="Season ${new Date().getFullYear()}"></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="archiveResetStats" type="checkbox" checked style="width:auto"> Reset games/wins/losses/Win-Loss after archive</label>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="archiveResetHistory" type="checkbox" style="width:auto"> Also clear teammate history after archive</label>
+    <div class="toolbar" style="margin-top:12px"><button class="btn-warn" type="button" onclick="archiveCurrentSeason()">Archive Season</button></div>
+    <div id="archiveSeasonStatus" class="small" style="margin-top:8px"></div>`;
+  makeDynamicModal("archiveSeasonModal", "Archive Season", body);
+}
+
+async function archiveCurrentSeason(){
+  if(!isAdmin()) return;
+  const name = (document.getElementById("archiveSeasonName")?.value || "").trim() || `Season ${new Date().getFullYear()}`;
+  const resetStats = !!document.getElementById("archiveResetStats")?.checked;
+  const resetHistory = !!document.getElementById("archiveResetHistory")?.checked;
+  if(!confirm(`Archive "${name}"?${resetStats ? "\n\nStats will be reset after archive." : ""}${resetHistory ? "\nTeammate history will also be cleared." : ""}`)) return;
+  await withLoading("Archiving season...", async () => {
+    const { data, error } = await db.rpc("archive_current_season", {
+      p_name: name,
+      p_reset_stats: resetStats,
+      p_reset_history: resetHistory
+    });
+    if(error) throw error;
+    const status = document.getElementById("archiveSeasonStatus");
+    if(status) status.textContent = `Archived ${data?.players ?? 0} players.`;
+    await loadCloudData();
+    renderAll();
+  }).catch(e => alert(e?.message || e));
+}
+
+function backupSummaryHtml(backup){
+  const s = summarizeBackupJson(backup);
+  const gameCount = Array.isArray(backup?.gameHistory) ? backup.gameHistory.length : 0;
+  const pairEventCount = Array.isArray(backup?.teammatePairEvents) ? backup.teammatePairEvents.length : 0;
+  const auditCount = Array.isArray(backup?.adminAuditLogs) ? backup.adminAuditLogs.length : 0;
+  return `<div class="notice"><strong>Backup summary</strong><br>${escapeHtml(s.message).replaceAll("\n","<br>")}<br>Game history: ${gameCount}<br>Pair events: ${pairEventCount}<br>Audit logs: ${auditCount}<br>Version: ${escapeHtml(backup?.appVersion || "unknown")}<br>Exported: ${escapeHtml(backup?.exportedAt || "unknown")}</div>`;
+}
+
+async function importBackupJsonFile(event){
+  if(!isAdmin()){ alert("Admin only."); return; }
+  const input = event?.target;
+  const file = input?.files?.[0];
+  if(!file) return;
+
+  try{
+    const text = await file.text();
+    const backup = JSON.parse(text);
+    const summary = summarizeBackupJson(backup);
+    if(!summary.valid){
+      alert("This does not look like a valid Ultimate Teams backup JSON file.");
+      return;
+    }
+
+    window.__pendingBackup410 = backup;
+    const body = `${backupSummaryHtml(backup)}
+      <div class="hr"></div>
+      <label style="display:flex;gap:8px;align-items:center"><input id="restorePlayersOnly" type="checkbox" style="width:auto"> Restore players only</label>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input id="restoreSettingsOnly" type="checkbox" style="width:auto"> Restore settings only</label>
+      <div class="small" style="margin-top:8px">Leave both unchecked to restore everything in the backup. Export your current backup first if you may need to undo this.</div>
+      <div class="toolbar" style="margin-top:12px"><button class="btn-warn" type="button" onclick="confirmPendingBackupRestore()">Restore Backup</button></div>`;
+    makeDynamicModal("backupRestoreModal", "Restore Backup", body);
+  }catch(e){
+    console.error(e);
+    alert("Could not import backup JSON: " + (e?.message || e));
+  }finally{
+    if(input) input.value = "";
+  }
+}
+
+async function confirmPendingBackupRestore(){
+  const backup = window.__pendingBackup410;
+  if(!backup){ alert("No backup loaded."); return; }
+  const playersOnly = !!document.getElementById("restorePlayersOnly")?.checked;
+  const settingsOnly = !!document.getElementById("restoreSettingsOnly")?.checked;
+
+  if(playersOnly && settingsOnly){ alert("Choose only one restore mode, or leave both unchecked for full restore."); return; }
+  if(!confirm("Restore selected backup data? This cannot be undone unless you exported the current data first.")) return;
+
+  await withLoading("Restoring backup...", async () => {
+    if(playersOnly){
+      const players = backup.players.map(backupPlayerToRow).filter(p => p.id && (p.first_name || p.last_name));
+      for(const chunk of chunkArray(players, 100)){
+        const { error } = await db.from("players").upsert(chunk, { onConflict:"id" });
+        if(error) throw error;
+      }
+    }else if(settingsOnly){
+      const s = backup.settings || {};
+      const { error } = await db.from("settings").upsert({
+        id: "main",
+        weight_handling: Number(s.weightHandling ?? 0.35),
+        weight_cutting: Number(s.weightCutting ?? 0.35),
+        weight_defense: Number(s.weightDefense ?? 0.30),
+        k_factor: Number(s.kFactor ?? 0.08),
+        repeat_weight: Number(s.repeatWeight ?? 4),
+        prioritize_handler_separation: !!s.prioritizeHandlerSeparation,
+        handler_separation_boost: Number(s.handlerSeparationBoost ?? 2),
+        prioritize_elite_balance: !!s.prioritizeEliteBalance,
+        elite_balance_boost: Number(s.eliteBalanceBoost ?? 2),
+        updated_at: new Date().toISOString()
+      }, { onConflict:"id" });
+      if(error) throw error;
+    }else{
+      await restoreBackupJson(backup);
+    }
+    hideModal("backupRestoreModal");
+    await loadCloudData();
+    renderAll();
+    alert("Backup restored.");
+  }).catch(e => alert(e?.message || e));
+}
+
+Object.assign(window, {
+  setLoading,
+  clearLoading,
+  toggleShowOnlyAttending,
+  openManualMoveModal,
+  manualMovePlayer,
+  manualSwapPlayers,
+  openMyProfileModal,
+  openSetupChecklistModal,
+  renderGameHistoryModalRows,
+  renderTeammateByPlayer,
+  renderAuditLogRows,
+  downloadAuditLogsCsv,
+  openManageAccountsModal,
+  renderManageAccountsRows,
+  saveManagedAccountRole,
+  openArchiveSeasonModal,
+  archiveCurrentSeason,
+  confirmPendingBackupRestore
 });
 

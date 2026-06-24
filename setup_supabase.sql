@@ -1210,3 +1210,115 @@ end;
 $$;
 
 grant execute on function public.void_last_saved_game() to authenticated;
+
+
+-- 4.10.0 season archive support
+create table if not exists public.season_archives (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  archived_at timestamptz not null default now(),
+  archived_by uuid references auth.users(id) on delete set null,
+  reset_stats boolean not null default false,
+  reset_history boolean not null default false,
+  snapshot jsonb not null default '{}'::jsonb
+);
+
+alter table public.season_archives enable row level security;
+
+drop policy if exists season_archives_select_admin on public.season_archives;
+create policy season_archives_select_admin on public.season_archives
+for select to authenticated using (public.is_admin());
+
+drop policy if exists season_archives_admin_all on public.season_archives;
+create policy season_archives_admin_all on public.season_archives
+for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create or replace function public.archive_current_season(
+  p_name text,
+  p_reset_stats boolean default true,
+  p_reset_history boolean default false
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_archive_id uuid;
+  v_player_count integer := 0;
+  v_game_count integer := 0;
+  v_pair_count integer := 0;
+  v_snapshot jsonb;
+begin
+  if not public.is_admin() then
+    raise exception using message = 'Admin only.';
+  end if;
+
+  select count(*) into v_player_count from public.players;
+  select count(*) into v_game_count from public.games;
+  select count(*) into v_pair_count from public.teammate_history;
+
+  v_snapshot := jsonb_build_object(
+    'players', coalesce((select jsonb_agg(to_jsonb(p)) from public.players p), '[]'::jsonb),
+    'games', coalesce((select jsonb_agg(to_jsonb(g)) from public.games g), '[]'::jsonb),
+    'teammate_history', coalesce((select jsonb_agg(to_jsonb(h)) from public.teammate_history h), '[]'::jsonb),
+    'teammate_pair_events', coalesce((select jsonb_agg(to_jsonb(e)) from public.teammate_pair_events e), '[]'::jsonb),
+    'game_player_results', coalesce((select jsonb_agg(to_jsonb(r)) from public.game_player_results r), '[]'::jsonb),
+    'settings', coalesce((select to_jsonb(s) from public.settings s where id = 'main'), '{}'::jsonb),
+    'archived_at', now()
+  );
+
+  insert into public.season_archives(name, archived_by, reset_stats, reset_history, snapshot)
+  values(coalesce(nullif(trim(p_name), ''), 'Season archive'), auth.uid(), p_reset_stats, p_reset_history, v_snapshot)
+  returning id into v_archive_id;
+
+  if p_reset_stats then
+    perform set_config('app.bypass_captain_player_guard', 'on', true);
+    perform set_config('app.audit_context', 'season_archive_reset', true);
+
+    update public.players
+    set games_played = 0,
+        wins = 0,
+        losses = 0,
+        win_loss = 0,
+        updated_at = now();
+
+    perform set_config('app.bypass_captain_player_guard', 'off', true);
+    perform set_config('app.audit_context', 'none', true);
+  end if;
+
+  if p_reset_history then
+    delete from public.teammate_pair_events;
+    delete from public.teammate_history;
+  end if;
+
+  insert into public.admin_audit_logs(action, table_name, row_id, actor_id, actor_role, details)
+  select
+    'season_archived',
+    'season_archives',
+    v_archive_id,
+    auth.uid(),
+    p.role,
+    jsonb_build_object('name', p_name, 'reset_stats', p_reset_stats, 'reset_history', p_reset_history, 'players', v_player_count, 'games', v_game_count)
+  from public.profiles p
+  where p.id = auth.uid();
+
+  return jsonb_build_object('archive_id', v_archive_id, 'players', v_player_count, 'games', v_game_count, 'teammate_history_entries', v_pair_count);
+exception
+  when others then
+    perform set_config('app.bypass_captain_player_guard', 'off', true);
+    perform set_config('app.audit_context', 'none', true);
+    raise;
+end;
+$$;
+
+grant execute on function public.archive_current_season(text, boolean, boolean) to authenticated;
+
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table public.season_archives;
+  exception when duplicate_object then null;
+  end;
+end $$;
+

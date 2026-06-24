@@ -50,12 +50,14 @@ serve(async (req) => {
   }
 
   const body = await req.json().catch(() => ({}));
-  const payload = JSON.stringify({
+  const teams = Array.isArray(body.teams) ? body.teams : [];
+
+  const basePayload = {
     title: body.title || "New teams are ready",
     body: body.body || "New ultimate teams have been generated.",
     url: body.url || "https://nmultimateteams.app",
     tag: "ultimate-teams-generated",
-  });
+  };
 
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
@@ -63,6 +65,10 @@ serve(async (req) => {
   const { data: subscriptions, error: subError } = await serviceClient
     .from("push_subscriptions")
     .select("id,user_id,endpoint,p256dh,auth");
+
+  const { data: profiles } = await serviceClient
+    .from("profiles")
+    .select("id,first_name,last_name,full_name,email");
 
   if (subError) {
     return json({ error: subError.message }, 500);
@@ -74,6 +80,12 @@ serve(async (req) => {
 
   for (const sub of subscriptions ?? []) {
     try {
+      const personalized = { ...basePayload };
+      const assignment = findTeamAssignment(sub.user_id, profiles ?? [], teams);
+      if (assignment) {
+        personalized.body = `Teams are ready. You are on Team ${assignment}.`;
+      }
+
       await webpush.sendNotification(
         {
           endpoint: sub.endpoint,
@@ -82,7 +94,7 @@ serve(async (req) => {
             auth: sub.auth,
           },
         },
-        payload
+        JSON.stringify(personalized)
       );
       sent++;
     } catch (err) {
@@ -99,6 +111,36 @@ serve(async (req) => {
 
   return json({ sent, failed, removed });
 });
+
+function normalizeName(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function findTeamAssignment(userId: string, profiles: Array<Record<string, unknown>>, teams: Array<Record<string, unknown>>) {
+  const profile = profiles.find((p) => String(p.id) === String(userId));
+  if (!profile) return null;
+
+  const profileName = normalizeName(
+    profile.full_name ||
+      `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim()
+  );
+
+  if (!profileName) return null;
+
+  for (const team of teams) {
+    const teamNumber = Number(team.teamNumber ?? 0);
+    const players = Array.isArray(team.players) ? team.players : [];
+    for (const player of players as Array<Record<string, unknown>>) {
+      const playerName = normalizeName(player.fullName || player.full_name || player.name);
+      if (playerName && playerName === profileName) return teamNumber || null;
+    }
+  }
+
+  return null;
+}
 
 function json(data: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(data), {

@@ -155,6 +155,23 @@
 
     .record-row .record-pill,.record-row .record-pill-no-border{display:inline-flex;align-items:center;justify-content:center;text-align:center}
 
+
+    .injury-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;margin-left:6px;border:1px solid var(--border)}
+    .injury-good{color:#86efac;border-color:#22c55e;background:rgba(34,197,94,.10)}
+    .injury-mid{color:#fde68a;border-color:#f59e0b;background:rgba(245,158,11,.12)}
+    .injury-low{color:#fecaca;border-color:#ef4444;background:rgba(239,68,68,.12)}
+    .loading-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center;padding:20px}
+    .loading-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 18px;box-shadow:0 12px 30px rgba(0,0,0,.35);max-width:320px;text-align:center}
+    .spinner{width:28px;height:28px;border:3px solid rgba(255,255,255,.25);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .profile-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+    .profile-stat{border:1px solid var(--border);border-radius:12px;padding:10px;text-align:center;background:rgba(255,255,255,.03)}
+    .profile-stat strong{display:block;font-size:18px}
+    .filter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+    @media(max-width:520px){.filter-grid,.profile-stat-grid{grid-template-columns:1fr}}
+    .manual-team-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    @media(max-width:520px){.manual-team-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -197,11 +214,12 @@
   <div id="mainPage">
     <div class="card"><details id="teamsDetails"><summary><span class="summary-title">Current Game</span><span class="muted-inline" id="gameStartTime"></span></summary><div id="teamsOutput" style="margin-top:10px"></div><div class="hr"></div><div class="notice" id="resultNotice"></div><div style="margin-top:10px" id="saveResultsWrap" class="hidden"><button class="btn-success" onclick="saveResults()">Save results</button>
         <button id="lateAddPlayerBtn" class="btn-secondary" type="button" onclick="openLateAddModal()">Late Add Player</button>
+        <button id="manualMoveBtn" class="btn-secondary" type="button" onclick="openManualMoveModal()">Manual Move</button>
 
         <button id="clearTeamsBtn" class="btn-danger admin-only" type="button" onclick="clearCurrentTeams()">Clear Teams</button>
 </div><div id="resultMessage" class="small" style="margin-top:8px"></div></details></div>
     <div class="card signed-in-only" id="attendanceCard"><details open><summary><span class="summary-title">Attendance</span><span></span></summary>
-<div class="subbox"><details><summary><span class="muted-inline">Present Players</span><span class="muted-inline" id="presentCount"></span></summary><div id="presentPlayersList" class="present-list" style="margin-top:10px"></div></details></div><div class="subbox" id="tempPlayerBox"><details><summary><span class="muted-inline">Add Player</span><span></span></summary><div class="small" style="margin-top:8px">Use Add One-Time Player for a temporary/sub player. Use Add Player to add them permanently to the roster and mark them present today.</div><div class="grid grid-2" style="margin-top:10px"><div><label>New Player Full Name</label><input id="tempName" placeholder="Mike Jones"></div><div><label>Rate Like</label><select id="tempLike" onchange="loadTempRatingsFromLike()"></select></div></div><div class="grid grid-3" style="margin-top:10px"><div><label>Handling</label><input id="tempHandling" type="number" step="0.1" value="3"></div><div><label>Cutting</label><input id="tempCutting" type="number" step="0.1" value="3"></div><div><label>Defense</label><input id="tempDefense" type="number" step="0.1" value="3"></div></div><div style="margin-top:10px" class="toolbar"><button class="btn-secondary" onclick="addTempPlayer()">Add One-Time Player</button><button class="btn" onclick="addPermanentPlayer()">Add Player</button></div><div id="addPlayerStatus" class="small" style="margin-top:8px"></div></details></div><div class="subbox" id="pairRulesBox"><details><summary><span class="muted-inline">Pair Rules</span><span></span></summary><div class="grid grid-4" style="margin-top:10px"><div><label>Player 1</label><select id="pairP1"></select></div><div><label>Player 2</label><select id="pairP2"></select></div><div><label>Rule</label><select id="pairType"><option value="apart">Apart</option><option value="together">Together</option></select></div><div><label>Strength</label><input id="pairStrength" type="number" min="0.1" max="5" step="0.1" value="1.0"></div></div><div style="margin-top:10px" class="section-actions"><button class="btn" onclick="addPairRule()">Add Pair Rule</button><button class="btn-secondary" onclick="lockPair()">Lock Pair</button><button class="btn-danger" onclick="clearPairRules()">Clear All Pair Rules</button></div><div id="pairRuleList" class="list" style="margin-top:10px"></div></details></div><div id="numTeamsSection" class="captain-admin-only"><div class="grid grid-1" style="margin-top:10px"><div><label>Number Of Teams</label><input id="numTeams" data-captain-admin-only="true" type="number" min="2" value="3"></div></div></div><div style="margin-top:10px" class="grid grid-2"><button id="toggleInactiveBtn" class="btn-secondary captain-admin-only" onclick="toggleShowInactive()">Show Inactive Players</button><button class="btn-warn captain-admin-only" onclick="clearAttendance()">Clear Attendance</button></div><div class="search-row" style="margin-top:10px"><div><label>Search Players</label><input id="playerSearch" type="text" placeholder="Search by name..." oninput="renderPlayers()"></div><div><label>&nbsp;</label><button class="btn-secondary" style="width:auto" onclick="clearPlayerSearch()">Clear</button></div></div><div id="playerList" class="list" style="margin-top:10px"></div></details></div>
+<div class="subbox"><details><summary><span class="muted-inline">Present Players</span><span class="muted-inline" id="presentCount"></span></summary><div id="presentPlayersList" class="present-list" style="margin-top:10px"></div></details></div><div class="subbox" id="tempPlayerBox"><details><summary><span class="muted-inline">Add Player</span><span></span></summary><div class="small" style="margin-top:8px">Use Add One-Time Player for a temporary/sub player. Use Add Player to add them permanently to the roster and mark them present today.</div><div class="grid grid-2" style="margin-top:10px"><div><label>New Player Full Name</label><input id="tempName" placeholder="Mike Jones"></div><div><label>Rate Like</label><select id="tempLike" onchange="loadTempRatingsFromLike()"></select></div></div><div class="grid grid-3" style="margin-top:10px"><div><label>Handling</label><input id="tempHandling" type="number" step="0.1" value="3"></div><div><label>Cutting</label><input id="tempCutting" type="number" step="0.1" value="3"></div><div><label>Defense</label><input id="tempDefense" type="number" step="0.1" value="3"></div></div><div style="margin-top:10px" class="toolbar"><button class="btn-secondary" onclick="addTempPlayer()">Add One-Time Player</button><button class="btn" onclick="addPermanentPlayer()">Add Player</button></div><div id="addPlayerStatus" class="small" style="margin-top:8px"></div></details></div><div class="subbox" id="pairRulesBox"><details><summary><span class="muted-inline">Pair Rules</span><span></span></summary><div class="grid grid-4" style="margin-top:10px"><div><label>Player 1</label><select id="pairP1"></select></div><div><label>Player 2</label><select id="pairP2"></select></div><div><label>Rule</label><select id="pairType"><option value="apart">Apart</option><option value="together">Together</option></select></div><div><label>Strength</label><input id="pairStrength" type="number" min="0.1" max="5" step="0.1" value="1.0"></div></div><div style="margin-top:10px" class="section-actions"><button class="btn" onclick="addPairRule()">Add Pair Rule</button><button class="btn-secondary" onclick="lockPair()">Lock Pair</button><button class="btn-danger" onclick="clearPairRules()">Clear All Pair Rules</button></div><div id="pairRuleList" class="list" style="margin-top:10px"></div></details></div><div id="numTeamsSection" class="captain-admin-only"><div class="grid grid-1" style="margin-top:10px"><div><label>Number Of Teams</label><input id="numTeams" data-captain-admin-only="true" type="number" min="2" value="3"></div></div></div><div style="margin-top:10px" class="grid grid-2"><button id="toggleInactiveBtn" class="btn-secondary captain-admin-only" onclick="toggleShowInactive()">Show Inactive Players</button><button id="showOnlyAttendingBtn" class="btn-secondary" type="button" onclick="toggleShowOnlyAttending()">Show Only Attending: Off</button><button class="btn-warn captain-admin-only" onclick="clearAttendance()">Clear Attendance</button></div><div class="search-row" style="margin-top:10px"><div><label>Search Players</label><input id="playerSearch" type="text" placeholder="Search by name..." oninput="renderPlayers()"></div><div><label>&nbsp;</label><button class="btn-secondary" style="width:auto" onclick="clearPlayerSearch()">Clear</button></div></div><div id="playerList" class="list" style="margin-top:10px"></div></details></div>
   </div>
   
 <div id="dataPage" style="display:none">
@@ -226,6 +244,8 @@
         <button class="btn-secondary" type="button" onclick="downloadRatingsCsv()">Download Ratings CSV</button>
         <button id="viewAuditLogsBtn" class="btn-secondary admin-only" type="button" onclick="openAuditLogsModal()">View Admin Audit Logs</button>
         <button id="voidLastSavedGameBtn" class="btn-danger admin-only" type="button" onclick="voidLastSavedGame()">Undo/Void Last Saved Game</button>
+        <button id="archiveSeasonBtn" class="btn-secondary admin-only" type="button" onclick="openArchiveSeasonModal()">Archive Season</button>
+        <button id="manageAccountsBtn" class="btn-secondary admin-only" type="button" onclick="openManageAccountsModal()">Manage Accounts</button>
       </div>
     </details>
   </div>
@@ -415,6 +435,7 @@
       <div class="player-name">My player profile</div>
       <div class="small">View your own attendance/game history and Win/Loss record.</div>
       <div class="toolbar" style="margin-top:10px">
+        <button id="myProfileBtn" class="btn-secondary" type="button" onclick="openMyProfileModal()">My Profile</button>
         <button id="myAttendanceHistoryBtn" class="btn-secondary" type="button" onclick="openMyAttendanceHistoryModal()">My Attendance History</button>
         <button id="myWinLossRecordBtn" class="btn-secondary" type="button" onclick="openMyWinLossRecordModal()">My Win/Loss Record</button>
       </div>
@@ -535,4 +556,5 @@
 
 <div class="stickybar" id="stickybar"><div class="inner"><button type="button" class="btn-success" onclick="generateTeamsButton()">Generate Teams</button></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="app.js"></script>
+<div id="loadingOverlay" class="loading-backdrop"><div class="loading-card"><div class="spinner"></div><div id="loadingMessage">Working...</div></div></div>
 </body></html>

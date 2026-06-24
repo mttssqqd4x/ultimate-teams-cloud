@@ -874,3 +874,27 @@ Changes:
 - record badges now use inline-flex centering
 - added a minimum badge width so records like 1-0, 10-2, etc. stay visually centered
 - no Supabase SQL changes
+
+
+## 4.10.0 feature release
+
+Added:
+- Late Add auto-placement options: smallest team or lowest-rated team
+- My Profile popup under Account with games, wins/losses, and most common teammates
+- Teammate History by-player view
+- Game History filters for player, result/pairings-only, and date range
+- Archive Season workflow with optional stat/history reset
+- Manual Move popup for moving one player or swapping two players between teams
+- Personalized team-assignment push notifications when possible
+- Version click opens a setup checklist
+- Admin Audit Log filters and CSV export
+- Manage Accounts popup for admins to update user/captain/admin roles
+- Safer backup restore summary with full/players-only/settings-only restore options
+- Attendance Show Only Attending toggle
+- Color-coded injury/availability badges
+- Loading overlay/spinner for longer actions
+
+Deployment notes:
+- Run the updated setup_supabase.sql once for season archive support.
+- Redeploy send-team-notification Edge Function for personalized team assignment messages.
+- This package intentionally omits the .github workflow folder to keep GitHub Pages branch deployment simple.
