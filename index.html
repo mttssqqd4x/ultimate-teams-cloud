@@ -142,6 +142,16 @@
     .late-add-player-row:last-child{border-bottom:0}
     .late-add-player-row button{width:auto;min-width:74px}
 
+
+    html,body{overflow-x:hidden;max-width:100%}
+    .modal{overflow-x:hidden;touch-action:pan-y}
+    .modal-card{overflow-x:hidden;overscroll-behavior-x:none;touch-action:pan-y;max-width:min(720px,calc(100vw - 24px));box-sizing:border-box}
+    .modal-card *{max-width:100%;box-sizing:border-box}
+    .history-card,.late-add-player-list,.record-list,.player-list,#gameHistoryList,#teammateHistoryList,#auditLogsList{overflow-x:hidden;overscroll-behavior-x:none;touch-action:pan-y}
+    .late-add-player-row,.record-row,.history-card .row{min-width:0}
+    .late-add-player-row > div,.record-row > div,.history-card .row > div{min-width:0}
+    .modal-card pre,.modal-card code{white-space:pre-wrap;word-break:break-word;overflow-x:hidden}
+
 </style>
 </head>
 <body>

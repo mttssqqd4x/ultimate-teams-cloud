@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.9.9";
+const APP_VERSION = "4.9.10";
 
 let db = null;
 let currentUser = null;
@@ -920,7 +920,23 @@ function ensureStickyModalHeaders(){
 }
 
 
+
+function preventHorizontalModalDrift(){
+  document.querySelectorAll(".modal-card, .modal").forEach(el => {
+    if(el.dataset.xScrollLocked === "true") return;
+    el.dataset.xScrollLocked = "true";
+    el.addEventListener("scroll", () => {
+      if(el.scrollLeft) el.scrollLeft = 0;
+    }, { passive: true });
+    el.addEventListener("touchmove", () => {
+      if(el.scrollLeft) el.scrollLeft = 0;
+    }, { passive: true });
+  });
+}
+
+
 function renderAll(){
+  preventHorizontalModalDrift();
   ensureV490FeatureUi();
   ensureStickyModalHeaders();
   ensurePlayerSortControls();
