@@ -45,8 +45,8 @@ serve(async (req) => {
     .eq("id", userData.user.id)
     .maybeSingle();
 
-  if (profileError || profile?.role !== "admin") {
-    return json({ error: "Admin only" }, 403);
+  if (profileError || !["admin", "captain"].includes(profile?.role ?? "")) {
+    return json({ error: "Captain/admin only" }, 403);
   }
 
   const body = await req.json().catch(() => ({}));

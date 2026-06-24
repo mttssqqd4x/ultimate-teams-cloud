@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.9.0";
+const APP_VERSION = "4.9.1";
 
 let db = null;
 let currentUser = null;
@@ -821,7 +821,85 @@ async function sendTeamGeneratedNotification(){
   }
 }
 
+
+function ensureV490FeatureUi(){
+  // This protects against partial deploy/cache cases where app.js updates but index.html is old.
+  const dataPage = document.getElementById("dataPage");
+  if(dataPage){
+    let toolsGrid = document.querySelector("#dataCaptainTools .player-tools-grid");
+    if(!toolsGrid){
+      let card = document.getElementById("dataCaptainTools");
+      if(!card){
+        card = document.createElement("div");
+        card.id = "dataCaptainTools";
+        card.className = "card captain-admin-only";
+        card.innerHTML = '<details open><summary><span class="summary-title">Player Tools</span><span></span></summary><div class="player-tools-grid"></div></details>';
+        const firstAdminCard = dataPage.querySelector(".admin-only");
+        if(firstAdminCard) dataPage.insertBefore(card, firstAdminCard);
+        else dataPage.appendChild(card);
+      }
+      toolsGrid = card.querySelector(".player-tools-grid");
+    }
+
+    const ensureToolButton = (id, label, cls, fnName) => {
+      if(document.getElementById(id) || !toolsGrid) return;
+      const btn = document.createElement("button");
+      btn.id = id;
+      btn.className = cls;
+      btn.type = "button";
+      btn.textContent = label;
+      btn.addEventListener("click", () => {
+        if(typeof window[fnName] === "function") window[fnName]();
+      });
+      toolsGrid.appendChild(btn);
+    };
+
+    ensureToolButton("viewGameHistoryBtn", "View Game History", "btn-secondary", "openGameHistoryModal");
+    ensureToolButton("viewTeammateHistoryBtn", "View Teammate History", "btn-secondary", "openTeammateHistoryModal");
+    ensureToolButton("viewAuditLogsBtn", "View Admin Audit Logs", "btn-secondary admin-only", "openAuditLogsModal");
+    ensureToolButton("voidLastSavedGameBtn", "Undo/Void Last Saved Game", "btn-danger admin-only", "voidLastSavedGame");
+  }
+
+  const saveWrap = document.getElementById("saveResultsWrap");
+  if(saveWrap && !document.getElementById("lateAddPlayerBtn")){
+    const btn = document.createElement("button");
+    btn.id = "lateAddPlayerBtn";
+    btn.className = "btn-secondary";
+    btn.type = "button";
+    btn.textContent = "Late Add Player";
+    btn.addEventListener("click", () => {
+      if(typeof window.openLateAddModal === "function") window.openLateAddModal();
+    });
+    const clearBtn = document.getElementById("clearTeamsBtn");
+    if(clearBtn) saveWrap.insertBefore(btn, clearBtn);
+    else saveWrap.appendChild(btn);
+  }
+
+  const accountModal = document.getElementById("accountModal");
+  if(accountModal && !document.getElementById("selfProfileBox")){
+    const modalCard = accountModal.querySelector(".modal-card");
+    const pushBox = document.getElementById("pushNotificationsBox");
+    if(modalCard){
+      const box = document.createElement("div");
+      box.className = "subbox";
+      box.id = "selfProfileBox";
+      box.style.marginTop = "12px";
+      box.innerHTML = `
+        <div class="player-name">My player profile</div>
+        <div class="small">View your own attendance/game history and Win/Loss record.</div>
+        <div class="toolbar" style="margin-top:10px">
+          <button id="myAttendanceHistoryBtn" class="btn-secondary" type="button" onclick="openMyAttendanceHistoryModal()">My Attendance History</button>
+          <button id="myWinLossRecordBtn" class="btn-secondary" type="button" onclick="openMyWinLossRecordModal()">My Win/Loss Record</button>
+        </div>`;
+      if(pushBox && pushBox.parentElement === modalCard) modalCard.insertBefore(box, pushBox);
+      else modalCard.appendChild(box);
+    }
+  }
+}
+
+
 function renderAll(){
+  ensureV490FeatureUi();
   updateNavVisibility();
   updateRoleVisibility();
   updateStats();
@@ -3010,3 +3088,15 @@ function escapeHtml(str){
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+
+Object.assign(window, {
+  openGameHistoryModal,
+  openTeammateHistoryModal,
+  openAuditLogsModal,
+  voidLastSavedGame,
+  openLateAddModal,
+  openMyAttendanceHistoryModal,
+  openMyWinLossRecordModal
+});
+

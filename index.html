@@ -123,7 +123,13 @@
       cursor:not-allowed;
     }
 
-  </style>
+  
+    .mini-table{display:grid;gap:8px;margin-top:10px}
+    .history-card{border:1px solid var(--border);border-radius:12px;padding:10px;background:rgba(255,255,255,.03)}
+    .history-card .team-line{margin-top:6px;font-size:13px;color:var(--muted)}
+    .pill-admin{display:inline-block;border:1px solid var(--warn);color:var(--warn);border-radius:999px;padding:2px 7px;font-size:11px;margin-left:6px}
+
+</style>
 </head>
 <body>
 <div class="app">
@@ -164,6 +170,7 @@
   
   <div id="mainPage">
     <div class="card"><details id="teamsDetails"><summary><span class="summary-title">Current Game</span><span class="muted-inline" id="gameStartTime"></span></summary><div id="teamsOutput" style="margin-top:10px"></div><div class="hr"></div><div class="notice" id="resultNotice"></div><div style="margin-top:10px" id="saveResultsWrap" class="hidden"><button class="btn-success" onclick="saveResults()">Save results</button>
+        <button id="lateAddPlayerBtn" class="btn-secondary" type="button" onclick="openLateAddModal()">Late Add Player</button>
 
         <button id="clearTeamsBtn" class="btn-danger admin-only" type="button" onclick="clearCurrentTeams()">Clear Teams</button>
 </div><div id="resultMessage" class="small" style="margin-top:8px"></div></details></div>
@@ -188,7 +195,11 @@
         <button class="btn-secondary" type="button" onclick="openEditPlayerModal()">Edit Player</button>
         <button class="btn-secondary" type="button" onclick="openRatingsModal()">View Player Ratings</button>
         <button class="btn-secondary" type="button" onclick="openWinLossModal()">View Win/Loss Records</button>
+        <button id="viewGameHistoryBtn" class="btn-secondary" type="button" onclick="openGameHistoryModal()">View Game History</button>
+        <button id="viewTeammateHistoryBtn" class="btn-secondary" type="button" onclick="openTeammateHistoryModal()">View Teammate History</button>
         <button class="btn-secondary" type="button" onclick="downloadRatingsCsv()">Download Ratings CSV</button>
+        <button id="viewAuditLogsBtn" class="btn-secondary admin-only" type="button" onclick="openAuditLogsModal()">View Admin Audit Logs</button>
+        <button id="voidLastSavedGameBtn" class="btn-danger admin-only" type="button" onclick="voidLastSavedGame()">Undo/Void Last Saved Game</button>
       </div>
     </details>
   </div>
@@ -332,6 +343,15 @@
 
     <div class="notice" style="margin-top:12px;line-height:1.45">
       <div id="accountEmailLine">Signed in</div>
+    </div>
+
+    <div class="subbox" id="selfProfileBox" style="margin-top:12px">
+      <div class="player-name">My player profile</div>
+      <div class="small">View your own attendance/game history and Win/Loss record.</div>
+      <div class="toolbar" style="margin-top:10px">
+        <button id="myAttendanceHistoryBtn" class="btn-secondary" type="button" onclick="openMyAttendanceHistoryModal()">My Attendance History</button>
+        <button id="myWinLossRecordBtn" class="btn-secondary" type="button" onclick="openMyWinLossRecordModal()">My Win/Loss Record</button>
+      </div>
     </div>
 
     <div class="subbox" id="pushNotificationsBox" style="margin-top:12px">

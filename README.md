@@ -742,3 +742,32 @@ Changes:
 - changed static PostgreSQL RAISE EXCEPTION statements to `RAISE EXCEPTION USING MESSAGE = ...`
 - this prevents PostgreSQL from treating `%` characters as missing placeholders
 - fixes the `too few parameters specified for RAISE` compile error in `prevent_captain_player_edits`
+
+
+## 4.9.0 history, audit, late-add, and captain notification features
+
+Changes:
+- Admins can now view/edit admin-created pair rules in the regular Pair Rules section.
+- Captains still cannot see admin pair rules, but those rules still apply during team generation.
+- Captain-created pair rules are visible to all captains/admins and apply globally.
+- Added Data page buttons/popups for Game History and Teammate History.
+- Added admin-only Undo/Void Last Saved Game, supported for games saved after this version creates game-player audit rows.
+- Added Late Add Player flow after teams are generated and before results are saved.
+- Push notifications can now be sent by captains/admins when teams are generated.
+- Added Account popups for a player's own attendance/game history and Win/Loss record.
+- Full JSON backup now includes gameHistory, teammatePairEvents, gamePlayerResults, and adminAuditLogs.
+- Added admin audit log table for rating edits, player adds, deleted players, and voided games.
+
+Required after upload:
+1. Run setup_supabase.sql in Supabase SQL Editor.
+2. Redeploy the send-team-notification Edge Function so captains can send notifications too:
+   npx supabase functions deploy send-team-notification --project-ref fsdqkozqjshqooqwvmhq
+
+
+## 4.9.1 UI deploy/cache hardening
+
+Changes:
+- fixes case where app version updated to 4.9.0 but new buttons did not appear
+- new 4.9 tools are now created by JavaScript if the deployed/cached index.html is missing them
+- adds stable IDs to the new Data page, Account, and Late Add buttons
+- no Supabase SQL changes from 4.9.0

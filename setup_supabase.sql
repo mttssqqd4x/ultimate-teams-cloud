@@ -1,4 +1,4 @@
--- Ultimate Teams Cloud Supabase setup 4.8.0
+-- Ultimate Teams Cloud Supabase setup 4.9.0
 -- Safe to rerun. This keeps existing data, refreshes policies/functions, and adds 4.8.0 backend fixes.
 
 create extension if not exists pgcrypto;
@@ -152,6 +152,100 @@ create table if not exists public.app_info_emails_sent (
   sent_at timestamptz not null default now(),
   primary key(user_id, email_type)
 );
+
+
+
+-- 4.9.0 feature/data integrity additions.
+create table if not exists public.game_player_results (
+  game_id uuid not null references public.games(id) on delete cascade,
+  player_id uuid not null references public.players(id) on delete cascade,
+  team_idx integer not null,
+  old_win_loss numeric not null default 0,
+  new_win_loss numeric not null default 0,
+  delta numeric not null default 0,
+  old_games_played integer not null default 0,
+  new_games_played integer not null default 0,
+  old_wins integer not null default 0,
+  new_wins integer not null default 0,
+  old_losses integer not null default 0,
+  new_losses integer not null default 0,
+  created_at timestamptz not null default now(),
+  primary key(game_id, player_id)
+);
+
+create table if not exists public.admin_audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  action text not null,
+  table_name text,
+  row_id uuid,
+  player_id uuid references public.players(id) on delete set null,
+  actor_id uuid references auth.users(id) on delete set null,
+  actor_role public.app_role,
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table public.game_player_results enable row level security;
+alter table public.admin_audit_logs enable row level security;
+
+create or replace function public.log_player_admin_audit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_role public.app_role;
+  v_action text;
+  v_row_id uuid;
+  v_player_id uuid;
+  v_details jsonb;
+begin
+  if current_setting('app.audit_context', true) in ('game_result','void_game') then
+    if tg_op = 'DELETE' then return old; else return new; end if;
+  end if;
+
+  select role into v_role from public.profiles where id = auth.uid();
+
+  if tg_op = 'INSERT' then
+    v_action := 'player_added';
+    v_row_id := new.id;
+    v_player_id := new.id;
+    v_details := jsonb_build_object('new', to_jsonb(new));
+  elsif tg_op = 'DELETE' then
+    v_action := 'player_deleted';
+    v_row_id := old.id;
+    v_player_id := old.id;
+    v_details := jsonb_build_object('old', to_jsonb(old));
+  elsif tg_op = 'UPDATE' then
+    if new.handling is distinct from old.handling
+       or new.cutting is distinct from old.cutting
+       or new.defense is distinct from old.defense
+       or new.win_loss is distinct from old.win_loss then
+      v_action := 'rating_edit';
+      v_row_id := new.id;
+      v_player_id := new.id;
+      v_details := jsonb_build_object(
+        'old', jsonb_build_object('handling', old.handling, 'cutting', old.cutting, 'defense', old.defense, 'win_loss', old.win_loss),
+        'new', jsonb_build_object('handling', new.handling, 'cutting', new.cutting, 'defense', new.defense, 'win_loss', new.win_loss),
+        'player_name', new.full_name
+      );
+    else
+      return new;
+    end if;
+  end if;
+
+  insert into public.admin_audit_logs(action, table_name, row_id, player_id, actor_id, actor_role, details)
+  values(v_action, tg_table_name, v_row_id, v_player_id, auth.uid(), v_role, coalesce(v_details, '{}'::jsonb));
+
+  if tg_op = 'DELETE' then return old; else return new; end if;
+end;
+$$;
+
+drop trigger if exists log_player_admin_audit_trigger on public.players;
+create trigger log_player_admin_audit_trigger
+after insert or update or delete on public.players
+for each row execute function public.log_player_admin_audit();
 
 create or replace function public.is_admin()
 returns boolean
@@ -527,8 +621,7 @@ begin
     raise exception using message = 'A player appears on more than one team.';
   end if;
 
-  select count(*)
-  into v_found_count
+  select count(*) into v_found_count
   from _game_players gp
   join public.players p on p.id = gp.player_id;
 
@@ -578,28 +671,52 @@ begin
   from _team_strengths ts
   where ts.team_idx <> p_winner_team_index;
 
-  perform set_config('app.bypass_captain_player_guard', 'on', true);
-
-  with updated as (
-    update public.players p
-    set win_loss = p.win_loss + td.delta,
-        games_played = p.games_played + 1,
-        wins = p.wins + case when gpv.team_idx = p_winner_team_index then 1 else 0 end,
-        losses = p.losses + case when gpv.team_idx = p_winner_team_index then 0 else 1 end,
-        updated_at = now()
-    from _game_player_values gpv
-    join _team_deltas td on td.team_idx = gpv.team_idx
-    where p.id = gpv.player_id
-    returning p.id, p.win_loss
-  )
-  insert into public.rating_history(player_id, value)
-  select id, win_loss from updated;
-
-  perform set_config('app.bypass_captain_player_guard', 'off', true);
+  drop table if exists pg_temp._game_player_audit;
+  create temp table _game_player_audit on commit drop as
+  select gpv.team_idx,
+         p.id as player_id,
+         p.win_loss as old_win_loss,
+         p.win_loss + td.delta as new_win_loss,
+         td.delta,
+         p.games_played as old_games_played,
+         p.games_played + 1 as new_games_played,
+         p.wins as old_wins,
+         p.wins + case when gpv.team_idx = p_winner_team_index then 1 else 0 end as new_wins,
+         p.losses as old_losses,
+         p.losses + case when gpv.team_idx = p_winner_team_index then 0 else 1 end as new_losses
+  from public.players p
+  join _game_player_values gpv on gpv.player_id = p.id
+  join _team_deltas td on td.team_idx = gpv.team_idx;
 
   insert into public.games(teams, winner_team_index, created_by)
   values(v_teams, p_winner_team_index, auth.uid())
   returning id into v_game_id;
+
+  perform set_config('app.bypass_captain_player_guard', 'on', true);
+  perform set_config('app.audit_context', 'game_result', true);
+
+  update public.players p
+  set win_loss = a.new_win_loss,
+      games_played = a.new_games_played,
+      wins = a.new_wins,
+      losses = a.new_losses,
+      updated_at = now()
+  from _game_player_audit a
+  where p.id = a.player_id;
+
+  insert into public.rating_history(player_id, value)
+  select player_id, new_win_loss from _game_player_audit;
+
+  insert into public.game_player_results(
+    game_id, player_id, team_idx, old_win_loss, new_win_loss, delta,
+    old_games_played, new_games_played, old_wins, new_wins, old_losses, new_losses
+  )
+  select v_game_id, player_id, team_idx, old_win_loss, new_win_loss, delta,
+         old_games_played, new_games_played, old_wins, new_wins, old_losses, new_losses
+  from _game_player_audit;
+
+  perform set_config('app.bypass_captain_player_guard', 'off', true);
+  perform set_config('app.audit_context', 'none', true);
 
   v_pair_count := public.record_teammate_pair_events(v_game_id, v_teams, 'results_saved');
 
@@ -619,6 +736,7 @@ begin
 exception
   when others then
     perform set_config('app.bypass_captain_player_guard', 'off', true);
+    perform set_config('app.audit_context', 'none', true);
     raise;
 end;
 $$;
@@ -734,6 +852,129 @@ create policy app_info_emails_sent_select_own on public.app_info_emails_sent
 grant execute on function public.add_player_from_app(text, text, numeric, numeric, numeric, boolean, boolean) to authenticated;
 grant execute on function public.save_game_results(integer, jsonb, timestamptz) to authenticated;
 grant execute on function public.save_pairings_only(jsonb, timestamptz) to authenticated;
+
+
+
+create or replace function public.void_last_saved_game()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_game public.games%rowtype;
+  v_restored integer := 0;
+  v_pair_count integer := 0;
+  v_role public.app_role;
+begin
+  if not public.is_admin() then
+    raise exception using message = 'Admin only.';
+  end if;
+
+  select * into v_game
+  from public.games
+  where winner_team_index is not null
+  order by played_at desc
+  limit 1;
+
+  if v_game.id is null then
+    raise exception using message = 'No saved result game found to void.';
+  end if;
+
+  if not exists(select 1 from public.game_player_results where game_id = v_game.id) then
+    raise exception using message = 'The last saved game was created before undo audit rows existed, so it cannot be safely undone.';
+  end if;
+
+  select role into v_role from public.profiles where id = auth.uid();
+
+  perform set_config('app.bypass_captain_player_guard', 'on', true);
+  perform set_config('app.audit_context', 'void_game', true);
+
+  update public.players p
+  set win_loss = g.old_win_loss,
+      games_played = g.old_games_played,
+      wins = g.old_wins,
+      losses = g.old_losses,
+      updated_at = now()
+  from public.game_player_results g
+  where g.game_id = v_game.id
+    and p.id = g.player_id;
+
+  get diagnostics v_restored = row_count;
+
+  perform set_config('app.bypass_captain_player_guard', 'off', true);
+  perform set_config('app.audit_context', 'none', true);
+
+  update public.teammate_history h
+  set count = greatest(0, h.count - 1)
+  from public.teammate_pair_events e
+  where e.game_id = v_game.id
+    and h.player_a = e.player_a
+    and h.player_b = e.player_b;
+
+  delete from public.teammate_history where count <= 0;
+
+  select count(*) into v_pair_count
+  from public.teammate_pair_events
+  where game_id = v_game.id;
+
+  delete from public.rating_history rh
+  using public.game_player_results g
+  where g.game_id = v_game.id
+    and rh.player_id = g.player_id
+    and rh.value = g.new_win_loss
+    and rh.created_at >= v_game.played_at - interval '10 minutes';
+
+  delete from public.games where id = v_game.id;
+
+  update public.current_game
+  set selected_winner_index = null,
+      results_saved = false,
+      updated_by = auth.uid()
+  where id = 'main';
+
+  insert into public.admin_audit_logs(action, table_name, row_id, actor_id, actor_role, details)
+  values('void_last_game', 'games', v_game.id, auth.uid(), v_role, jsonb_build_object('voided_game_id', v_game.id, 'restored_players', v_restored, 'pair_events_removed', v_pair_count));
+
+  return jsonb_build_object('voided_game_id', v_game.id, 'restored_players', v_restored, 'pair_events_removed', v_pair_count);
+exception
+  when others then
+    perform set_config('app.bypass_captain_player_guard', 'off', true);
+    perform set_config('app.audit_context', 'none', true);
+    raise;
+end;
+$$;
+
+-- 4.9.0 policy refresh for new tables and functions.
+drop policy if exists game_player_results_select_captain_admin on public.game_player_results;
+create policy game_player_results_select_captain_admin on public.game_player_results
+  for select to authenticated using(public.can_manage_games());
+
+drop policy if exists game_player_results_admin_all on public.game_player_results;
+create policy game_player_results_admin_all on public.game_player_results
+  for all to authenticated using(public.is_admin()) with check(public.is_admin());
+
+drop policy if exists admin_audit_logs_select_admin on public.admin_audit_logs;
+create policy admin_audit_logs_select_admin on public.admin_audit_logs
+  for select to authenticated using(public.is_admin());
+
+drop policy if exists admin_audit_logs_admin_all on public.admin_audit_logs;
+create policy admin_audit_logs_admin_all on public.admin_audit_logs
+  for all to authenticated using(public.is_admin()) with check(public.is_admin());
+
+grant execute on function public.void_last_saved_game() to authenticated;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.admin_audit_logs;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.game_player_results;
+exception when duplicate_object then null;
+end $$;
 
 -- Realtime tables used by the app.
 do $$
