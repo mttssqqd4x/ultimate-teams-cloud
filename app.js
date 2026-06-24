@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.10.4";
+const APP_VERSION = "4.10.5";
 
 let db = null;
 let currentUser = null;
@@ -4752,5 +4752,64 @@ Object.assign(window, {
   gameHistoryDateValue410,
   renderGameHistoryModalRows,
   openGameHistoryModal
+});
+
+
+
+/* ===== 4.10.5 custom push notification prompt ===== */
+
+function askPushNotificationPopup(){
+  return new Promise(resolve => {
+    const existing = document.getElementById("pushPromptModal");
+    if(existing) existing.remove();
+
+    const wrap = document.createElement("div");
+    wrap.id = "pushPromptModal";
+    wrap.className = "modal show";
+    wrap.innerHTML = `
+      <div class="modal-card">
+        <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center;gap:10px">
+          <h2 style="margin:0">Send Push Notification?</h2>
+          <button class="btn-secondary" type="button" id="pushPromptCloseBtn">Close</button>
+        </div>
+        <div class="notice">
+          Teams have been generated. Do you want to send a push notification to players who enabled notifications?
+        </div>
+        <div class="small" style="margin-top:10px">
+          If a player account matches a roster name, the notification can include their team number.
+        </div>
+        <div class="toolbar" style="margin-top:14px">
+          <button class="btn" type="button" id="pushPromptYesBtn">Yes, Send Push</button>
+          <button class="btn-secondary" type="button" id="pushPromptNoBtn">No, Don't Send</button>
+        </div>
+      </div>
+    `;
+
+    const finish = value => {
+      wrap.remove();
+      resolve(value);
+    };
+
+    wrap.querySelector("#pushPromptYesBtn").onclick = () => finish(true);
+    wrap.querySelector("#pushPromptNoBtn").onclick = () => finish(false);
+    wrap.querySelector("#pushPromptCloseBtn").onclick = () => finish(false);
+    wrap.addEventListener("click", event => {
+      if(event.target === wrap) finish(false);
+    });
+
+    document.body.appendChild(wrap);
+    if(typeof ensureStickyModalHeaders === "function") ensureStickyModalHeaders();
+    if(typeof preventHorizontalModalDrift === "function") preventHorizontalModalDrift();
+  });
+}
+
+async function askAdminWhetherToSendTeamNotification(){
+  if(!canManageGames()) return false;
+  return await askPushNotificationPopup();
+}
+
+Object.assign(window, {
+  askPushNotificationPopup,
+  askAdminWhetherToSendTeamNotification
 });
 

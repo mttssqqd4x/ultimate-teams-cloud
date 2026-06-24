@@ -942,3 +942,14 @@ Changes:
 - moved Game History cache to a window-backed variable so it is available before filters/rendering run
 - kept the 4.10.3 played_at-only query fix
 - no Supabase SQL changes
+
+
+## 4.10.5 Custom push notification prompt
+
+Changes:
+- replaced the browser OK/Cancel push notification prompt with a custom in-app popup
+- new buttons:
+  - Yes, Send Push
+  - No, Don't Send
+- closing the popup or tapping outside it counts as No
+- no Supabase SQL changes
