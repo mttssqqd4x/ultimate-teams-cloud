@@ -246,7 +246,7 @@ begin
        or new.games_played is distinct from old.games_played
        or new.wins is distinct from old.wins
        or new.losses is distinct from old.losses then
-      raise exception 'Captains can edit names, active/inactive, and injury %. Ratings and season stats are locked.';
+      raise exception 'Captains can edit names, active/inactive, and injury percent. Ratings and season stats are locked.';
     end if;
   end if;
 

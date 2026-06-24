@@ -725,3 +725,12 @@ Changes:
 - Updated config.js to the correct Supabase project URL.
 - Removed the Player Tools permissions notice and the requested typical-range helper text.
 - Cleaned up unused current-game start-time rendering code.
+
+
+## 4.8.1 SQL compile fix
+
+Changes:
+- fixed PostgreSQL error: "too few parameters specified for RAISE"
+- cause was a `%` character in the `prevent_captain_player_edits` RAISE EXCEPTION message
+- changed the message to say "injury percent" so the SQL compiles cleanly
+- no app behavior change from 4.8.0 other than version number
