@@ -780,3 +780,14 @@ Changes:
 - sort options include name A-Z/Z-A, overall rating, Win/Loss rating, Win %, games played, handling, cutting, defense, active first, and inactive first
 - sort controls are also injected by JavaScript if a cached/older index.html is missing them
 - no Supabase SQL changes
+
+
+## 4.9.3 Active/inactive moved to Edit Player
+
+Changes:
+- removed the Active/Inactive button from the Attendance player rows
+- added Status Active/Inactive to each player dropdown in Data page -> Edit Player
+- added Injury / Availability % to the same Edit Player dropdown
+- captains/admins can save player status and injury/availability from Edit Player
+- marking a player present automatically makes that player active
+- added `mark_attendance_from_app(...)` RPC so attendance saves and auto-active behavior are handled consistently

@@ -354,6 +354,44 @@ create trigger prevent_captain_player_edits_trigger
 before update on public.players
 for each row execute function public.prevent_captain_player_edits();
 
+
+-- Mark attendance from the app. If a player is marked present, they are also made active.
+-- This keeps inactive players from staying inactive once they show up and play.
+create or replace function public.mark_attendance_from_app(
+  p_player_id uuid,
+  p_present boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception using message = 'Sign in required.';
+  end if;
+
+  insert into public.attendance(player_id, present, updated_at, updated_by)
+  values (p_player_id, p_present, now(), auth.uid())
+  on conflict (player_id)
+  do update set
+    present = excluded.present,
+    updated_at = excluded.updated_at,
+    updated_by = excluded.updated_by;
+
+  if p_present then
+    update public.players
+    set active = true,
+        updated_at = now()
+    where id = p_player_id
+      and active is distinct from true;
+  end if;
+end;
+$$;
+
+grant execute on function public.mark_attendance_from_app(uuid, boolean) to authenticated;
+
+
 create or replace function public.add_player_from_app(
   p_first_name text,
   p_last_name text,

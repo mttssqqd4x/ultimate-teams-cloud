@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.9.2";
+const APP_VERSION = "4.9.3";
 
 let db = null;
 let currentUser = null;
@@ -1175,7 +1175,6 @@ function renderPlayers(){
 
     const controls = canManageGames()
       ? `<div class="toggle-wrap">
-          <button onclick="event.stopPropagation(); toggleActive('${p.id}')">${p.active ? "Inactive" : "Active"}</button>
           <button onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">Injury %</button>
           ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
         </div>`
@@ -1192,6 +1191,43 @@ function renderPlayers(){
   });
 }
 
+
+async function saveAttendanceFromApp(playerId, present){
+  if(db.rpc){
+    const { error } = await db.rpc("mark_attendance_from_app", {
+      p_player_id: playerId,
+      p_present: present
+    });
+    if(!error) return { error: null };
+
+    const msg = String(error.message || "");
+    const missingFunction = msg.includes("mark_attendance_from_app") || msg.includes("Could not find the function");
+    if(!missingFunction) return { error };
+  }
+
+  const payload = {
+    player_id: playerId,
+    present,
+    updated_at: new Date().toISOString(),
+    updated_by: currentUser?.id || null
+  };
+
+  const { error } = await db.from("attendance").upsert(payload, { onConflict: "player_id" });
+  if(error) return { error };
+
+  if(present){
+    const p = playerById(playerId);
+    if(p && !p.active && canManageGames()){
+      const { error: activeError } = await db.from("players")
+        .update({ active: true, updated_at: new Date().toISOString() })
+        .eq("id", playerId);
+      if(activeError) return { error: activeError };
+    }
+  }
+
+  return { error: null };
+}
+
 async function toggleAttendance(id){
   if(!canMarkAttendance()){
     alert("Create an account or sign in to mark attendance.");
@@ -1203,21 +1239,17 @@ async function toggleAttendance(id){
   if(!p) return;
 
   const next = !p.attending;
+  const wasActive = p.active;
   p.attending = next;
+  if(next && !p.active) p.active = true;
 
   renderAll();
 
-  const payload = {
-    player_id: p.id,
-    present: next,
-    updated_at: new Date().toISOString(),
-    updated_by: currentUser?.id || null
-  };
-
-  const { error } = await db.from("attendance").upsert(payload, { onConflict: "player_id" });
+  const { error } = await saveAttendanceFromApp(p.id, next);
   if(error){
     alert("Attendance save error: " + error.message);
     p.attending = !next;
+    p.active = wasActive;
     renderAll();
     return;
   }
@@ -3052,6 +3084,19 @@ function openEditPlayerModal(show = true){
             <div><label>First Name</label><input id="${safe}-first" value="${escapeHtml(p.firstName || "")}"></div>
             <div><label>Last Name</label><input id="${safe}-last" value="${escapeHtml(p.lastName || "")}"></div>
           </div>
+          <div class="grid grid-2" style="margin-top:10px">
+            <div>
+              <label>Status</label>
+              <select id="${safe}-active">
+                <option value="true" ${p.active ? "selected" : ""}>Active</option>
+                <option value="false" ${!p.active ? "selected" : ""}>Inactive</option>
+              </select>
+            </div>
+            <div>
+              <label>Injury / Availability %</label>
+              <input id="${safe}-injury" type="number" min="0" max="100" step="1" value="${Math.round(Number(p.injuryPct || 1) * 100)}">
+            </div>
+          </div>
           <div class="grid grid-4 admin-rating-fields" style="margin-top:10px">
             <div><label>Handling</label><input id="${safe}-handling" type="number" step="0.5" value="${Number(p.handling).toFixed(1)}" ${isAdmin() ? "" : "disabled"}></div>
             <div><label>Cutting</label><input id="${safe}-cutting" type="number" step="0.5" value="${Number(p.cutting).toFixed(1)}" ${isAdmin() ? "" : "disabled"}></div>
@@ -3086,8 +3131,8 @@ function openEditPlayerModal(show = true){
 
   const help = document.getElementById("editPlayerHelp");
   if(help) help.textContent = isAdmin()
-    ? "Tap a player name to open the dropdown. Admins can edit names and ratings."
-    : "Tap a player name to open the dropdown. Captains can edit names here. Active/inactive and injury % are controlled from the Attendance page.";
+    ? "Tap a player name to open the dropdown. Admins can edit names, ratings, status, and injury/availability."
+    : "Tap a player name to open the dropdown. Captains can edit names, active/inactive status, and injury/availability.";
 
   updateRoleVisibility();
   if(show) showModal("editPlayerModal");
@@ -3106,9 +3151,15 @@ async function saveInlineEditedPlayer(playerId){
   const last = (document.getElementById(`${safe}-last`)?.value || "").trim();
   if(!first && !last){ alert("Enter a valid player name."); return; }
 
+  const injuryPctRaw = Number(document.getElementById(`${safe}-injury`)?.value || 100);
+  const injuryPct = Math.max(0, Math.min(100, injuryPctRaw)) / 100;
+  const activeVal = document.getElementById(`${safe}-active`)?.value !== "false";
+
   const payload = {
     first_name: first,
     last_name: last,
+    active: activeVal,
+    injury_pct: injuryPct,
     updated_at: new Date().toISOString()
   };
 
@@ -3138,6 +3189,8 @@ async function saveInlineEditedPlayer(playerId){
   p.firstName = first;
   p.lastName = last;
   p.fullName = `${first} ${last}`.trim();
+  p.active = activeVal;
+  p.injuryPct = injuryPct;
 
   if(isAdmin()){
     p.handling = payload.handling;
