@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.10.6";
+const APP_VERSION = "4.10.7";
 
 let db = null;
 let currentUser = null;
@@ -4882,5 +4882,68 @@ async function generateTeamsButton(){
 Object.assign(window, {
   sendTeamGeneratedNotification,
   generateTeamsButton
+});
+
+
+
+/* ===== 4.10.7 centered push notification prompt ===== */
+
+function askPushNotificationPopup(){
+  return new Promise(resolve => {
+    const existing = document.getElementById("pushPromptModal");
+    if(existing) existing.remove();
+
+    const wrap = document.createElement("div");
+    wrap.id = "pushPromptModal";
+    wrap.className = "push-prompt-modal";
+    wrap.setAttribute("role", "dialog");
+    wrap.setAttribute("aria-modal", "true");
+    wrap.innerHTML = `
+      <div class="push-prompt-card">
+        <div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
+          <h2 style="margin:0">Send Push Notification?</h2>
+          <button class="btn-secondary" type="button" id="pushPromptCloseBtn" style="width:auto;min-width:76px">Close</button>
+        </div>
+        <div class="notice">
+          Teams have been generated. Do you want to send a push notification to players who enabled notifications?
+        </div>
+        <div class="small" style="margin-top:10px">
+          If a player account matches a roster name, the notification can include their team number.
+        </div>
+        <div class="toolbar" style="margin-top:14px">
+          <button class="btn" type="button" id="pushPromptYesBtn">Yes, Send Push</button>
+          <button class="btn-secondary" type="button" id="pushPromptNoBtn">No, Don't Send</button>
+        </div>
+      </div>
+    `;
+
+    const finish = value => {
+      wrap.remove();
+      resolve(value);
+    };
+
+    wrap.querySelector("#pushPromptYesBtn").onclick = () => finish(true);
+    wrap.querySelector("#pushPromptNoBtn").onclick = () => finish(false);
+    wrap.querySelector("#pushPromptCloseBtn").onclick = () => finish(false);
+    wrap.addEventListener("click", event => {
+      if(event.target === wrap) finish(false);
+    });
+
+    document.body.appendChild(wrap);
+    setTimeout(() => {
+      const yes = document.getElementById("pushPromptYesBtn");
+      if(yes) yes.focus({ preventScroll: true });
+    }, 0);
+  });
+}
+
+async function askAdminWhetherToSendTeamNotification(){
+  if(!canManageGames()) return false;
+  return await askPushNotificationPopup();
+}
+
+Object.assign(window, {
+  askPushNotificationPopup,
+  askAdminWhetherToSendTeamNotification
 });
 
