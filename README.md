@@ -898,3 +898,15 @@ Deployment notes:
 - Run the updated setup_supabase.sql once for season archive support.
 - Redeploy send-team-notification Edge Function for personalized team assignment messages.
 - This package intentionally omits the .github workflow folder to keep GitHub Pages branch deployment simple.
+
+
+## 4.10.1 Injury button badge
+
+Changes:
+- moved the injury/availability percentage into the Injury button on Attendance rows
+- removed the separate injury badge beside the player name
+- Injury button is now color-coded:
+  - green for 100%
+  - yellow for 70–99%
+  - red for below 70%
+- no Supabase SQL changes

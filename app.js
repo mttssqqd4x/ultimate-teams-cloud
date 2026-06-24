@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.10.0";
+const APP_VERSION = "4.10.1";
 
 let db = null;
 let currentUser = null;
@@ -1214,7 +1214,7 @@ function renderPlayers(){
 
     const controls = canManageGames()
       ? `<div class="toggle-wrap">
-          <button onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">Injury %</button>
+          <button class="${injuryButtonClass(p)}" onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">${injuryButtonLabel(p)}</button>
           ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
         </div>`
       : "";
@@ -3512,6 +3512,22 @@ async function withLoading(message, fn){
   }
 }
 
+
+function injuryPercent(p){
+  return Math.round(Number(p?.injuryPct ?? 1) * 100);
+}
+
+function injuryButtonClass(p){
+  const pct = injuryPercent(p);
+  if(pct >= 100) return "injury-btn injury-btn-good";
+  if(pct >= 70) return "injury-btn injury-btn-mid";
+  return "injury-btn injury-btn-low";
+}
+
+function injuryButtonLabel(p){
+  return `Injury ${injuryPercent(p)}%`;
+}
+
 function injuryBadgeHtml(p){
   const pct = Math.round(Number(p?.injuryPct ?? 1) * 100);
   if(pct >= 100) return '<span class="injury-badge injury-good">100%</span>';
@@ -3560,14 +3576,14 @@ function renderPlayers(){
 
     const controls = canManageGames()
       ? `<div class="toggle-wrap">
-          <button onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">Injury %</button>
+          <button class="${injuryButtonClass(p)}" onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">${injuryButtonLabel(p)}</button>
           ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
         </div>`
       : "";
 
     row.innerHTML = `
       <div style="min-width:0">
-        <div class="player-name">${escapeHtml(p.fullName)}${isCurrentSignedInPlayer(p) ? ' <span class="chip">You</span>' : ""}${canManageGames() ? injuryBadgeHtml(p) : ""}</div>
+        <div class="player-name">${escapeHtml(p.fullName)}${isCurrentSignedInPlayer(p) ? ' <span class="chip">You</span>' : ""}</div>
         ${canManageGames() && !p.active ? '<div class="small">Inactive</div>' : ""}
       </div>
       ${controls}
