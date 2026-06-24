@@ -135,7 +135,7 @@
     .pill-admin{display:inline-block;border:1px solid var(--warn);color:var(--warn);border-radius:999px;padding:2px 7px;font-size:11px;margin-left:6px}
 
 
-    .modal-header-sticky{position:sticky;top:-14px;z-index:10;background:var(--card);padding:0 0 10px;margin:0 0 4px;border-bottom:1px solid var(--border)}
+    .modal-header-sticky{position:sticky;top:0;z-index:30;background:var(--card);padding:10px 0 12px;margin:-2px 0 10px;border-bottom:1px solid var(--border);box-shadow:0 8px 14px rgba(0,0,0,.18)}.modal-header-sticky button{margin-top:0;margin-right:6px}
     .edit-active-toggle{width:auto;min-width:82px;flex:0 0 auto;padding:8px 10px;font-size:12px}
     .late-add-player-list{max-height:260px;overflow:auto;margin-top:10px;border:1px solid var(--border);border-radius:12px;padding:8px;background:rgba(255,255,255,.02)}
     .late-add-player-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;border-bottom:1px solid rgba(255,255,255,.06)}
@@ -242,7 +242,7 @@
       </div>
 
       <div id="importPreviewBox" class="subbox" style="display:none">
-        <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
           <strong>Import Preview</strong>
           <button class="btn-secondary" style="width:auto" type="button" onclick="closeImportPreview()">Close</button>
         </div>
@@ -260,7 +260,7 @@
       </div>
 
       <div id="seasonPreviewBox" class="subbox" style="display:none">
-        <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
           <strong>Season Stats Preview</strong>
           <button class="btn-secondary" style="width:auto" type="button" onclick="closeSeasonPreview()">Close</button>
         </div>
@@ -349,7 +349,7 @@
 
 <div id="ratingsModal" class="modal-backdrop" onclick="closeModal(event, 'ratingsModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
-    <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
       <h2 style="margin:0">Player Ratings</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('ratingsModal')">Close</button>
     </div>
@@ -389,7 +389,7 @@
 
 <div id="accountModal" class="modal-backdrop" onclick="closeModal(event, 'accountModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
-    <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
       <h2 style="margin:0">Account</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('accountModal')">Close</button>
     </div>
@@ -408,7 +408,7 @@
     </div>
 
     <div class="subbox" id="pushNotificationsBox" style="margin-top:12px">
-      <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
         <div>
           <div class="player-name">Team notifications</div>
           <div class="small">Get notified when new teams are generated.</div>
@@ -431,7 +431,7 @@
 
 <div id="accountCreatedModal" class="modal-backdrop" onclick="closeModal(event, 'accountCreatedModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
-    <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
       <h2 style="margin:0">Account created</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('accountCreatedModal')">Close</button>
     </div>
@@ -446,7 +446,7 @@
 
 <div id="captainWelcomeModal" class="modal-backdrop" onclick="closeModal(event, 'captainWelcomeModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
-    <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
       <h2 style="margin:0">You’re a captain</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('captainWelcomeModal')">Close</button>
     </div>
@@ -461,7 +461,7 @@
 
 <div id="signOutConfirmModal" class="modal-backdrop" onclick="closeModal(event, 'signOutConfirmModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
-    <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
       <h2 style="margin:0">Sign out?</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('signOutConfirmModal')">Close</button>
     </div>
@@ -476,7 +476,7 @@
 </div>
 <div id="authConfirmedModal" class="modal-backdrop" onclick="closeModal(event, 'authConfirmedModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
-    <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
       <h2 style="margin:0">Account confirmed</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('authConfirmedModal')">Close</button>
     </div>
@@ -492,7 +492,7 @@
 
 <div id="winLossModal" class="modal-backdrop" onclick="closeModal(event, 'winLossModal')">
   <div class="modal-card" onclick="event.stopPropagation()">
-    <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row modal-header-sticky" style="justify-content:space-between;align-items:center">
       <h2 style="margin:0">Win/Loss Records</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('winLossModal')">Close</button>
     </div>

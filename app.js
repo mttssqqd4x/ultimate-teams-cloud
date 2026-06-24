@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.9.7";
+const APP_VERSION = "4.9.8";
 
 let db = null;
 let currentUser = null;
@@ -898,8 +898,31 @@ function ensureV490FeatureUi(){
 }
 
 
+
+function ensureStickyModalHeaders(){
+  document.querySelectorAll(".modal-card").forEach(card => {
+    const rows = Array.from(card.querySelectorAll(":scope > .row, :scope > div > .row, .row"));
+    const header = rows.find(row => {
+      const hasClose = row.querySelector('button[onclick*="close"], button[onclick*="modal"], button');
+      const hasHeading = row.querySelector("h2, h3, .summary-title, strong");
+      return hasClose && hasHeading;
+    });
+    if(header){
+      header.classList.add("modal-header-sticky");
+      const closeBtn = Array.from(header.querySelectorAll("button")).find(btn =>
+        /close/i.test(btn.textContent || "") ||
+        String(btn.getAttribute("onclick") || "").includes("close") ||
+        String(btn.getAttribute("onclick") || "").includes("modal")
+      );
+      if(closeBtn) closeBtn.style.marginRight = "6px";
+    }
+  });
+}
+
+
 function renderAll(){
   ensureV490FeatureUi();
+  ensureStickyModalHeaders();
   ensurePlayerSortControls();
   updateNavVisibility();
   updateRoleVisibility();

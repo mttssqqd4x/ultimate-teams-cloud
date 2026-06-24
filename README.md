@@ -837,3 +837,12 @@ Changes:
 - added root-level `CNAME` file for GitHub Pages custom domain
 - CNAME contains `nmultimateteams.app`
 - no Supabase SQL changes
+
+
+## 4.9.8 Sticky popup header spacing
+
+Changes:
+- made modal/popup headers sticky more consistently across the app
+- added top padding and a small right margin so the Close button does not sit against the popup edge while scrolling
+- added a defensive runtime helper that applies sticky headers to any modal that static HTML misses
+- no Supabase SQL changes
