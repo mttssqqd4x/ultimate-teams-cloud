@@ -829,3 +829,11 @@ Changes:
 - saved Edit Player rows stay compact instead of expanding into rating/win-loss text
 - modal headers are sticky so the Close button stays easier to reach while scrolling
 - no Supabase SQL changes
+
+
+## 4.9.7 GitHub Pages CNAME file
+
+Changes:
+- added root-level `CNAME` file for GitHub Pages custom domain
+- CNAME contains `nmultimateteams.app`
+- no Supabase SQL changes
