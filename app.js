@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.7.13";
+const APP_VERSION = "4.8.0";
 
 let db = null;
 let currentUser = null;
@@ -114,7 +114,7 @@ async function init(){
 
   db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  subscribeToCurrentGameUpdates();
+  subscribeToLiveDataUpdates();
   listenForAuthConfirmedFromOtherTab();
   await completeAuthRedirectIfNeeded();
 
@@ -130,18 +130,33 @@ async function init(){
 }
 
 
-function subscribeToCurrentGameUpdates(){
+function subscribeToLiveDataUpdates(){
   if(!db || currentGameChannel) return;
 
   currentGameChannel = db
-    .channel("current-game-live")
+    .channel("app-live-data")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "current_game", filter: "id=eq.main" },
       () => scheduleLiveRefresh()
     )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "attendance" },
+      () => scheduleLiveRefresh()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "players" },
+      () => scheduleLiveRefresh()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "pair_rules" },
+      () => scheduleLiveRefresh()
+    )
     .subscribe(status => {
-      console.log("Current game live updates:", status);
+      console.log("Live data updates:", status);
     });
 }
 
@@ -510,7 +525,8 @@ async function loadCloudData(){
     player2Id: r.player2_id,
     type: r.rule_type,
     strength: Number(r.strength || 1),
-    createdBy: r.created_by || null
+    createdBy: r.created_by || null,
+    createdByRole: r.created_by_role || null
   }));
 
   state.history = {};
@@ -1255,33 +1271,21 @@ async function insertPlayerFromAddForm({ temporary }){
 
   setAddPlayerStatus(temporary ? "Adding one-time player..." : "Adding permanent player...");
 
-  const payload = {
-    first_name: form.first,
-    last_name: form.last,
-    handling: form.handling,
-    cutting: form.cutting,
-    defense: form.defense,
-    win_loss: 0,
-    active: true,
-    injury_pct: 1,
-    temporary: !!temporary,
-    updated_at: new Date().toISOString()
-  };
+  const { error } = await db.rpc("add_player_from_app", {
+    p_first_name: form.first,
+    p_last_name: form.last,
+    p_handling: form.handling,
+    p_cutting: form.cutting,
+    p_defense: form.defense,
+    p_temporary: !!temporary,
+    p_mark_present: true
+  });
 
-  const { data, error } = await db.from("players").insert(payload).select().single();
   if(error){
     setAddPlayerStatus("Add failed.");
     alert(error.message);
     return;
   }
-
-  // Since this section is inside Attendance, add the new player to today's present list.
-  await db.from("attendance").upsert({
-    player_id: data.id,
-    present: true,
-    updated_at: new Date().toISOString(),
-    updated_by: currentUser?.id || null
-  }, { onConflict: "player_id" });
 
   document.getElementById("tempName").value = "";
   await loadCloudData();
@@ -1303,9 +1307,12 @@ async function addPermanentPlayer(){
 }
 
 function visiblePairRules(){
-  if(isAdmin()) return state.pairRules;
-  if(isCaptain()) return state.pairRules.filter(r => r.createdBy === currentUser?.id);
-  return [];
+  if(!isCaptainOrAdmin()) return [];
+
+  // Admin-created rules are hidden in the UI but still loaded into state.pairRules,
+  // so they still apply during team generation. Captain-created rules are visible to
+  // all captains/admins and apply to all generated games.
+  return state.pairRules.filter(r => r.createdByRole !== "admin");
 }
 function renderPairRules(){
   const box = document.getElementById("pairRuleList");
@@ -1349,7 +1356,8 @@ async function addPairRule(){
     player2_id: p2,
     rule_type: type,
     strength,
-    created_by: currentUser?.id || null
+    created_by: currentUser?.id || null,
+    created_by_role: normalizedRole()
   });
   if(error){ alert(error.message); return; }
   await loadCloudData();
@@ -1366,7 +1374,8 @@ async function lockPair(){
     player2_id: p2,
     rule_type: "together",
     strength: 999,
-    created_by: currentUser?.id || null
+    created_by: currentUser?.id || null,
+    created_by_role: normalizedRole()
   });
   if(error){ alert(error.message); return; }
   await loadCloudData();
@@ -1377,7 +1386,7 @@ async function removePairRule(id){
   const rule = state.pairRules.find(r => String(r.id) === String(id));
   if(!rule) return;
   if(isCaptain() && rule.createdBy !== currentUser?.id){
-    alert("You can only remove your own pair rules.");
+    alert("You can only remove pair rules that you created.");
     return;
   }
   const { error } = await db.from("pair_rules").delete().eq("id", id);
@@ -1387,13 +1396,22 @@ async function removePairRule(id){
 }
 async function clearPairRules(){
   if(!canManageGames()) return;
-  if(!confirm(isAdmin() ? "Clear all pair rules?" : "Clear your pair rules?")) return;
+  const message = isAdmin()
+    ? "Clear all visible captain pair rules? Hidden admin pair rules will remain."
+    : "Clear your pair rules?";
+  if(!confirm(message)) return;
 
-  let query = db.from("pair_rules").delete();
-  if(isAdmin()) query = query.not("id", "is", null);
-  else query = query.eq("created_by", currentUser?.id);
+  let error = null;
+  if(isAdmin()){
+    const ids = visiblePairRules().map(r => r.id).filter(Boolean);
+    if(!ids.length){ alert("No visible captain pair rules to clear."); return; }
+    const res = await db.from("pair_rules").delete().in("id", ids);
+    error = res.error;
+  }else{
+    const res = await db.from("pair_rules").delete().eq("created_by", currentUser?.id);
+    error = res.error;
+  }
 
-  const { error } = await query;
   if(error){ alert(error.message); return; }
   await loadCloudData();
   renderAll();
@@ -1594,6 +1612,11 @@ async function generateTeamsButton(){
 }
 async function generateGame(sendPushNotification = false){
   if(!canGenerateTeams()){ alert("Only captains/admins can generate teams."); return; }
+
+  // Pull fresh attendance/players/pair rules immediately before generating so captains
+  // do not accidentally build teams from stale open-page data.
+  await loadCloudData();
+
   const players = presentPlayers();
   const numTeams = Math.max(2, Number(document.getElementById("numTeams")?.value || 2));
 
@@ -1704,10 +1727,6 @@ function renderTeams(){
     return;
   }
 
-  const startTime = formatGameStartTime(state.currentGameGeneratedAt);
-  const startLine = document.createElement("div");
-  startLine.className = "game-start-line";
-  startLine.textContent = startTime ? `Started ${startTime}` : "Started time unavailable";
 
   const wrap = document.createElement("div");
   wrap.className = "grid grid-3";
@@ -1751,7 +1770,10 @@ async function saveResults(){
   if(!state.currentGame){ alert("Generate teams first."); return; }
   if(state.selectedWinnerIndex === null || state.selectedWinnerIndex === undefined){ alert("Tap the winning team first."); return; }
   if(!state.currentGame.teams?.[state.selectedWinnerIndex]){ alert("Winning team selection is invalid."); return; }
-  if(state.resultsSavedForCurrentGame && !confirm("Results already saved. Save again anyway?")) return;
+  if(state.resultsSavedForCurrentGame){
+    alert("Results are already saved for this game. This prevents accidental duplicate stat/rating updates.");
+    return;
+  }
 
   const saveBtn = document.querySelector("#saveResultsWrap .btn-success");
   const msg = document.getElementById("resultMessage");
@@ -1759,83 +1781,19 @@ async function saveResults(){
   if(msg) msg.textContent = "Saving results...";
 
   try{
-    const winner = state.currentGame.teams[state.selectedWinnerIndex];
-    const losers = state.currentGame.teams.filter((_, i) => i !== state.selectedWinnerIndex);
-    if(!winner?.length || !losers.length){
-      alert("Results require at least one winning team and one losing team.");
-      if(msg) msg.textContent = "";
-      return;
-    }
-
-    const winnerStrength = teamStats(winner).overall;
-    const updates = new Map();
-
-    state.currentGame.teams.flat().forEach(p => {
-      if(p?.id) updates.set(p.id, { ...p });
+    const { error } = await db.rpc("save_game_results", {
+      p_winner_team_index: Number(state.selectedWinnerIndex),
+      p_teams: serializableTeams(),
+      p_generated_at: state.currentGameGeneratedAt || null
     });
 
-    losers.forEach(loserTeam => {
-      const loserStrength = teamStats(loserTeam).overall;
-      const winnerExpected = expectedWinProb(winnerStrength, loserStrength);
-      const loserExpected = expectedWinProb(loserStrength, winnerStrength);
-      const scaledK = Number(state.settings.kFactor || 0.08) / Math.max(1, losers.length);
-
-      const winnerDelta = scaledK * (1 - winnerExpected);
-      const loserDelta = scaledK * (0 - loserExpected);
-
-      winner.forEach(p => {
-        const u = updates.get(p.id);
-        if(u) u.winLossRating = Number(u.winLossRating || 0) + winnerDelta;
-      });
-      loserTeam.forEach(p => {
-        const u = updates.get(p.id);
-        if(u) u.winLossRating = Number(u.winLossRating || 0) + loserDelta;
-      });
-    });
-
-    state.currentGame.teams.forEach((team, idx) => {
-      team.forEach(p => {
-        const u = updates.get(p.id);
-        if(!u) return;
-        u.gamesPlayed = Number(u.gamesPlayed || 0) + 1;
-        if(idx === state.selectedWinnerIndex) u.wins = Number(u.wins || 0) + 1;
-        else u.losses = Number(u.losses || 0) + 1;
-      });
-    });
-
-    for(const p of updates.values()){
-      const { error } = await db.from("players").update({
-        win_loss: Number(p.winLossRating || 0),
-        games_played: Number(p.gamesPlayed || 0),
-        wins: Number(p.wins || 0),
-        losses: Number(p.losses || 0),
-        updated_at: new Date().toISOString()
-      }).eq("id", p.id);
-      if(error) throw error;
-
-      const hist = await db.from("rating_history").insert({ player_id: p.id, value: Number(p.winLossRating || 0) });
-      if(hist.error) console.warn("Could not save rating history", hist.error);
-    }
-
-    await addCurrentTeamsToHistory();
-
-    const gameInsert = await db.from("games").insert({
-      teams: serializableTeams(),
-      winner_team_index: state.selectedWinnerIndex,
-      created_by: currentUser?.id || null
-    });
-    if(gameInsert.error) throw gameInsert.error;
-
-    state.resultsSavedForCurrentGame = true;
-    await saveCurrentGameToDb(true);
-
-    state.players = state.players.map(p => updates.get(p.id) || p);
+    if(error) throw error;
 
     await loadCloudData();
     renderAll();
 
     const finalMsg = document.getElementById("resultMessage");
-    if(finalMsg) finalMsg.textContent = "Results saved. Records and Win/Loss ratings updated.";
+    if(finalMsg) finalMsg.textContent = "Results saved. Records, Win/Loss ratings, game history, and teammate history updated.";
   }catch(error){
     console.error("saveResults failed", error);
     if(msg) msg.textContent = "Results save failed.";
@@ -1849,21 +1807,20 @@ async function saveResults(){
 async function savePairingsOnlyForCurrentGame(){
   if(!state.currentGame) return;
 
-  await addCurrentTeamsToHistory();
-
-  // Record that a game happened without recording a winner/rating update.
   try{
-    await db.from("games").insert({
-      teams: serializableTeams(),
-      winner_team_index: null,
-      created_by: currentUser?.id || null
+    const { error } = await db.rpc("save_pairings_only", {
+      p_teams: serializableTeams(),
+      p_generated_at: state.currentGameGeneratedAt || null
     });
-  }catch(e){
-    console.warn("Could not insert pairings-only game record", e);
-  }
+    if(error) throw error;
 
-  state.resultsSavedForCurrentGame = true;
-  await saveCurrentGameToDb(true);
+    state.resultsSavedForCurrentGame = true;
+    await loadCloudData();
+    renderAll();
+  }catch(e){
+    console.error("Could not save pairings-only game", e);
+    alert("Could not save pairings-only game: " + (e?.message || e));
+  }
 }
 
 async function addCurrentTeamsToHistory(){
@@ -2505,7 +2462,7 @@ function openEditPlayerModal(show = true){
     const safe = editDomId("edit", id);
     const ratingLine = isAdmin()
       ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}`
-      : "Name edit only";
+      : "Name edit";
     return `
       <details class="edit-player-details" data-player-id="${escapeHtml(id)}">
         <summary>
@@ -2558,7 +2515,7 @@ function openEditPlayerModal(show = true){
   const help = document.getElementById("editPlayerHelp");
   if(help) help.textContent = isAdmin()
     ? "Tap a player name to open the dropdown. Admins can edit names and ratings."
-    : "Tap a player name to open the dropdown. Captains can edit player names only. Ratings are locked.";
+    : "Tap a player name to open the dropdown. Captains can edit names here. Active/inactive and injury % are controlled from the Attendance page.";
 
   updateRoleVisibility();
   if(show) showModal("editPlayerModal");
@@ -2625,7 +2582,7 @@ async function saveInlineEditedPlayer(playerId){
     if(smallEl){
       const ratingLine = isAdmin()
         ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}`
-        : "Name edit only";
+        : "Name edit";
       smallEl.textContent = `${ratingLine} · ${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}`;
     }
     details.open = true;

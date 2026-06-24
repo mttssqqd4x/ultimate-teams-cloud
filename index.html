@@ -184,7 +184,6 @@
   <div class="card captain-admin-only" id="dataCaptainTools">
     <details open>
       <summary><span class="summary-title">Player Tools</span><span></span></summary>
-      <div class="notice" style="margin-top:10px">Captains can edit names only. Admins can edit names and ratings.</div>
       <div class="player-tools-grid">
         <button class="btn-secondary" type="button" onclick="openEditPlayerModal()">Edit Player</button>
         <button class="btn-secondary" type="button" onclick="openRatingsModal()">View Player Ratings</button>
@@ -247,13 +246,10 @@
 
       <div class="hr"></div>
 
-      <div class="notice" style="margin-bottom:10px;line-height:1.45">
-        <strong>Typical ranges:</strong> rating weights usually total about 1.00; K-Factor 0.02-0.20; anti-repeat 0-10; handler/elite boosts 0-5.
-      </div>
       <div class="grid grid-3">
-        <div><label>Handling Weight</label><input id="weightHandling" type="number" min="0" max="1" step="0.01" value="0.35"><div class="small">Typical 0.25-0.45. Default 0.35.</div></div>
-        <div><label>Cutting Weight</label><input id="weightCutting" type="number" min="0" max="1" step="0.01" value="0.35"><div class="small">Typical 0.25-0.45. Default 0.35.</div></div>
-        <div><label>Defense Weight</label><input id="weightDefense" type="number" min="0" max="1" step="0.01" value="0.30"><div class="small">Typical 0.20-0.40. Default 0.30.</div></div>
+        <div><label>Handling Weight</label><input id="weightHandling" type="number" min="0" max="1" step="0.01" value="0.35"></div>
+        <div><label>Cutting Weight</label><input id="weightCutting" type="number" min="0" max="1" step="0.01" value="0.35"></div>
+        <div><label>Defense Weight</label><input id="weightDefense" type="number" min="0" max="1" step="0.01" value="0.30"></div>
       </div>
       <div class="grid grid-4" style="margin-top:10px">
         <div><label>K-Factor</label><input id="kFactor" type="number" min="0" max="1" step="0.01" value="0.08"><div class="small">Typical 0.02-0.20. Higher = ratings move faster.</div></div>

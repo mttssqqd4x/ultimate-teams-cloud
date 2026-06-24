@@ -706,3 +706,22 @@ Changes:
 - fixed Player Tools search rows where the Clear button wrapped under the search box
 - Edit Player, Win/Loss Records, and Ratings search rows now use a same-line layout
 - search box expands to available width and Clear stays beside it
+
+
+## 4.8.0 backend integrity + realtime update
+
+Important: run `setup_supabase.sql` once in Supabase SQL Editor after uploading this version.
+
+Changes:
+- Added server-side RPC `save_game_results(...)` so result saving is atomic and captains can save results without direct rating/stat edit permissions.
+- Added server-side RPC `save_pairings_only(...)` for pairings-only saves.
+- Added server-side RPC `add_player_from_app(...)` so captains/admins can add one-time or permanent players through a controlled function.
+- Captains can now control active/inactive and injury_pct, but cannot directly edit ratings or win/loss stats.
+- Added auditable `teammate_pair_events` for future saved games while keeping `teammate_history` counts for anti-repeat.
+- Realtime now listens for attendance, players, pair rules, and current game changes.
+- Team generation refreshes cloud data immediately before building teams.
+- Admin-created pair rules are hidden from the UI but still apply to all team generation.
+- Captain-created pair rules are visible to all captains/admins and apply to all team generation.
+- Updated config.js to the correct Supabase project URL.
+- Removed the Player Tools permissions notice and the requested typical-range helper text.
+- Cleaned up unused current-game start-time rendering code.
