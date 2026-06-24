@@ -910,3 +910,14 @@ Changes:
   - yellow for 70–99%
   - red for below 70%
 - no Supabase SQL changes
+
+
+## 4.10.2 Game History loading fix
+
+Changes:
+- made View Game History load a smaller initial set of rows for faster mobile performance
+- added a timeout so the popup does not stay stuck on Loading
+- added a Try Again button and clear error message if the query fails
+- made history team-data parsing safer so one odd saved row cannot break the whole popup
+- added a Reload button inside Game History
+- no Supabase SQL changes
