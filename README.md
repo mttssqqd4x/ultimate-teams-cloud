@@ -846,3 +846,12 @@ Changes:
 - added top padding and a small right margin so the Close button does not sit against the popup edge while scrolling
 - added a defensive runtime helper that applies sticky headers to any modal that static HTML misses
 - no Supabase SQL changes
+
+
+## 4.9.9 Sticky popup header bleed-through fix
+
+Changes:
+- fixed scroll content showing above/behind sticky popup headers
+- sticky header now has an opaque top cover using a pseudo-element
+- kept small spacing around the Close button without creating a transparent gap
+- no Supabase SQL changes
