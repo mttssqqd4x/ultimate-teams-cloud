@@ -963,3 +963,27 @@ Changes:
 - loading overlay now starts only after the prompt is answered
 - added timeout handling around push notification send so it cannot hang generation indefinitely
 - no Supabase SQL changes
+
+
+## 4.10.7 Centered push prompt fix
+
+Changes:
+- fixed push notification prompt appearing at the bottom of the screen
+- added dedicated push-prompt modal styling that forces the prompt to stay centered
+- removed dependency on the general modal/sticky-header behavior for this prompt
+- prompt still uses:
+  - Yes, Send Push
+  - No, Don't Send
+- no Supabase SQL changes
+
+
+## 4.10.8 hard-centered push notification prompt
+
+Changes:
+- fixed push notification prompt still appearing at the bottom of the screen
+- prompt now uses inline fixed-position styles, so it stays centered even if CSS is cached or index.html was not updated
+- removed autofocus behavior that could scroll the page unexpectedly on phones
+- temporarily locks page scrolling while the prompt is open
+- re-overrode Generate Teams so the prompt always appears before the loading overlay
+- added a 15-second startup safety cleanup for any stale loading overlay
+- no Supabase SQL changes

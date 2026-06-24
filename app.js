@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.10.7";
+const APP_VERSION = "4.10.8";
 
 let db = null;
 let currentUser = null;
@@ -4946,4 +4946,170 @@ Object.assign(window, {
   askPushNotificationPopup,
   askAdminWhetherToSendTeamNotification
 });
+
+
+
+/* ===== 4.10.8 hard-centered push notification prompt ===== */
+
+function applyStyles(el, styles){
+  Object.assign(el.style, styles);
+}
+
+function askPushNotificationPopup(){
+  return new Promise(resolve => {
+    const existing = document.getElementById("pushPromptModal");
+    if(existing) existing.remove();
+
+    const oldBodyOverflow = document.body.style.overflow;
+    const oldHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    const wrap = document.createElement("div");
+    wrap.id = "pushPromptModal";
+    wrap.className = "push-prompt-hard-center";
+    wrap.setAttribute("role", "dialog");
+    wrap.setAttribute("aria-modal", "true");
+
+    // Inline styles are intentional: this prevents the prompt from breaking if CSS is cached
+    // or if index.html was not uploaded with app.js.
+    applyStyles(wrap, {
+      position: "fixed",
+      left: "0",
+      right: "0",
+      top: "0",
+      bottom: "0",
+      width: "100vw",
+      height: "100vh",
+      minHeight: "100vh",
+      zIndex: "2147483647",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "16px",
+      background: "rgba(0,0,0,0.72)",
+      overflow: "hidden",
+      boxSizing: "border-box",
+      transform: "none",
+      margin: "0"
+    });
+
+    const card = document.createElement("div");
+    applyStyles(card, {
+      width: "min(460px, calc(100vw - 32px))",
+      maxWidth: "calc(100vw - 32px)",
+      maxHeight: "calc(100vh - 32px)",
+      overflowY: "auto",
+      background: "var(--card, #080808)",
+      color: "var(--text, #f5f5f5)",
+      border: "1px solid var(--border, #1f1f1f)",
+      borderRadius: "18px",
+      padding: "16px",
+      boxShadow: "0 18px 42px rgba(0,0,0,0.65)",
+      boxSizing: "border-box",
+      margin: "0",
+      position: "relative",
+      top: "auto",
+      bottom: "auto",
+      left: "auto",
+      right: "auto",
+      transform: "none"
+    });
+
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
+        <h2 style="margin:0;font-size:22px;line-height:1.15">Send Push Notification?</h2>
+        <button class="btn-secondary" type="button" id="pushPromptCloseBtn" style="width:auto;min-width:76px;padding:10px 12px">Close</button>
+      </div>
+      <div class="notice" style="line-height:1.35">
+        Teams have been generated. Do you want to send a push notification to players who enabled notifications?
+      </div>
+      <div class="small" style="margin-top:10px;line-height:1.35">
+        If a player account matches a roster name, the notification can include their team number.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px">
+        <button class="btn" type="button" id="pushPromptYesBtn">Yes, Send Push</button>
+        <button class="btn-secondary" type="button" id="pushPromptNoBtn">No, Don't Send</button>
+      </div>
+    `;
+
+    wrap.appendChild(card);
+
+    const finish = value => {
+      document.body.style.overflow = oldBodyOverflow;
+      document.documentElement.style.overflow = oldHtmlOverflow;
+      wrap.remove();
+      resolve(value);
+    };
+
+    card.addEventListener("click", event => event.stopPropagation());
+    wrap.addEventListener("click", event => {
+      if(event.target === wrap) finish(false);
+    });
+    card.querySelector("#pushPromptYesBtn").onclick = () => finish(true);
+    card.querySelector("#pushPromptNoBtn").onclick = () => finish(false);
+    card.querySelector("#pushPromptCloseBtn").onclick = () => finish(false);
+
+    const keyHandler = event => {
+      if(event.key === "Escape"){
+        document.removeEventListener("keydown", keyHandler);
+        finish(false);
+      }
+    };
+    document.addEventListener("keydown", keyHandler);
+
+    document.body.appendChild(wrap);
+  });
+}
+
+async function askAdminWhetherToSendTeamNotification(){
+  if(!canManageGames()) return false;
+  return await askPushNotificationPopup();
+}
+
+// Re-override Generate Teams so the hard-centered prompt is always asked before the loading overlay.
+async function generateTeamsButton(){
+  if(!canGenerateTeams()){
+    alert("Only captains/admins can generate teams.");
+    return;
+  }
+
+  try{
+    if(state.currentGame && !state.resultsSavedForCurrentGame){
+      const continueWithoutResults = await confirmContinueWithoutResults();
+      if(!continueWithoutResults) return;
+
+      await withLoading("Saving current pairings...", async () => {
+        await savePairingsOnlyForCurrentGame();
+      });
+    }
+
+    const sendPush = await askAdminWhetherToSendTeamNotification();
+
+    await withLoading("Generating teams...", async () => {
+      await generateGame(sendPush);
+    });
+  }catch(e){
+    if(typeof clearLoading === "function") clearLoading();
+    console.error("Generate teams failed", e);
+    alert("Generate teams failed: " + (e?.message || e));
+  }
+}
+
+Object.assign(window, {
+  applyStyles,
+  askPushNotificationPopup,
+  askAdminWhetherToSendTeamNotification,
+  generateTeamsButton
+});
+
+
+
+/* ===== 4.10.8 startup safety ===== */
+setTimeout(() => {
+  const overlay = document.getElementById("loadingOverlay");
+  if(overlay && overlay.style.display === "flex"){
+    overlay.style.display = "none";
+  }
+}, 15000);
 
