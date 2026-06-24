@@ -674,3 +674,12 @@ Changes:
 - fixed the missing Version label on the Data page
 - moved Version into a normal visible Data page card instead of a captain/admin-only hidden card
 - shows "Version: v4.47"
+
+
+## v4.48 Data page version fix
+
+Changes:
+- fixed Version still not showing on the Data page
+- Version is now created dynamically inside #dataPage on every render
+- removes any misplaced duplicate version card outside the Data page
+- shows "Version: v4.48"
