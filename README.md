@@ -683,3 +683,18 @@ Changes:
 - Version is now created dynamically inside #dataPage on every render
 - removes any misplaced duplicate version card outside the Data page
 - shows "Version: v4.48"
+
+
+## 4.7.12 versioning cleanup
+
+Changes:
+- removed the box/card around the Version label
+- Version now appears as a plain text line at the bottom of the Data page only
+- changed version format from one long v4.xx sequence to semantic-style x.y.z
+- current version is now 4.7.12
+
+Versioning going forward:
+- first number: major app generation
+- second number: new feature/change set
+- third number: fixes/retries for issues within that feature set
+- bug-fix attempts increment the third number instead of creating a whole new feature version

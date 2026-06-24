@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "v4.48";
+const APP_VERSION = "4.7.12";
 
 let db = null;
 let currentUser = null;
@@ -825,24 +825,20 @@ function updateAppVersionLine(){
   const dataPage = document.getElementById("dataPage");
   if(!dataPage) return;
 
-  // Remove any old misplaced duplicates first.
-  document.querySelectorAll("#dataVersionCard").forEach(card => {
-    if(card.parentElement !== dataPage) card.remove();
-  });
+  // Remove old boxed version card if it exists from a cached/older build.
+  document.querySelectorAll("#dataVersionCard").forEach(card => card.remove());
 
-  let card = document.getElementById("dataVersionCard");
-  if(!card){
-    card = document.createElement("div");
-    card.id = "dataVersionCard";
-    card.className = "card";
-    card.innerHTML = '<div id="dataAppVersionLine" class="app-version-line"></div>';
-    dataPage.appendChild(card);
-  }else if(card.parentElement !== dataPage){
-    dataPage.appendChild(card);
+  let el = document.getElementById("dataAppVersionLine");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "dataAppVersionLine";
+    el.className = "app-version-line";
+    dataPage.appendChild(el);
+  }else if(el.parentElement !== dataPage){
+    dataPage.appendChild(el);
   }
 
-  const el = document.getElementById("dataAppVersionLine");
-  if(el) el.textContent = `Version: ${APP_VERSION}`;
+  el.textContent = `Version: ${APP_VERSION}`;
 }
 
 function updateStats(){
