@@ -803,3 +803,17 @@ Changes:
 - Player Ratings sort defaults to Overall rating high-low
 - Win/Loss Records sort defaults to Win/Loss rating high-low
 - no Supabase SQL changes
+
+
+## 4.9.5 Delete game from history
+
+Changes:
+- admins can delete a saved game directly from the View Game History popup
+- added admin-only `delete_game_from_history(game_id)` RPC
+- deleting a pairings-only game removes its teammate pair events and decrements teammate-history counts
+- deleting a result game saved with audit rows subtracts that game's Win/Loss, games played, wins, and losses changes from player records
+- deletes rating-history rows tied to the game where available
+- deletes game-player result audit rows and teammate-pair events through game-row cascade
+- logs the deletion in admin audit logs
+- old Undo/Void Last Saved Game now uses the same safer selected-game delete logic
+- added `rating_history.game_id` for cleaner future deletion/audit

@@ -123,6 +123,9 @@ create table if not exists public.rating_history (
   created_at timestamptz not null default now()
 );
 
+alter table public.rating_history add column if not exists game_id uuid;
+
+
 create table if not exists public.teammate_pair_events (
   id uuid primary key default gen_random_uuid(),
   game_id uuid references public.games(id) on delete cascade,
@@ -742,8 +745,8 @@ begin
   from _game_player_audit a
   where p.id = a.player_id;
 
-  insert into public.rating_history(player_id, value)
-  select player_id, new_win_loss from _game_player_audit;
+  insert into public.rating_history(player_id, value, game_id)
+  select player_id, new_win_loss, v_game_id from _game_player_audit;
 
   insert into public.game_player_results(
     game_id, player_id, team_idx, old_win_loss, new_win_loss, delta,
@@ -1047,3 +1050,163 @@ end $$;
 
 -- After signing up in the app, make yourself admin if needed:
 -- update public.profiles set role='admin' where email='samschra44@gmail.com';
+
+
+-- 4.9.5: Delete/void one selected game from Game History.
+-- For result games with game_player_results audit rows, this subtracts that game's stat/rating changes.
+-- Pairings-only games simply remove pairing events/history counts and the game row.
+create or replace function public.delete_game_from_history(p_game_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_game public.games%rowtype;
+  v_restored integer := 0;
+  v_pair_count integer := 0;
+  v_rating_rows integer := 0;
+  v_role public.app_role;
+  v_has_results boolean := false;
+begin
+  if not public.is_admin() then
+    raise exception using message = 'Admin only.';
+  end if;
+
+  select * into v_game
+  from public.games
+  where id = p_game_id;
+
+  if v_game.id is null then
+    raise exception using message = 'Game not found.';
+  end if;
+
+  v_has_results := v_game.winner_team_index is not null;
+
+  if v_has_results and not exists(select 1 from public.game_player_results where game_id = v_game.id) then
+    raise exception using message = 'This result game was created before result audit rows existed, so it cannot be safely deleted and reversed.';
+  end if;
+
+  select role into v_role from public.profiles where id = auth.uid();
+
+  select count(*) into v_pair_count
+  from public.teammate_pair_events
+  where game_id = v_game.id;
+
+  if v_has_results then
+    perform set_config('app.bypass_captain_player_guard', 'on', true);
+    perform set_config('app.audit_context', 'void_game', true);
+
+    update public.players p
+    set win_loss = p.win_loss - g.delta,
+        games_played = greatest(0, p.games_played - greatest(0, g.new_games_played - g.old_games_played)),
+        wins = greatest(0, p.wins - greatest(0, g.new_wins - g.old_wins)),
+        losses = greatest(0, p.losses - greatest(0, g.new_losses - g.old_losses)),
+        updated_at = now()
+    from public.game_player_results g
+    where g.game_id = v_game.id
+      and p.id = g.player_id;
+
+    get diagnostics v_restored = row_count;
+
+    perform set_config('app.bypass_captain_player_guard', 'off', true);
+    perform set_config('app.audit_context', 'none', true);
+
+    delete from public.rating_history
+    where game_id = v_game.id;
+    get diagnostics v_rating_rows = row_count;
+
+    if v_rating_rows = 0 then
+      delete from public.rating_history rh
+      using public.game_player_results g
+      where g.game_id = v_game.id
+        and rh.player_id = g.player_id
+        and rh.value = g.new_win_loss
+        and rh.created_at >= v_game.played_at - interval '10 minutes'
+        and rh.created_at <= v_game.played_at + interval '10 minutes';
+      get diagnostics v_rating_rows = row_count;
+    end if;
+  end if;
+
+  update public.teammate_history h
+  set count = greatest(0, h.count - 1)
+  from public.teammate_pair_events e
+  where e.game_id = v_game.id
+    and h.player_a = e.player_a
+    and h.player_b = e.player_b;
+
+  delete from public.teammate_history where count <= 0;
+
+  -- Deleting the game cascades to teammate_pair_events and game_player_results.
+  delete from public.games where id = v_game.id;
+
+  update public.current_game
+  set selected_winner_index = case when teams = v_game.teams then null else selected_winner_index end,
+      results_saved = case when teams = v_game.teams then false else results_saved end,
+      updated_by = auth.uid()
+  where id = 'main';
+
+  insert into public.admin_audit_logs(action, table_name, row_id, actor_id, actor_role, details)
+  values(
+    'game_deleted',
+    'games',
+    v_game.id,
+    auth.uid(),
+    v_role,
+    jsonb_build_object(
+      'deleted_game_id', v_game.id,
+      'played_at', v_game.played_at,
+      'winner_team_index', v_game.winner_team_index,
+      'had_results', v_has_results,
+      'restored_players', v_restored,
+      'pair_events_removed', v_pair_count,
+      'rating_history_rows_removed', v_rating_rows
+    )
+  );
+
+  return jsonb_build_object(
+    'deleted_game_id', v_game.id,
+    'had_results', v_has_results,
+    'restored_players', v_restored,
+    'pair_events_removed', v_pair_count,
+    'rating_history_rows_removed', v_rating_rows
+  );
+exception
+  when others then
+    perform set_config('app.bypass_captain_player_guard', 'off', true);
+    perform set_config('app.audit_context', 'none', true);
+    raise;
+end;
+$$;
+
+grant execute on function public.delete_game_from_history(uuid) to authenticated;
+
+-- Keep the old admin-only button, but route it through the selected-game delete/void function.
+create or replace function public.void_last_saved_game()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_game_id uuid;
+begin
+  if not public.is_admin() then
+    raise exception using message = 'Admin only.';
+  end if;
+
+  select id into v_game_id
+  from public.games
+  where winner_team_index is not null
+  order by played_at desc
+  limit 1;
+
+  if v_game_id is null then
+    raise exception using message = 'No saved result game found to void.';
+  end if;
+
+  return public.delete_game_from_history(v_game_id);
+end;
+$$;
+
+grant execute on function public.void_last_saved_game() to authenticated;
