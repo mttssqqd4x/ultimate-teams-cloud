@@ -698,3 +698,11 @@ Versioning going forward:
 - second number: new feature/change set
 - third number: fixes/retries for issues within that feature set
 - bug-fix attempts increment the third number instead of creating a whole new feature version
+
+
+## 4.7.13 Player Tools search layout fix
+
+Changes:
+- fixed Player Tools search rows where the Clear button wrapped under the search box
+- Edit Player, Win/Loss Records, and Ratings search rows now use a same-line layout
+- search box expands to available width and Clear stays beside it
