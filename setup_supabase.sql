@@ -246,7 +246,7 @@ begin
        or new.games_played is distinct from old.games_played
        or new.wins is distinct from old.wins
        or new.losses is distinct from old.losses then
-      raise exception 'Captains can edit names, active/inactive, and injury percent. Ratings and season stats are locked.';
+      raise exception using message = 'Captains can edit names, active/inactive, and injury percent. Ratings and season stats are locked.';
     end if;
   end if;
 
@@ -280,11 +280,11 @@ declare
   v_last text := nullif(trim(coalesce(p_last_name, '')), '');
 begin
   if not public.can_manage_games() then
-    raise exception 'Captain/admin only.';
+    raise exception using message = 'Captain/admin only.';
   end if;
 
   if v_first is null and v_last is null then
-    raise exception 'Player name is required.';
+    raise exception using message = 'Player name is required.';
   end if;
 
   insert into public.players(first_name, last_name, handling, cutting, defense, win_loss, active, injury_pct, temporary, updated_at)
@@ -314,7 +314,7 @@ begin
   return jsonb_build_object('player_id', v_id);
 exception
   when unique_violation then
-    raise exception 'A player with that first and last name already exists.';
+    raise exception using message = 'A player with that first and last name already exists.';
 end;
 $$;
 
@@ -340,11 +340,11 @@ declare
   inserted_count integer := 0;
 begin
   if p_source not in ('results_saved','pairings_only') then
-    raise exception 'Invalid pairing-event source.';
+    raise exception using message = 'Invalid pairing-event source.';
   end if;
 
   if p_teams is null or jsonb_typeof(p_teams) <> 'array' then
-    raise exception 'Teams JSON is required.';
+    raise exception using message = 'Teams JSON is required.';
   end if;
 
   for team in select value from jsonb_array_elements(p_teams) loop
@@ -401,7 +401,7 @@ declare
   v_already_saved boolean;
 begin
   if not public.can_manage_games() then
-    raise exception 'Captain/admin only.';
+    raise exception using message = 'Captain/admin only.';
   end if;
 
   select coalesce(teams, p_teams), coalesce(generated_at, p_generated_at, now()), results_saved
@@ -411,7 +411,7 @@ begin
 
   if p_generated_at is not null and v_generated_at is not null
      and abs(extract(epoch from (p_generated_at - v_generated_at))) > 2 then
-    raise exception 'The current game changed before pairings could be saved. Refresh and try again.';
+    raise exception using message = 'The current game changed before pairings could be saved. Refresh and try again.';
   end if;
 
   if coalesce(v_already_saved, false) then
@@ -419,7 +419,7 @@ begin
   end if;
 
   if v_teams is null or jsonb_typeof(v_teams) <> 'array' or jsonb_array_length(v_teams) = 0 then
-    raise exception 'No current game teams to save.';
+    raise exception using message = 'No current game teams to save.';
   end if;
 
   insert into public.games(teams, winner_team_index, created_by)
@@ -468,7 +468,7 @@ declare
   v_pair_count integer;
 begin
   if not public.can_manage_games() then
-    raise exception 'Captain/admin only.';
+    raise exception using message = 'Captain/admin only.';
   end if;
 
   select coalesce(teams, p_teams), coalesce(generated_at, p_generated_at, now()), results_saved
@@ -478,20 +478,20 @@ begin
 
   if p_generated_at is not null and v_generated_at is not null
      and abs(extract(epoch from (p_generated_at - v_generated_at))) > 2 then
-    raise exception 'The current game changed before results could be saved. Refresh and try again.';
+    raise exception using message = 'The current game changed before results could be saved. Refresh and try again.';
   end if;
 
   if coalesce(v_already_saved, false) then
-    raise exception 'Current game results are already saved.';
+    raise exception using message = 'Current game results are already saved.';
   end if;
 
   if v_teams is null or jsonb_typeof(v_teams) <> 'array' or jsonb_array_length(v_teams) < 2 then
-    raise exception 'Results require at least two teams.';
+    raise exception using message = 'Results require at least two teams.';
   end if;
 
   v_team_count := jsonb_array_length(v_teams);
   if p_winner_team_index is null or p_winner_team_index < 0 or p_winner_team_index >= v_team_count then
-    raise exception 'Winning team selection is invalid.';
+    raise exception using message = 'Winning team selection is invalid.';
   end if;
 
   v_loser_count := greatest(1, v_team_count - 1);
@@ -520,11 +520,11 @@ begin
   from _game_players;
 
   if v_player_count = 0 then
-    raise exception 'No players found in teams.';
+    raise exception using message = 'No players found in teams.';
   end if;
 
   if v_player_count <> v_distinct_count then
-    raise exception 'A player appears on more than one team.';
+    raise exception using message = 'A player appears on more than one team.';
   end if;
 
   select count(*)
@@ -533,7 +533,7 @@ begin
   join public.players p on p.id = gp.player_id;
 
   if v_found_count <> v_player_count then
-    raise exception 'One or more team players no longer exist in the database.';
+    raise exception using message = 'One or more team players no longer exist in the database.';
   end if;
 
   drop table if exists pg_temp._game_player_values;
@@ -560,7 +560,7 @@ begin
   where team_idx = p_winner_team_index;
 
   if v_winner_strength is null then
-    raise exception 'Winning team has no players.';
+    raise exception using message = 'Winning team has no players.';
   end if;
 
   drop table if exists pg_temp._team_deltas;

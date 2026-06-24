@@ -734,3 +734,11 @@ Changes:
 - cause was a `%` character in the `prevent_captain_player_edits` RAISE EXCEPTION message
 - changed the message to say "injury percent" so the SQL compiles cleanly
 - no app behavior change from 4.8.0 other than version number
+
+
+## 4.8.2 SQL RAISE hard fix
+
+Changes:
+- changed static PostgreSQL RAISE EXCEPTION statements to `RAISE EXCEPTION USING MESSAGE = ...`
+- this prevents PostgreSQL from treating `%` characters as missing placeholders
+- fixes the `too few parameters specified for RAISE` compile error in `prevent_captain_player_edits`
