@@ -44,11 +44,11 @@
     }
 
     .record-row{display:flex;justify-content:space-between;gap:12px;align-items:center}
-    .record-pill{border-radius:999px;padding:3px 9px;font-weight:700;white-space:nowrap;border:2px solid #6b7280}
+    .record-pill{border-radius:999px;padding:3px 10px;font-weight:700;white-space:nowrap;border:2px solid #6b7280;display:inline-flex;align-items:center;justify-content:center;text-align:center;line-height:1.15;min-width:54px;flex:0 0 auto}
     .record-pill-winning{border-color:#22c55e;color:#bbf7d0}
     .record-pill-losing{border-color:#ef4444;color:#fecaca}
     .record-pill-even{border-color:#6b7280;color:#e5e7eb}
-    .record-pill-no-border{padding:3px 9px;font-weight:700;white-space:nowrap}
+    .record-pill-no-border{padding:3px 10px;font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;text-align:center;line-height:1.15;min-width:54px;flex:0 0 auto}
     .edit-player-details{border:1px solid var(--border);border-radius:14px;padding:12px;margin-top:8px;background:rgba(255,255,255,.03)}
     .edit-player-details summary{cursor:pointer;list-style:none}
     .edit-player-details summary::-webkit-details-marker{display:none}
@@ -151,6 +151,9 @@
     .late-add-player-row,.record-row,.history-card .row{min-width:0}
     .late-add-player-row > div,.record-row > div,.history-card .row > div{min-width:0}
     .modal-card pre,.modal-card code{white-space:pre-wrap;word-break:break-word;overflow-x:hidden}
+
+
+    .record-row .record-pill,.record-row .record-pill-no-border{display:inline-flex;align-items:center;justify-content:center;text-align:center}
 
 </style>
 </head>

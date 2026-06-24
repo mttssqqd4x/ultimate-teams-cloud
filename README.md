@@ -865,3 +865,12 @@ Changes:
 - added touch-action/overscroll rules to reduce left-right swiping inside data popups
 - added a runtime fallback that resets accidental horizontal scroll position inside modals
 - no Supabase SQL changes
+
+
+## 4.9.11 Win/Loss record badge centering fix
+
+Changes:
+- fixed Win/Loss record text being shifted to the right inside red/green record badges
+- record badges now use inline-flex centering
+- added a minimum badge width so records like 1-0, 10-2, etc. stay visually centered
+- no Supabase SQL changes
