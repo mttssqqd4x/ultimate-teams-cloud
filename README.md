@@ -921,3 +921,15 @@ Changes:
 - made history team-data parsing safer so one odd saved row cannot break the whole popup
 - added a Reload button inside Game History
 - no Supabase SQL changes
+
+
+## 4.10.3 Game History column fix
+
+Changes:
+- fixed View Game History error: column games.created_at does not exist
+- Game History now queries only the columns that exist on the games table:
+  - id
+  - played_at
+  - teams
+  - winner_team_index
+- no Supabase SQL changes

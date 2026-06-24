@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.10.2";
+const APP_VERSION = "4.10.3";
 
 let db = null;
 let currentUser = null;
@@ -4409,8 +4409,8 @@ function renderGameHistoryModalRows(){
     if(playerSearch) games = games.filter(g => gameIncludesPlayerName(g, playerSearch));
     if(type === "results") games = games.filter(g => g.winner_team_index !== null && g.winner_team_index !== undefined);
     if(type === "pairings") games = games.filter(g => g.winner_team_index === null || g.winner_team_index === undefined);
-    if(from) games = games.filter(g => String(g.played_at || g.created_at || "") >= `${from}T00:00:00`);
-    if(to) games = games.filter(g => String(g.played_at || g.created_at || "") <= `${to}T23:59:59`);
+    if(from) games = games.filter(g => String(g.played_at || "") >= `${from}T00:00:00`);
+    if(to) games = games.filter(g => String(g.played_at || "") <= `${to}T23:59:59`);
 
     if(!games.length){
       list.innerHTML = '<div class="small">No games match those filters.</div>';
@@ -4433,7 +4433,7 @@ function renderGameHistoryModalRows(){
 
       return `<div class="history-card">
         <div class="row" style="justify-content:space-between;gap:10px">
-          <strong>${escapeHtml(formatDateTime(g.played_at || g.created_at) || "Game")}</strong>
+          <strong>${escapeHtml(formatDateTime(g.played_at) || "Game")}</strong>
           <span class="chip">${escapeHtml(winnerLabelForGame(g))}</span>
         </div>
         ${teamHtml || '<div class="small">No team data saved for this game.</div>'}
@@ -4459,7 +4459,7 @@ async function openGameHistoryModal(){
   try{
     const query = db
       .from("games")
-      .select("id,played_at,created_at,teams,winner_team_index")
+      .select("id,played_at,teams,winner_team_index")
       .order("played_at", { ascending:false, nullsFirst:false })
       .limit(150);
 
@@ -4502,6 +4502,124 @@ async function openGameHistoryModal(){
 Object.assign(window, {
   withTimeoutPromise,
   normalizeGameTeamsForHistory,
+  renderGameHistoryModalRows,
+  openGameHistoryModal
+});
+
+
+
+/* ===== 4.10.3 Game History fix: games table has played_at, not created_at ===== */
+
+function gameHistoryDateValue(game){
+  return String(game?.played_at || "");
+}
+
+function renderGameHistoryModalRows(){
+  const list = document.getElementById("gameHistoryFilterList");
+  if(!list) return;
+
+  try{
+    const playerSearch = document.getElementById("gameHistoryPlayerSearch")?.value || "";
+    const type = document.getElementById("gameHistoryTypeFilter")?.value || "all";
+    const from = document.getElementById("gameHistoryFrom")?.value || "";
+    const to = document.getElementById("gameHistoryTo")?.value || "";
+
+    let games = Array.isArray(cachedGameHistoryRows410) ? cachedGameHistoryRows410.slice() : [];
+    if(playerSearch) games = games.filter(g => gameIncludesPlayerName(g, playerSearch));
+    if(type === "results") games = games.filter(g => g.winner_team_index !== null && g.winner_team_index !== undefined);
+    if(type === "pairings") games = games.filter(g => g.winner_team_index === null || g.winner_team_index === undefined);
+    if(from) games = games.filter(g => gameHistoryDateValue(g) >= `${from}T00:00:00`);
+    if(to) games = games.filter(g => gameHistoryDateValue(g) <= `${to}T23:59:59`);
+
+    if(!games.length){
+      list.innerHTML = '<div class="small">No games match those filters.</div>';
+      return;
+    }
+
+    const rows = games.map(g => {
+      const teams = normalizeGameTeamsForHistory(g.teams);
+      const teamHtml = teams.map((team, idx) => {
+        const names = (Array.isArray(team) ? team : [])
+          .map(playerDisplayNameFromTeamsPlayer)
+          .map(escapeHtml)
+          .join(", ");
+        return `<div class="team-line"><strong>Team ${idx + 1}:</strong> ${names || '<span class="small">No players listed</span>'}</div>`;
+      }).join("");
+
+      const deleteBtn = isAdmin()
+        ? `<button class="btn-danger" style="width:auto;margin-top:10px" type="button" onclick="deleteGameFromHistory('${escapeHtml(String(g.id))}')">Delete Game</button>`
+        : "";
+
+      return `<div class="history-card">
+        <div class="row" style="justify-content:space-between;gap:10px">
+          <strong>${escapeHtml(formatDateTime(g.played_at) || "Game")}</strong>
+          <span class="chip">${escapeHtml(winnerLabelForGame(g))}</span>
+        </div>
+        ${teamHtml || '<div class="small">No team data saved for this game.</div>'}
+        ${deleteBtn}
+      </div>`;
+    });
+
+    list.innerHTML = `<div class="small" style="margin-bottom:8px">Showing ${games.length} game${games.length === 1 ? "" : "s"}.</div><div class="mini-table">${rows.join("")}</div>`;
+  }catch(e){
+    console.error("Game history render error", e);
+    list.innerHTML = `<div class="notice">Game history opened, but one saved row could not be displayed. ${escapeHtml(e?.message || e)}</div>`;
+  }
+}
+
+async function openGameHistoryModal(){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+
+  makeDynamicModal("gameHistoryModal", "Game History", `
+    <div class="small">Loading game history...</div>
+    <div class="small" style="margin-top:8px">If this takes more than a few seconds, the app will show the error instead of staying stuck.</div>
+  `);
+
+  try{
+    const query = db
+      .from("games")
+      .select("id,played_at,teams,winner_team_index")
+      .order("played_at", { ascending:false })
+      .limit(150);
+
+    const { data, error } = await withTimeoutPromise(query, 12000, "Game history load");
+    if(error) throw error;
+
+    cachedGameHistoryRows410 = data || [];
+
+    const body = `
+      <div class="filter-grid">
+        <div><label>Search player</label><input id="gameHistoryPlayerSearch" placeholder="Player name" oninput="renderGameHistoryModalRows()"></div>
+        <div><label>Type</label><select id="gameHistoryTypeFilter" onchange="renderGameHistoryModalRows()"><option value="all">All games</option><option value="results">Results only</option><option value="pairings">Pairings only</option></select></div>
+        <div><label>From</label><input id="gameHistoryFrom" type="date" onchange="renderGameHistoryModalRows()"></div>
+        <div><label>To</label><input id="gameHistoryTo" type="date" onchange="renderGameHistoryModalRows()"></div>
+        <div><label>&nbsp;</label><button class="btn-secondary" type="button" onclick="setValue('gameHistoryPlayerSearch','');setValue('gameHistoryFrom','');setValue('gameHistoryTo','');setValue('gameHistoryTypeFilter','all');renderGameHistoryModalRows()">Clear Filters</button></div>
+        <div><label>&nbsp;</label><button class="btn-secondary" type="button" onclick="openGameHistoryModal()">Reload</button></div>
+      </div>
+      <div id="gameHistoryFilterList"></div>
+    `;
+
+    makeDynamicModal("gameHistoryModal", "Game History", body);
+    renderGameHistoryModalRows();
+  }catch(e){
+    console.error("Game history load error", e);
+    makeDynamicModal("gameHistoryModal", "Game History", `
+      <div class="notice">
+        Game history could not load.<br><br>
+        <strong>Error:</strong> ${escapeHtml(e?.message || e)}
+      </div>
+      <div class="small" style="margin-top:10px">
+        Common causes: the latest SQL did not finish, the games table policy blocked access, or the connection timed out.
+      </div>
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn-secondary" type="button" onclick="openGameHistoryModal()">Try Again</button>
+      </div>
+    `);
+  }
+}
+
+Object.assign(window, {
+  gameHistoryDateValue,
   renderGameHistoryModalRows,
   openGameHistoryModal
 });
