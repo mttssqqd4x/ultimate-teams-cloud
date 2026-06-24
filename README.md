@@ -791,3 +791,15 @@ Changes:
 - captains/admins can save player status and injury/availability from Edit Player
 - marking a player present automatically makes that player active
 - added `mark_attendance_from_app(...)` RPC so attendance saves and auto-active behavior are handled consistently
+
+
+## 4.9.4 Edit Player compact rows and sort defaults
+
+Changes:
+- Edit Player collapsed rows now only show player name and Active/Inactive on one line
+- removed "Tap to edit" from Edit Player rows
+- removed rating, Win/Loss, games, wins, and losses text from the collapsed Edit Player rows
+- Edit Player sort defaults to Name A-Z
+- Player Ratings sort defaults to Overall rating high-low
+- Win/Loss Records sort defaults to Win/Loss rating high-low
+- no Supabase SQL changes

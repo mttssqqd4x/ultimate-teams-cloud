@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.9.3";
+const APP_VERSION = "4.9.4";
 
 let db = null;
 let currentUser = null;
@@ -2963,8 +2963,8 @@ function ensurePlayerSortControls(){
   };
 
   addSort("editPlayerModal", "editPlayerSearch", "editPlayerSort", "openEditPlayerModal", "az");
-  addSort("ratingsModal", "ratingsSearch", "ratingsSort", "openRatingsModal", "az");
-  addSort("winLossModal", "winLossSearch", "winLossSort", "openWinLossModal", "gamesDesc");
+  addSort("ratingsModal", "ratingsSearch", "ratingsSort", "openRatingsModal", "ratingDesc");
+  addSort("winLossModal", "winLossSearch", "winLossSort", "openWinLossModal", "winLossDesc");
 }
 
 
@@ -2975,7 +2975,7 @@ function openWinLossModal(show = true){
   if(!content) return;
 
   const search = (document.getElementById("winLossSearch")?.value || "").trim().toLowerCase();
-  const sortMode = document.getElementById("winLossSort")?.value || "gamesDesc";
+  const sortMode = document.getElementById("winLossSort")?.value || "winLossDesc";
 
   const players = sortPlayersForModal(
     state.players.filter(p => !search || p.fullName.toLowerCase().includes(search)),
@@ -3014,7 +3014,7 @@ function openRatingsModal(show = true){
   if(!content) return;
 
   const search = (document.getElementById("ratingsSearch")?.value || "").trim().toLowerCase();
-  const sortMode = document.getElementById("ratingsSort")?.value || "az";
+  const sortMode = document.getElementById("ratingsSort")?.value || "ratingDesc";
   const players = sortPlayersForModal(
     state.players.filter(p => !search || p.fullName.toLowerCase().includes(search)),
     sortMode
@@ -3064,18 +3064,12 @@ function openEditPlayerModal(show = true){
   list.innerHTML = players.length ? players.map(p => {
     const id = String(p.id);
     const safe = editDomId("edit", id);
-    const ratingLine = isAdmin()
-      ? `H ${Number(p.handling).toFixed(1)} · C ${Number(p.cutting).toFixed(1)} · D ${Number(p.defense).toFixed(1)} · W/L ${Number(p.winLossRating).toFixed(2)}`
-      : "Name edit";
     return `
       <details class="edit-player-details" data-player-id="${escapeHtml(id)}">
         <summary>
-          <div class="row" style="justify-content:space-between;align-items:center;gap:12px">
-            <div style="min-width:0">
-              <div class="player-name">${escapeHtml(p.fullName)}</div>
-              <div class="small">${escapeHtml(ratingLine)} · ${p.active ? "Active" : "Inactive"} · Games ${p.gamesPlayed} · Wins ${p.wins} · Losses ${p.losses}</div>
-            </div>
-            <div class="small">Tap to edit</div>
+          <div class="row" style="justify-content:space-between;align-items:center;gap:8px;width:100%">
+            <div class="player-name" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.fullName)}</div>
+            <div class="small" style="white-space:nowrap">${p.active ? "Active" : "Inactive"}</div>
           </div>
         </summary>
 
@@ -3130,9 +3124,7 @@ function openEditPlayerModal(show = true){
   });
 
   const help = document.getElementById("editPlayerHelp");
-  if(help) help.textContent = isAdmin()
-    ? "Tap a player name to open the dropdown. Admins can edit names, ratings, status, and injury/availability."
-    : "Tap a player name to open the dropdown. Captains can edit names, active/inactive status, and injury/availability.";
+  if(help) help.textContent = "Tap a player name to open the dropdown.";
 
   updateRoleVisibility();
   if(show) showModal("editPlayerModal");

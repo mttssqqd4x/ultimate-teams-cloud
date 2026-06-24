@@ -312,7 +312,7 @@
     <div class="modal-sort-row">
       <label for="editPlayerSort">Sort by</label>
       <select id="editPlayerSort" onchange="openEditPlayerModal(false)">
-        <option value="az">Name A-Z</option>
+        <option value="az" selected>Name A-Z</option>
         <option value="za">Name Z-A</option>
         <option value="ratingDesc">Overall rating high-low</option>
         <option value="ratingAsc">Overall rating low-high</option>
@@ -350,7 +350,7 @@
       <select id="ratingsSort" onchange="openRatingsModal(false)">
         <option value="az">Name A-Z</option>
         <option value="za">Name Z-A</option>
-        <option value="ratingDesc">Overall rating high-low</option>
+        <option value="ratingDesc" selected>Overall rating high-low</option>
         <option value="ratingAsc">Overall rating low-high</option>
         <option value="winLossDesc">Win/Loss rating high-low</option>
         <option value="winLossAsc">Win/Loss rating low-high</option>
@@ -488,15 +488,15 @@
       <h2 style="margin:0">Win/Loss Records</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('winLossModal')">Close</button>
     </div>
-    <div class="small" style="margin-top:10px">Sorted by games played, most first. Winning records are green, losing records are red, and tied records are neutral.</div>
+    <div class="small" style="margin-top:10px">Default sort is Win/Loss rating high-low. Winning records are green, losing records are red, and tied records are neutral.</div>
     <div class="modal-sort-row">
       <label for="winLossSort">Sort by</label>
       <select id="winLossSort" onchange="openWinLossModal(false)">
-        <option value="gamesDesc" selected>Games played high-low</option>
+        <option value="gamesDesc">Games played high-low</option>
         <option value="gamesAsc">Games played low-high</option>
         <option value="winPctDesc">Win % high-low</option>
         <option value="winPctAsc">Win % low-high</option>
-        <option value="winLossDesc">Win/Loss rating high-low</option>
+        <option value="winLossDesc" selected>Win/Loss rating high-low</option>
         <option value="winLossAsc">Win/Loss rating low-high</option>
         <option value="az">Name A-Z</option>
         <option value="za">Name Z-A</option>
