@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.10.8";
+const APP_VERSION = "4.11.1";
 
 let db = null;
 let currentUser = null;
@@ -5112,4 +5112,289 @@ setTimeout(() => {
     overlay.style.display = "none";
   }
 }, 15000);
+
+
+
+/* ===== 4.11.0 retroactive Game History winner selection ===== */
+
+function gameHasWinner410(game){
+  return game && game.winner_team_index !== null && game.winner_team_index !== undefined;
+}
+
+function openRetroWinnerModal(gameId){
+  if(!isAdmin()){
+    alert("Admin only.");
+    return;
+  }
+
+  const game = getGameHistoryRows410().find(g => String(g.id) === String(gameId));
+  if(!game){
+    alert("Game not found in loaded history. Try Reload first.");
+    return;
+  }
+
+  if(gameHasWinner410(game)){
+    alert("This game already has a saved winner. Delete/void it first if you need to change the result.");
+    return;
+  }
+
+  const teams = normalizeGameTeamsForHistory(game.teams);
+  if(!teams.length){
+    alert("This game has no team data saved.");
+    return;
+  }
+
+  const options = teams.map((team, idx) => {
+    const names = (Array.isArray(team) ? team : [])
+      .map(playerDisplayNameFromTeamsPlayer)
+      .filter(Boolean)
+      .join(", ");
+    return `<option value="${idx}">Team ${idx + 1} (${team.length})</option>`;
+  }).join("");
+
+  const teamPreview = teams.map((team, idx) => {
+    const names = (Array.isArray(team) ? team : [])
+      .map(playerDisplayNameFromTeamsPlayer)
+      .map(escapeHtml)
+      .join(", ");
+    return `<div class="history-card"><strong>Team ${idx + 1}</strong><div class="small" style="margin-top:4px">${names || "No players listed"}</div></div>`;
+  }).join("");
+
+  const body = `
+    <div class="notice">
+      Choose the winner for this saved game. This will retroactively update games played, wins/losses, Win/Loss rating, rating history, and audit logs.
+    </div>
+    <div class="small" style="margin-top:8px">Game: ${escapeHtml(formatDateTime(game.played_at) || "Game")}</div>
+    <div style="margin-top:12px">
+      <label>Winning Team</label>
+      <select id="retroWinnerTeamSelect">${options}</select>
+    </div>
+    <div class="toolbar" style="margin-top:12px">
+      <button class="btn" type="button" onclick="saveRetroWinnerFromHistory('${escapeHtml(String(game.id))}')">Save Winner</button>
+      <button class="btn-secondary" type="button" onclick="hideModal('retroWinnerModal')">Cancel</button>
+    </div>
+    <div id="retroWinnerStatus" class="small" style="margin-top:8px"></div>
+    <div class="hr"></div>
+    <div class="mini-table">${teamPreview}</div>
+  `;
+
+  makeDynamicModal("retroWinnerModal", "Select Winner", body);
+}
+
+async function saveRetroWinnerFromHistory(gameId){
+  if(!isAdmin()){
+    alert("Admin only.");
+    return;
+  }
+
+  const winnerIndex = Number(document.getElementById("retroWinnerTeamSelect")?.value || 0);
+  const game = getGameHistoryRows410().find(g => String(g.id) === String(gameId));
+  const label = `Team ${winnerIndex + 1}`;
+
+  if(!confirm(`Set ${label} as the winner for this saved game?\n\nThis will update player records and Win/Loss ratings.`)){
+    return;
+  }
+
+  const status = document.getElementById("retroWinnerStatus");
+  if(status) status.textContent = "Saving winner...";
+
+  await withLoading("Saving retroactive winner...", async () => {
+    const { data, error } = await db.rpc("set_game_winner_from_history", {
+      p_game_id: gameId,
+      p_winner_team_index: winnerIndex
+    });
+
+    if(error) throw error;
+
+    if(status) status.textContent = "Winner saved.";
+    hideModal("retroWinnerModal");
+
+    // Update local loaded row immediately, then reload cloud data and history.
+    if(game) game.winner_team_index = winnerIndex;
+    await loadCloudData();
+    renderAll();
+    await openGameHistoryModal();
+  }).catch(e => {
+    if(status) status.textContent = "Save failed.";
+    alert("Could not save winner: " + (e?.message || e));
+  });
+}
+
+function renderGameHistoryModalRows(){
+  const list = document.getElementById("gameHistoryFilterList");
+  if(!list) return;
+
+  try{
+    const playerSearch = document.getElementById("gameHistoryPlayerSearch")?.value || "";
+    const type = document.getElementById("gameHistoryTypeFilter")?.value || "all";
+    const from = document.getElementById("gameHistoryFrom")?.value || "";
+    const to = document.getElementById("gameHistoryTo")?.value || "";
+
+    let games = getGameHistoryRows410().slice();
+    if(playerSearch) games = games.filter(g => gameIncludesPlayerName(g, playerSearch));
+    if(type === "results") games = games.filter(g => gameHasWinner410(g));
+    if(type === "pairings") games = games.filter(g => !gameHasWinner410(g));
+    if(from) games = games.filter(g => gameHistoryDateValue410(g) >= `${from}T00:00:00`);
+    if(to) games = games.filter(g => gameHistoryDateValue410(g) <= `${to}T23:59:59`);
+
+    if(!games.length){
+      list.innerHTML = '<div class="small">No games match those filters.</div>';
+      return;
+    }
+
+    const rows = games.map(g => {
+      const teams = normalizeGameTeamsForHistory(g.teams);
+      const hasWinner = gameHasWinner410(g);
+
+      const teamHtml = teams.map((team, idx) => {
+        const names = (Array.isArray(team) ? team : [])
+          .map(playerDisplayNameFromTeamsPlayer)
+          .map(escapeHtml)
+          .join(", ");
+        const winMark = hasWinner && Number(g.winner_team_index) === idx ? ' <span class="chip">Winner</span>' : "";
+        return `<div class="team-line"><strong>Team ${idx + 1}${winMark}:</strong> ${names || '<span class="small">No players listed</span>'}</div>`;
+      }).join("");
+
+      const selectWinnerBtn = isAdmin() && !hasWinner
+        ? `<button class="btn-secondary" style="width:auto;margin-top:10px" type="button" onclick="openRetroWinnerModal('${escapeHtml(String(g.id))}')">Select Winner</button>`
+        : "";
+
+      const deleteBtn = isAdmin()
+        ? `<button class="btn-danger" style="width:auto;margin-top:10px" type="button" onclick="deleteGameFromHistory('${escapeHtml(String(g.id))}')">Delete Game</button>`
+        : "";
+
+      return `<div class="history-card">
+        <div class="row" style="justify-content:space-between;gap:10px">
+          <strong>${escapeHtml(formatDateTime(g.played_at) || "Game")}</strong>
+          <span class="chip">${escapeHtml(winnerLabelForGame(g))}</span>
+        </div>
+        ${teamHtml || '<div class="small">No team data saved for this game.</div>'}
+        <div class="toolbar" style="margin-top:4px">${selectWinnerBtn}${deleteBtn}</div>
+      </div>`;
+    });
+
+    list.innerHTML = `<div class="small" style="margin-bottom:8px">Showing ${games.length} game${games.length === 1 ? "" : "s"}.</div><div class="mini-table">${rows.join("")}</div>`;
+  }catch(e){
+    console.error("Game history render error", e);
+    list.innerHTML = `<div class="notice">Game history opened, but one saved row could not be displayed.<br><br><strong>Error:</strong> ${escapeHtml(e?.message || e)}</div>`;
+  }
+}
+
+Object.assign(window, {
+  gameHasWinner410,
+  openRetroWinnerModal,
+  saveRetroWinnerFromHistory,
+  renderGameHistoryModalRows
+});
+
+
+
+/* ===== 4.11.1 clear Game History winner ===== */
+
+async function clearWinnerFromHistory(gameId){
+  if(!isAdmin()){
+    alert("Admin only.");
+    return;
+  }
+
+  const game = getGameHistoryRows410().find(g => String(g.id) === String(gameId));
+  if(!game){
+    alert("Game not found in loaded history. Try Reload first.");
+    return;
+  }
+
+  if(!gameHasWinner410(game)){
+    alert("This game already has no winner.");
+    return;
+  }
+
+  const winnerText = `Team ${Number(game.winner_team_index) + 1}`;
+  if(!confirm(`Clear winner for this game?\n\nThis will reverse the saved result for ${winnerText}, but keep the game in history as pairings-only/no winner.`)){
+    return;
+  }
+
+  await withLoading("Clearing winner...", async () => {
+    const { data, error } = await db.rpc("clear_game_winner_from_history", {
+      p_game_id: gameId
+    });
+
+    if(error) throw error;
+
+    game.winner_team_index = null;
+    await loadCloudData();
+    renderAll();
+    await openGameHistoryModal();
+  }).catch(e => {
+    alert("Could not clear winner: " + (e?.message || e));
+  });
+}
+
+function renderGameHistoryModalRows(){
+  const list = document.getElementById("gameHistoryFilterList");
+  if(!list) return;
+
+  try{
+    const playerSearch = document.getElementById("gameHistoryPlayerSearch")?.value || "";
+    const type = document.getElementById("gameHistoryTypeFilter")?.value || "all";
+    const from = document.getElementById("gameHistoryFrom")?.value || "";
+    const to = document.getElementById("gameHistoryTo")?.value || "";
+
+    let games = getGameHistoryRows410().slice();
+    if(playerSearch) games = games.filter(g => gameIncludesPlayerName(g, playerSearch));
+    if(type === "results") games = games.filter(g => gameHasWinner410(g));
+    if(type === "pairings") games = games.filter(g => !gameHasWinner410(g));
+    if(from) games = games.filter(g => gameHistoryDateValue410(g) >= `${from}T00:00:00`);
+    if(to) games = games.filter(g => gameHistoryDateValue410(g) <= `${to}T23:59:59`);
+
+    if(!games.length){
+      list.innerHTML = '<div class="small">No games match those filters.</div>';
+      return;
+    }
+
+    const rows = games.map(g => {
+      const teams = normalizeGameTeamsForHistory(g.teams);
+      const hasWinner = gameHasWinner410(g);
+
+      const teamHtml = teams.map((team, idx) => {
+        const names = (Array.isArray(team) ? team : [])
+          .map(playerDisplayNameFromTeamsPlayer)
+          .map(escapeHtml)
+          .join(", ");
+        const winMark = hasWinner && Number(g.winner_team_index) === idx ? ' <span class="chip">Winner</span>' : "";
+        return `<div class="team-line"><strong>Team ${idx + 1}${winMark}:</strong> ${names || '<span class="small">No players listed</span>'}</div>`;
+      }).join("");
+
+      const selectWinnerBtn = isAdmin() && !hasWinner
+        ? `<button class="btn-secondary" style="width:auto;margin-top:10px" type="button" onclick="openRetroWinnerModal('${escapeHtml(String(g.id))}')">Select Winner</button>`
+        : "";
+
+      const clearWinnerBtn = isAdmin() && hasWinner
+        ? `<button class="btn-warn" style="width:auto;margin-top:10px" type="button" onclick="clearWinnerFromHistory('${escapeHtml(String(g.id))}')">Clear Winner</button>`
+        : "";
+
+      const deleteBtn = isAdmin()
+        ? `<button class="btn-danger" style="width:auto;margin-top:10px" type="button" onclick="deleteGameFromHistory('${escapeHtml(String(g.id))}')">Delete Game</button>`
+        : "";
+
+      return `<div class="history-card">
+        <div class="row" style="justify-content:space-between;gap:10px">
+          <strong>${escapeHtml(formatDateTime(g.played_at) || "Game")}</strong>
+          <span class="chip">${escapeHtml(winnerLabelForGame(g))}</span>
+        </div>
+        ${teamHtml || '<div class="small">No team data saved for this game.</div>'}
+        <div class="toolbar" style="margin-top:4px">${selectWinnerBtn}${clearWinnerBtn}${deleteBtn}</div>
+      </div>`;
+    });
+
+    list.innerHTML = `<div class="small" style="margin-bottom:8px">Showing ${games.length} game${games.length === 1 ? "" : "s"}.</div><div class="mini-table">${rows.join("")}</div>`;
+  }catch(e){
+    console.error("Game history render error", e);
+    list.innerHTML = `<div class="notice">Game history opened, but one saved row could not be displayed.<br><br><strong>Error:</strong> ${escapeHtml(e?.message || e)}</div>`;
+  }
+}
+
+Object.assign(window, {
+  clearWinnerFromHistory,
+  renderGameHistoryModalRows
+});
 

@@ -987,3 +987,47 @@ Changes:
 - re-overrode Generate Teams so the prompt always appears before the loading overlay
 - added a 15-second startup safety cleanup for any stale loading overlay
 - no Supabase SQL changes
+
+
+## 4.11.0 Retroactive Game History winner selection
+
+Added:
+- Admin-only Select Winner button in View Game History for pairings-only/no-winner games
+- Select Winner popup with team preview
+- Supabase RPC `set_game_winner_from_history(game_id, winner_team_index)`
+- Retroactive winner selection updates:
+  - games.winner_team_index
+  - player games played
+  - player wins/losses
+  - player Win/Loss rating
+  - rating_history
+  - game_player_results audit rows
+  - admin_audit_logs
+- Existing result games are protected: delete/void first if you need to change an already-saved result.
+
+Deployment notes:
+- Run the updated setup_supabase.sql once before using Select Winner.
+- No Edge Function redeploy required for this feature.
+
+
+## 4.11.1 Clear winner from Game History
+
+Added:
+- Admin-only Clear Winner button in View Game History for games that already have a winner
+- Backend RPC `clear_game_winner_from_history(game_id)`
+- Clear Winner reverses:
+  - player games played
+  - wins/losses
+  - Win/Loss rating
+  - rating_history rows for that result
+  - game_player_results audit rows for that result
+- Clear Winner keeps:
+  - the game history row
+  - teams
+  - teammate pair events
+  - teammate-history counts/anti-repeat history
+- The game becomes pairings-only/no winner again, so you can later use Select Winner if needed.
+
+Deployment notes:
+- Run the updated setup_supabase.sql once before using Clear Winner.
+- No Edge Function redeploy required for this feature.

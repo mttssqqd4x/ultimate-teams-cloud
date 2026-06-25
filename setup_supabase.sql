@@ -1322,3 +1322,377 @@ begin
   end;
 end $$;
 
+
+
+-- 4.11.0: Admin retroactive winner selection for pairings-only Game History rows.
+create or replace function public.set_game_winner_from_history(
+  p_game_id uuid,
+  p_winner_team_index integer
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_game public.games%rowtype;
+  v_teams jsonb;
+  v_team_count integer;
+  v_player_count integer;
+  v_distinct_count integer;
+  v_found_count integer;
+  v_loser_count numeric;
+  v_weight_h numeric;
+  v_weight_c numeric;
+  v_weight_d numeric;
+  v_k numeric;
+  v_winner_strength numeric;
+  v_pair_count integer := 0;
+  v_existing_result_rows integer := 0;
+  v_role public.app_role;
+begin
+  if not public.is_admin() then
+    raise exception using message = 'Admin only.';
+  end if;
+
+  select * into v_game
+  from public.games
+  where id = p_game_id
+  for update;
+
+  if v_game.id is null then
+    raise exception using message = 'Game not found.';
+  end if;
+
+  if v_game.winner_team_index is not null then
+    raise exception using message = 'This game already has a saved winner. Delete/void it first if you need to change the result.';
+  end if;
+
+  select count(*) into v_existing_result_rows
+  from public.game_player_results
+  where game_id = v_game.id;
+
+  if v_existing_result_rows > 0 then
+    raise exception using message = 'This game already has result audit rows and cannot be retroactively set again.';
+  end if;
+
+  v_teams := v_game.teams;
+
+  if v_teams is null or jsonb_typeof(v_teams) <> 'array' or jsonb_array_length(v_teams) < 2 then
+    raise exception using message = 'Results require at least two teams.';
+  end if;
+
+  v_team_count := jsonb_array_length(v_teams);
+  if p_winner_team_index is null or p_winner_team_index < 0 or p_winner_team_index >= v_team_count then
+    raise exception using message = 'Winning team selection is invalid.';
+  end if;
+
+  v_loser_count := greatest(1, v_team_count - 1);
+
+  select weight_handling, weight_cutting, weight_defense, k_factor
+  into v_weight_h, v_weight_c, v_weight_d, v_k
+  from public.settings
+  where id = 'main';
+
+  v_weight_h := coalesce(v_weight_h, .35);
+  v_weight_c := coalesce(v_weight_c, .35);
+  v_weight_d := coalesce(v_weight_d, .30);
+  v_k := coalesce(v_k, .08);
+
+  drop table if exists pg_temp._history_game_players;
+  create temp table _history_game_players on commit drop as
+  select (team_index - 1)::integer as team_idx,
+         nullif(player_obj ->> 'id', '')::uuid as player_id
+  from jsonb_array_elements(v_teams) with ordinality as t(team_json, team_index)
+  cross join jsonb_array_elements(t.team_json) as p(player_obj);
+
+  delete from _history_game_players where player_id is null;
+
+  select count(*), count(distinct player_id)
+  into v_player_count, v_distinct_count
+  from _history_game_players;
+
+  if v_player_count = 0 then
+    raise exception using message = 'No players found in teams.';
+  end if;
+
+  if v_player_count <> v_distinct_count then
+    raise exception using message = 'A player appears on more than one team.';
+  end if;
+
+  select count(*) into v_found_count
+  from _history_game_players gp
+  join public.players p on p.id = gp.player_id;
+
+  if v_found_count <> v_player_count then
+    raise exception using message = 'One or more team players no longer exist in the database.';
+  end if;
+
+  drop table if exists pg_temp._history_game_player_values;
+  create temp table _history_game_player_values on commit drop as
+  select gp.team_idx,
+         p.id as player_id,
+         (
+           (coalesce(p.handling,0) * (0.5 + 0.5 * coalesce(p.injury_pct,1)) * v_weight_h)
+           + (coalesce(p.cutting,0) * coalesce(p.injury_pct,1) * v_weight_c)
+           + (coalesce(p.defense,0) * coalesce(p.injury_pct,1) * v_weight_d)
+           + coalesce(p.win_loss,0)
+         ) as overall
+  from _history_game_players gp
+  join public.players p on p.id = gp.player_id;
+
+  drop table if exists pg_temp._history_team_strengths;
+  create temp table _history_team_strengths on commit drop as
+  select team_idx, sum(overall) as strength
+  from _history_game_player_values
+  group by team_idx;
+
+  select strength into v_winner_strength
+  from _history_team_strengths
+  where team_idx = p_winner_team_index;
+
+  if v_winner_strength is null then
+    raise exception using message = 'Winning team has no players.';
+  end if;
+
+  drop table if exists pg_temp._history_team_deltas;
+  create temp table _history_team_deltas(team_idx integer primary key, delta numeric) on commit drop;
+
+  insert into _history_team_deltas(team_idx, delta)
+  select p_winner_team_index,
+         coalesce(sum((v_k / v_loser_count) * (1 - (1 / (1 + power(10::numeric, ((ts.strength - v_winner_strength) / 4.0)))))), 0)
+  from _history_team_strengths ts
+  where ts.team_idx <> p_winner_team_index;
+
+  insert into _history_team_deltas(team_idx, delta)
+  select ts.team_idx,
+         (v_k / v_loser_count) * (0 - (1 / (1 + power(10::numeric, ((v_winner_strength - ts.strength) / 4.0)))))
+  from _history_team_strengths ts
+  where ts.team_idx <> p_winner_team_index;
+
+  drop table if exists pg_temp._history_game_player_audit;
+  create temp table _history_game_player_audit on commit drop as
+  select gpv.team_idx,
+         p.id as player_id,
+         p.win_loss as old_win_loss,
+         p.win_loss + td.delta as new_win_loss,
+         td.delta,
+         p.games_played as old_games_played,
+         p.games_played + 1 as new_games_played,
+         p.wins as old_wins,
+         p.wins + case when gpv.team_idx = p_winner_team_index then 1 else 0 end as new_wins,
+         p.losses as old_losses,
+         p.losses + case when gpv.team_idx = p_winner_team_index then 0 else 1 end as new_losses
+  from public.players p
+  join _history_game_player_values gpv on gpv.player_id = p.id
+  join _history_team_deltas td on td.team_idx = gpv.team_idx;
+
+  perform set_config('app.bypass_captain_player_guard', 'on', true);
+  perform set_config('app.audit_context', 'retroactive_game_result', true);
+
+  update public.players p
+  set win_loss = a.new_win_loss,
+      games_played = a.new_games_played,
+      wins = a.new_wins,
+      losses = a.new_losses,
+      updated_at = now()
+  from _history_game_player_audit a
+  where p.id = a.player_id;
+
+  insert into public.rating_history(player_id, value, game_id)
+  select player_id, new_win_loss, v_game.id from _history_game_player_audit;
+
+  insert into public.game_player_results(
+    game_id, player_id, team_idx, old_win_loss, new_win_loss, delta,
+    old_games_played, new_games_played, old_wins, new_wins, old_losses, new_losses
+  )
+  select v_game.id, player_id, team_idx, old_win_loss, new_win_loss, delta,
+         old_games_played, new_games_played, old_wins, new_wins, old_losses, new_losses
+  from _history_game_player_audit;
+
+  update public.games
+  set winner_team_index = p_winner_team_index
+  where id = v_game.id;
+
+  perform set_config('app.bypass_captain_player_guard', 'off', true);
+  perform set_config('app.audit_context', 'none', true);
+
+  select count(*) into v_pair_count
+  from public.teammate_pair_events
+  where game_id = v_game.id;
+
+  if v_pair_count = 0 then
+    v_pair_count := public.record_teammate_pair_events(v_game.id, v_teams, 'results_saved');
+  else
+    update public.teammate_pair_events
+    set source = 'results_saved'
+    where game_id = v_game.id;
+  end if;
+
+  update public.current_game
+  set selected_winner_index = case when teams = v_teams then p_winner_team_index else selected_winner_index end,
+      results_saved = case when teams = v_teams then true else results_saved end,
+      updated_by = auth.uid()
+  where id = 'main';
+
+  select role into v_role from public.profiles where id = auth.uid();
+
+  insert into public.admin_audit_logs(action, table_name, row_id, actor_id, actor_role, details)
+  values(
+    'retroactive_winner_selected',
+    'games',
+    v_game.id,
+    auth.uid(),
+    v_role,
+    jsonb_build_object(
+      'game_id', v_game.id,
+      'played_at', v_game.played_at,
+      'winner_team_index', p_winner_team_index,
+      'updated_players', v_player_count,
+      'pair_events', v_pair_count
+    )
+  );
+
+  return jsonb_build_object(
+    'game_id', v_game.id,
+    'winner_team_index', p_winner_team_index,
+    'updated_players', v_player_count,
+    'pair_events', v_pair_count
+  );
+exception
+  when others then
+    perform set_config('app.bypass_captain_player_guard', 'off', true);
+    perform set_config('app.audit_context', 'none', true);
+    raise;
+end;
+$$;
+
+grant execute on function public.set_game_winner_from_history(uuid, integer) to authenticated;
+
+
+
+-- 4.11.1: Admin clear winner from Game History while keeping the game as pairings-only.
+create or replace function public.clear_game_winner_from_history(
+  p_game_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_game public.games%rowtype;
+  v_result_count integer := 0;
+  v_pair_event_count integer := 0;
+  v_rating_history_deleted integer := 0;
+  v_role public.app_role;
+begin
+  if not public.is_admin() then
+    raise exception using message = 'Admin only.';
+  end if;
+
+  select * into v_game
+  from public.games
+  where id = p_game_id
+  for update;
+
+  if v_game.id is null then
+    raise exception using message = 'Game not found.';
+  end if;
+
+  if v_game.winner_team_index is null then
+    raise exception using message = 'This game already has no winner.';
+  end if;
+
+  select count(*) into v_result_count
+  from public.game_player_results
+  where game_id = v_game.id;
+
+  if v_result_count = 0 then
+    raise exception using message = 'This result cannot be safely cleared because it has no game_player_results audit rows. Older games may need to be deleted/voided instead.';
+  end if;
+
+  perform set_config('app.bypass_captain_player_guard', 'on', true);
+  perform set_config('app.audit_context', 'clear_game_winner', true);
+
+  -- Reverse player record/rating back to the exact audited old values.
+  update public.players p
+  set win_loss = r.old_win_loss,
+      games_played = r.old_games_played,
+      wins = r.old_wins,
+      losses = r.old_losses,
+      updated_at = now()
+  from public.game_player_results r
+  where r.game_id = v_game.id
+    and r.player_id = p.id;
+
+  -- Remove rating-history rows for the cleared result.
+  delete from public.rating_history
+  where game_id = v_game.id;
+
+  get diagnostics v_rating_history_deleted = row_count;
+
+  -- Remove result audit rows so this game becomes pairings-only again.
+  delete from public.game_player_results
+  where game_id = v_game.id;
+
+  -- Keep teammate pair events and teammate_history counts because the game still happened
+  -- as a pairings-only game. Just relabel the source.
+  update public.teammate_pair_events
+  set source = 'pairings_only'
+  where game_id = v_game.id;
+
+  get diagnostics v_pair_event_count = row_count;
+
+  -- Clear the winner while keeping the game record.
+  update public.games
+  set winner_team_index = null
+  where id = v_game.id;
+
+  -- If this is still the current game, reflect that state too.
+  update public.current_game
+  set selected_winner_index = null,
+      results_saved = false,
+      updated_by = auth.uid()
+  where id = 'main'
+    and teams = v_game.teams;
+
+  perform set_config('app.bypass_captain_player_guard', 'off', true);
+  perform set_config('app.audit_context', 'none', true);
+
+  select role into v_role from public.profiles where id = auth.uid();
+
+  insert into public.admin_audit_logs(action, table_name, row_id, actor_id, actor_role, details)
+  values(
+    'game_winner_cleared',
+    'games',
+    v_game.id,
+    auth.uid(),
+    v_role,
+    jsonb_build_object(
+      'game_id', v_game.id,
+      'played_at', v_game.played_at,
+      'previous_winner_team_index', v_game.winner_team_index,
+      'reversed_players', v_result_count,
+      'rating_history_rows_deleted', v_rating_history_deleted,
+      'pair_events_kept', v_pair_event_count
+    )
+  );
+
+  return jsonb_build_object(
+    'game_id', v_game.id,
+    'previous_winner_team_index', v_game.winner_team_index,
+    'reversed_players', v_result_count,
+    'rating_history_rows_deleted', v_rating_history_deleted,
+    'pair_events_kept', v_pair_event_count
+  );
+exception
+  when others then
+    perform set_config('app.bypass_captain_player_guard', 'off', true);
+    perform set_config('app.audit_context', 'none', true);
+    raise;
+end;
+$$;
+
+grant execute on function public.clear_game_winner_from_history(uuid) to authenticated;
+
