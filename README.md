@@ -1054,3 +1054,20 @@ Changes:
   - Present Only
 - removed toggle descriptions so the color/knob state speaks for itself
 - no Supabase SQL changes
+
+
+## 4.11.4 Data modal filters and Teammate History search
+
+Changes:
+- added Inactive Players toggle to:
+  - Edit Player
+  - Player Ratings
+  - Win/Loss Records
+- added Present Only toggle to:
+  - Edit Player
+  - Player Ratings
+  - Win/Loss Records
+- toggles use the same simple labels/style as Attendance
+- default for these data popups keeps Inactive Players on so existing all-player behavior is preserved
+- added a player search bar to View Teammate History's by-player selector
+- no Supabase SQL changes

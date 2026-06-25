@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.3";
+const APP_VERSION = "4.11.4";
 
 let db = null;
 let currentUser = null;
@@ -5628,5 +5628,239 @@ Object.assign(window, {
   updateShowOnlyAttendingButton,
   toggleShowInactive,
   toggleShowOnlyAttending
+});
+
+
+
+/* ===== 4.11.4 modal filter toggles + teammate-history player search ===== */
+
+state.modalPlayerFilters = state.modalPlayerFilters || {
+  edit: { showInactive: true, presentOnly: false },
+  ratings: { showInactive: true, presentOnly: false },
+  winLoss: { showInactive: true, presentOnly: false }
+};
+
+function modalFilterState(key){
+  state.modalPlayerFilters = state.modalPlayerFilters || {};
+  if(!state.modalPlayerFilters[key]){
+    state.modalPlayerFilters[key] = { showInactive: true, presentOnly: false };
+  }
+  return state.modalPlayerFilters[key];
+}
+
+function applyModalPlayerFilters(players, key){
+  const f = modalFilterState(key);
+  return (players || []).filter(p => {
+    if(!f.showInactive && !p.active) return false;
+    if(f.presentOnly && !p.attending) return false;
+    return true;
+  });
+}
+
+function setModalToggleButton(btn, on, label){
+  if(typeof makeToggleButton === "function"){
+    makeToggleButton(btn, on, label);
+    return;
+  }
+  if(!btn) return;
+  btn.classList.add("toggle-button");
+  btn.classList.toggle("toggle-on", !!on);
+  btn.innerHTML = `<span>${escapeHtml(label)}</span><span class="toggle-knob" aria-hidden="true"></span>`;
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+
+function updateModalFilterToggles(key){
+  const f = modalFilterState(key);
+  setModalToggleButton(document.getElementById(`${key}ShowInactiveFilterBtn`), !!f.showInactive, "Inactive Players");
+  setModalToggleButton(document.getElementById(`${key}PresentOnlyFilterBtn`), !!f.presentOnly, "Present Only");
+}
+
+function ensureModalFilterToggles(key, searchInputId, handlerName){
+  const searchInput = document.getElementById(searchInputId);
+  if(!searchInput) return;
+
+  const searchRow = searchInput.closest(".modal-search-row") || searchInput.parentElement;
+  if(!searchRow || !searchRow.parentElement) return;
+
+  let row = document.getElementById(`${key}FilterToggles`);
+  if(!row){
+    row = document.createElement("div");
+    row.id = `${key}FilterToggles`;
+    row.className = "modal-filter-toggle-row";
+    row.innerHTML = `
+      <button id="${key}ShowInactiveFilterBtn" class="toggle-button" type="button"></button>
+      <button id="${key}PresentOnlyFilterBtn" class="toggle-button" type="button"></button>
+    `;
+    searchRow.parentElement.insertBefore(row, searchRow);
+  }
+
+  const inactiveBtn = document.getElementById(`${key}ShowInactiveFilterBtn`);
+  const presentBtn = document.getElementById(`${key}PresentOnlyFilterBtn`);
+  if(inactiveBtn && inactiveBtn.dataset.bound4114 !== "true"){
+    inactiveBtn.dataset.bound4114 = "true";
+    inactiveBtn.addEventListener("click", () => {
+      const f = modalFilterState(key);
+      f.showInactive = !f.showInactive;
+      if(typeof window[handlerName] === "function") window[handlerName](false);
+    });
+  }
+  if(presentBtn && presentBtn.dataset.bound4114 !== "true"){
+    presentBtn.dataset.bound4114 = "true";
+    presentBtn.addEventListener("click", () => {
+      const f = modalFilterState(key);
+      f.presentOnly = !f.presentOnly;
+      if(typeof window[handlerName] === "function") window[handlerName](false);
+    });
+  }
+
+  updateModalFilterToggles(key);
+}
+
+const openEditPlayerModalBefore4114 = openEditPlayerModal;
+openEditPlayerModal = function(show = true){
+  ensureModalFilterToggles("edit", "editPlayerSearch", "openEditPlayerModal");
+  const originalPlayers = state.players;
+  state.players = applyModalPlayerFilters(originalPlayers, "edit");
+  try{
+    openEditPlayerModalBefore4114(show);
+  }finally{
+    state.players = originalPlayers;
+  }
+  ensureModalFilterToggles("edit", "editPlayerSearch", "openEditPlayerModal");
+};
+
+const openRatingsModalBefore4114 = openRatingsModal;
+openRatingsModal = function(show = true){
+  ensureModalFilterToggles("ratings", "ratingsSearch", "openRatingsModal");
+  const originalPlayers = state.players;
+  state.players = applyModalPlayerFilters(originalPlayers, "ratings");
+  try{
+    openRatingsModalBefore4114(show);
+  }finally{
+    state.players = originalPlayers;
+  }
+  ensureModalFilterToggles("ratings", "ratingsSearch", "openRatingsModal");
+};
+
+const openWinLossModalBefore4114 = openWinLossModal;
+openWinLossModal = function(show = true){
+  ensureModalFilterToggles("winLoss", "winLossSearch", "openWinLossModal");
+  const originalPlayers = state.players;
+  state.players = applyModalPlayerFilters(originalPlayers, "winLoss");
+  try{
+    openWinLossModalBefore4114(show);
+  }finally{
+    state.players = originalPlayers;
+  }
+  ensureModalFilterToggles("winLoss", "winLossSearch", "openWinLossModal");
+};
+
+function teammateHistoryFilteredPlayers(){
+  const search = (document.getElementById("teammatePlayerSearch")?.value || "").trim().toLowerCase();
+  return state.players
+    .slice()
+    .sort(comparePlayersByLastName)
+    .filter(p => !search || p.fullName.toLowerCase().includes(search));
+}
+
+function renderTeammatePlayerSelect(){
+  const select = document.getElementById("teammatePlayerSelect");
+  if(!select) return;
+
+  const previous = select.value;
+  const players = teammateHistoryFilteredPlayers();
+
+  select.innerHTML = players.length
+    ? players.map(p => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.fullName)}</option>`).join("")
+    : '<option value="">No players match</option>';
+
+  if(players.some(p => String(p.id) === String(previous))){
+    select.value = previous;
+  }else if(players[0]){
+    select.value = String(players[0].id);
+  }
+
+  renderTeammateByPlayer(window.__lastTeammateCounts410 || []);
+}
+
+function clearTeammatePlayerSearch(){
+  const input = document.getElementById("teammatePlayerSearch");
+  if(input) input.value = "";
+  renderTeammatePlayerSelect();
+}
+
+function renderTeammateByPlayer(counts){
+  const select = document.getElementById("teammatePlayerSelect");
+  const out = document.getElementById("teammateByPlayerOutput");
+  if(!select || !out) return;
+  if(!select.value){
+    out.innerHTML = '<div class="small">No player selected.</div>';
+    return;
+  }
+  const rows = teammateRowsForPlayer(select.value, counts || []);
+  out.innerHTML = rows.length
+    ? rows.slice(0, 25).map(r => `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><div>${escapeHtml(r.other)}</div><strong>${r.count}</strong></div></div>`).join("")
+    : '<div class="small">No teammate history for that player yet.</div>';
+}
+
+async function openTeammateHistoryModal(){
+  if(!canAccessDataPage()){ alert("Captain/admin only."); return; }
+  makeDynamicModal("teammateHistoryModal", "Teammate History", '<div class="small">Loading teammate history...</div>');
+  const [histRes, eventRes] = await Promise.all([
+    db.from("teammate_history").select("*").order("count", { ascending:false }).limit(500),
+    db.from("teammate_pair_events").select("*").order("created_at", { ascending:false }).limit(100)
+  ]);
+  if(histRes.error || eventRes.error){
+    makeDynamicModal("teammateHistoryModal", "Teammate History", `<div class="notice">${escapeHtml(histRes.error?.message || eventRes.error?.message || "Could not load history.")}</div>`);
+    return;
+  }
+  const counts = histRes.data || [];
+  const recent = eventRes.data || [];
+
+  const countHtml = counts.length ? counts.slice(0, 100).map(h => {
+    const a = playerById(h.player_a)?.fullName || h.player_a;
+    const b = playerById(h.player_b)?.fullName || h.player_b;
+    return `<div class="history-card"><div class="row" style="justify-content:space-between;gap:10px"><div>${escapeHtml(a)} ↔ ${escapeHtml(b)}</div><strong>${Number(h.count || 0)}</strong></div></div>`;
+  }).join("") : '<div class="small">No teammate history counts yet.</div>';
+
+  const recentHtml = recent.length ? recent.map(e => {
+    const a = playerById(e.player_a)?.fullName || e.player_a;
+    const b = playerById(e.player_b)?.fullName || e.player_b;
+    return `<div class="small">${escapeHtml(formatDateTime(e.created_at))}: ${escapeHtml(a)} ↔ ${escapeHtml(b)} · ${escapeHtml(e.source || "")}</div>`;
+  }).join("") : '<div class="small">No recent pairing events yet.</div>';
+
+  const body = `
+    <h3 style="margin:0 0 8px">By player</h3>
+    <div class="modal-search-row">
+      <div class="modal-search-input-wrap"><input id="teammatePlayerSearch" placeholder="Search players..." oninput="renderTeammatePlayerSelect()"></div>
+      <button class="btn-secondary modal-search-clear" type="button" onclick="clearTeammatePlayerSearch()">Clear</button>
+    </div>
+    <div class="grid grid-2" style="margin-top:10px">
+      <div><label>Player</label><select id="teammatePlayerSelect" onchange="renderTeammateByPlayer(window.__lastTeammateCounts410 || [])"></select></div>
+    </div>
+    <div id="teammateByPlayerOutput" class="mini-table" style="margin-top:10px"></div>
+    <div class="hr"></div>
+    <h3 style="margin:0 0 8px">Top teammate pairs</h3><div class="mini-table">${countHtml}</div>
+    <div class="hr"></div><h3 style="margin:0 0 8px">Recent pairing events</h3>${recentHtml}`;
+
+  window.__lastTeammateCounts410 = counts;
+  makeDynamicModal("teammateHistoryModal", "Teammate History", body);
+  renderTeammatePlayerSelect();
+}
+
+Object.assign(window, {
+  modalFilterState,
+  applyModalPlayerFilters,
+  setModalToggleButton,
+  updateModalFilterToggles,
+  ensureModalFilterToggles,
+  openEditPlayerModal,
+  openRatingsModal,
+  openWinLossModal,
+  teammateHistoryFilteredPlayers,
+  renderTeammatePlayerSelect,
+  clearTeammatePlayerSearch,
+  renderTeammateByPlayer,
+  openTeammateHistoryModal
 });
 

@@ -201,6 +201,11 @@
 
     #attendanceHeaderCount{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
 
+
+    .modal-filter-toggle-row{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
+    .modal-filter-toggle-row .toggle-button{width:100%}
+    @media(max-width:520px){.modal-filter-toggle-row{grid-template-columns:1fr 1fr;gap:8px}.modal-filter-toggle-row .toggle-button{padding:9px 10px;font-size:13px}}
+
 </style>
 </head>
 <body>
