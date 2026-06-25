@@ -1042,3 +1042,15 @@ Changes:
 - removed/hid the Present Players dropdown
 - replaced it with a simple Present Players count
 - no Supabase SQL changes
+
+
+## 4.11.3 Cleaner Attendance header and toggles
+
+Changes:
+- removed the separate Present Players section from Attendance
+- moved the present count into the Attendance header
+- simplified toggle labels:
+  - Inactive Players
+  - Present Only
+- removed toggle descriptions so the color/knob state speaks for itself
+- no Supabase SQL changes

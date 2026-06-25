@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.2";
+const APP_VERSION = "4.11.3";
 
 let db = null;
 let currentUser = null;
@@ -5509,6 +5509,121 @@ renderAll = function(){
 Object.assign(window, {
   countPresentPlayers,
   updatePresentPlayersCount,
+  updateAttendanceFilterToggles,
+  updateShowOnlyAttendingButton,
+  toggleShowInactive,
+  toggleShowOnlyAttending
+});
+
+
+
+/* ===== 4.11.3 cleaner Attendance header/toggles ===== */
+
+function updateAttendanceHeaderCount(){
+  const attendanceCard = document.getElementById("attendanceCard");
+  const summary = attendanceCard?.querySelector(":scope > details > summary") || attendanceCard?.querySelector("summary");
+  if(!summary) return;
+
+  let headerCount = document.getElementById("attendanceHeaderCount");
+  if(!headerCount){
+    headerCount = document.createElement("span");
+    headerCount.id = "attendanceHeaderCount";
+    headerCount.className = "muted-inline";
+    summary.appendChild(headerCount);
+  }
+
+  const count = countPresentPlayers();
+  headerCount.textContent = `${count} present`;
+}
+
+function removePresentPlayersSection(){
+  const oldList = document.getElementById("presentPlayersList");
+  if(oldList){
+    const subbox = oldList.closest(".subbox");
+    if(subbox) subbox.remove();
+    else oldList.remove();
+  }
+
+  const oldCard = document.getElementById("presentPlayersCount");
+  if(oldCard) oldCard.remove();
+
+  const oldCount = document.getElementById("presentCount");
+  if(oldCount) oldCount.remove();
+
+  const oldSelect = document.getElementById("presentPlayersSelect");
+  if(oldSelect){
+    const oldWrap = oldSelect.closest(".subbox,.card,.section,.field,div");
+    if(oldWrap) oldWrap.remove();
+    else oldSelect.remove();
+  }
+}
+
+function renderPresentList(){
+  removePresentPlayersSection();
+  updateAttendanceHeaderCount();
+}
+
+function updatePresentPlayersCount(){
+  removePresentPlayersSection();
+  updateAttendanceHeaderCount();
+}
+
+function makeToggleButton(btn, on, label){
+  if(!btn) return;
+  btn.classList.add("toggle-button");
+  btn.classList.toggle("toggle-on", !!on);
+  btn.innerHTML = `
+    <span>${escapeHtml(label)}</span>
+    <span class="toggle-knob" aria-hidden="true"></span>
+  `;
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.setAttribute("aria-label", `${label}: ${on ? "on" : "off"}`);
+}
+
+function updateAttendanceFilterToggles(){
+  const inactiveBtn = document.getElementById("toggleInactiveBtn");
+  const attendingBtn = document.getElementById("showOnlyAttendingBtn");
+
+  makeToggleButton(inactiveBtn, !!state.showInactive, "Inactive Players");
+  makeToggleButton(attendingBtn, !!state.showOnlyAttending, "Present Only");
+}
+
+function updateShowOnlyAttendingButton(){
+  updateAttendanceFilterToggles();
+}
+
+function toggleShowInactive(){
+  state.showInactive = !state.showInactive;
+  renderPlayers();
+}
+
+function toggleShowOnlyAttending(){
+  state.showOnlyAttending = !state.showOnlyAttending;
+  renderPlayers();
+}
+
+const renderPlayersBefore4113 = renderPlayers;
+renderPlayers = function(){
+  renderPlayersBefore4113();
+  removePresentPlayersSection();
+  updateAttendanceHeaderCount();
+  updateAttendanceFilterToggles();
+};
+
+const renderAllBefore4113 = renderAll;
+renderAll = function(){
+  renderAllBefore4113();
+  removePresentPlayersSection();
+  updateAttendanceHeaderCount();
+  updateAttendanceFilterToggles();
+};
+
+Object.assign(window, {
+  updateAttendanceHeaderCount,
+  removePresentPlayersSection,
+  renderPresentList,
+  updatePresentPlayersCount,
+  makeToggleButton,
   updateAttendanceFilterToggles,
   updateShowOnlyAttendingButton,
   toggleShowInactive,
