@@ -188,6 +188,16 @@
 
     .push-prompt-hard-center{position:fixed!important;inset:0!important;z-index:2147483647!important;display:flex!important;align-items:center!important;justify-content:center!important}
 
+
+    .toggle-button{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font-weight:700;border-radius:999px;padding:10px 12px;min-height:42px}
+    .toggle-button .toggle-knob{width:38px;height:22px;border-radius:999px;background:#374151;position:relative;flex:0 0 auto;transition:background .15s ease}
+    .toggle-button .toggle-knob::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s ease}
+    .toggle-button.toggle-on{border-color:#22c55e;background:rgba(34,197,94,.12);color:#bbf7d0}
+    .toggle-button.toggle-on .toggle-knob{background:#22c55e}
+    .toggle-button.toggle-on .toggle-knob::after{left:19px}
+    .present-count-card{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:14px;padding:12px;margin:10px 0}
+    .present-count-number{font-size:26px;font-weight:800;line-height:1}
+
 </style>
 </head>
 <body>

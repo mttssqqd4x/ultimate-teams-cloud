@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.1";
+const APP_VERSION = "4.11.2";
 
 let db = null;
 let currentUser = null;
@@ -5396,5 +5396,122 @@ function renderGameHistoryModalRows(){
 Object.assign(window, {
   clearWinnerFromHistory,
   renderGameHistoryModalRows
+});
+
+
+
+/* ===== 4.11.2 friendly Attendance filter toggles and present count ===== */
+
+function countPresentPlayers(){
+  return state.players.filter(p => p.attending).length;
+}
+
+function updatePresentPlayersCount(){
+  const oldSelect = document.getElementById("presentPlayersSelect");
+  if(oldSelect){
+    oldSelect.style.display = "none";
+    const label = document.querySelector('label[for="presentPlayersSelect"]');
+    if(label) label.style.display = "none";
+  }
+
+  let countEl = document.getElementById("presentPlayersCount");
+  const attending = countPresentPlayers();
+
+  if(!countEl){
+    const playerList = document.getElementById("playerList");
+    countEl = document.createElement("div");
+    countEl.id = "presentPlayersCount";
+    countEl.className = "present-count-card";
+    if(playerList && playerList.parentElement){
+      playerList.parentElement.insertBefore(countEl, playerList);
+    }else{
+      const attendanceCard = document.getElementById("attendanceCard") || document.body;
+      attendanceCard.appendChild(countEl);
+    }
+  }
+
+  countEl.innerHTML = `
+    <div>
+      <strong>Present Players</strong>
+      <div class="small">Players marked attending</div>
+    </div>
+    <div class="present-count-number">${attending}</div>
+  `;
+}
+
+function makeToggleButton(btn, on, label, sublabel){
+  if(!btn) return;
+  btn.classList.add("toggle-button");
+  btn.classList.toggle("toggle-on", !!on);
+  btn.innerHTML = `
+    <span>
+      <span>${escapeHtml(label)}</span>
+      ${sublabel ? `<span class="small" style="display:block;font-weight:500;margin-top:2px">${escapeHtml(sublabel)}</span>` : ""}
+    </span>
+    <span class="toggle-knob" aria-hidden="true"></span>
+  `;
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+
+function updateAttendanceFilterToggles(){
+  const inactiveBtn = document.getElementById("toggleInactiveBtn");
+  const attendingBtn = document.getElementById("showOnlyAttendingBtn");
+
+  if(inactiveBtn){
+    const visible = !!state.showInactive;
+    makeToggleButton(
+      inactiveBtn,
+      visible,
+      visible ? "Inactive: Showing" : "Inactive: Hidden",
+      visible ? "Inactive players are visible" : "Only active players are shown"
+    );
+  }
+
+  if(attendingBtn){
+    const on = !!state.showOnlyAttending;
+    makeToggleButton(
+      attendingBtn,
+      on,
+      on ? "Only Attending: On" : "Only Attending: Off",
+      on ? "Showing present players only" : "Showing all available players"
+    );
+  }
+}
+
+function updateShowOnlyAttendingButton(){
+  updateAttendanceFilterToggles();
+}
+
+function toggleShowInactive(){
+  state.showInactive = !state.showInactive;
+  renderPlayers();
+}
+
+function toggleShowOnlyAttending(){
+  state.showOnlyAttending = !state.showOnlyAttending;
+  renderPlayers();
+}
+
+const renderPlayersBefore4112 = renderPlayers;
+renderPlayers = function(){
+  renderPlayersBefore4112();
+  updatePresentPlayersCount();
+  updateAttendanceFilterToggles();
+};
+
+const renderAllBefore4112 = renderAll;
+renderAll = function(){
+  renderAllBefore4112();
+  updatePresentPlayersCount();
+  updateAttendanceFilterToggles();
+};
+
+Object.assign(window, {
+  countPresentPlayers,
+  updatePresentPlayersCount,
+  updateAttendanceFilterToggles,
+  updateShowOnlyAttendingButton,
+  toggleShowInactive,
+  toggleShowOnlyAttending
 });
 

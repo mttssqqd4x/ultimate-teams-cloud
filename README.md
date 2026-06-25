@@ -1031,3 +1031,14 @@ Added:
 Deployment notes:
 - Run the updated setup_supabase.sql once before using Clear Winner.
 - No Edge Function redeploy required for this feature.
+
+
+## 4.11.2 Attendance filter UI polish
+
+Changes:
+- changed Show Only Attending into a clearer toggle-style button
+- changed Show/Hide Inactive Players into a clearer toggle-style button
+- toggle buttons change color when enabled
+- removed/hid the Present Players dropdown
+- replaced it with a simple Present Players count
+- no Supabase SQL changes
