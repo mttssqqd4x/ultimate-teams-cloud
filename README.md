@@ -1071,3 +1071,15 @@ Changes:
 - default for these data popups keeps Inactive Players on so existing all-player behavior is preserved
 - added a player search bar to View Teammate History's by-player selector
 - no Supabase SQL changes
+
+
+## 4.11.5 Admin Audit Logs loading fix
+
+Changes:
+- fixed Admin Audit Logs getting stuck/not loading
+- moved audit log cache to a safer window-backed variable
+- added loading timeout and clear error message
+- added Try Again / Reload
+- made audit log rendering safer if one row has unexpected details data
+- kept CSV export
+- no Supabase SQL changes

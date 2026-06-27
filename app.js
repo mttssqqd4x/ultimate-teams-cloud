@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.4";
+const APP_VERSION = "4.11.5";
 
 let db = null;
 let currentUser = null;
@@ -5862,5 +5862,175 @@ Object.assign(window, {
   clearTeammatePlayerSearch,
   renderTeammateByPlayer,
   openTeammateHistoryModal
+});
+
+
+
+/* ===== 4.11.5 Admin Audit Logs loading/cache fix ===== */
+
+window.__auditLogRows410 = window.__auditLogRows410 || [];
+
+function getAuditLogRows410(){
+  return Array.isArray(window.__auditLogRows410) ? window.__auditLogRows410 : [];
+}
+
+function setAuditLogRows410(rows){
+  window.__auditLogRows410 = Array.isArray(rows) ? rows : [];
+}
+
+function auditLogMatchesAction410(log, action){
+  if(!action) return true;
+  const a = String(log.action || "").toLowerCase();
+  const t = String(log.table_name || "").toLowerCase();
+  const combined = `${a} ${t}`;
+  if(action === "rating") return combined.includes("rating") || combined.includes("win_loss");
+  if(action === "player_added") return combined.includes("player_added") || combined.includes("insert") || combined.includes("add_player");
+  if(action === "player_deleted") return combined.includes("player_deleted") || combined.includes("deleted_player") || combined.includes("delete_player");
+  if(action === "game_deleted") return combined.includes("game_deleted") || combined.includes("deleted_game") || combined.includes("void");
+  if(action === "winner") return combined.includes("winner") || combined.includes("retroactive");
+  if(action === "season") return combined.includes("season");
+  return combined.includes(action);
+}
+
+function renderAuditLogRows(){
+  const list = document.getElementById("auditLogsList");
+  if(!list) return;
+
+  try{
+    const action = document.getElementById("auditActionFilter")?.value || "";
+    const search = (document.getElementById("auditSearch")?.value || "").toLowerCase();
+
+    let logs = getAuditLogRows410().slice();
+
+    if(action){
+      logs = logs.filter(l => auditLogMatchesAction410(l, action));
+    }
+
+    if(search){
+      logs = logs.filter(l => {
+        try{
+          return JSON.stringify(l).toLowerCase().includes(search);
+        }catch(_){
+          return String(l.action || "").toLowerCase().includes(search);
+        }
+      });
+    }
+
+    if(!logs.length){
+      list.innerHTML = '<div class="small">No audit logs match those filters.</div>';
+      return;
+    }
+
+    list.innerHTML = `<div class="small" style="margin-bottom:8px">Showing ${logs.length} audit log${logs.length === 1 ? "" : "s"}.</div><div class="mini-table">${logs.map(log => {
+      let details = "";
+      try{
+        details = log.details ? JSON.stringify(log.details, null, 2) : "";
+      }catch(_){
+        details = String(log.details || "");
+      }
+
+      return `<div class="history-card">
+        <div class="row" style="justify-content:space-between;gap:10px">
+          <strong>${escapeHtml(log.action || "log")}</strong>
+          <span class="small">${escapeHtml(formatDateTime(log.created_at) || "")}</span>
+        </div>
+        <div class="small">Table: ${escapeHtml(log.table_name || "")} · Actor role: ${escapeHtml(log.actor_role || "")}</div>
+        ${details ? `<pre style="white-space:pre-wrap;font-size:11px;overflow:auto;max-height:220px">${escapeHtml(details)}</pre>` : ""}
+      </div>`;
+    }).join("")}</div>`;
+  }catch(e){
+    console.error("Audit log render error", e);
+    list.innerHTML = `<div class="notice">Audit logs opened, but one saved row could not be displayed.<br><br><strong>Error:</strong> ${escapeHtml(e?.message || e)}</div>`;
+  }
+}
+
+async function openAuditLogsModal(){
+  if(!isAdmin()){
+    alert("Admin only.");
+    return;
+  }
+
+  makeDynamicModal("auditLogsModal", "Admin Audit Logs", `
+    <div class="small">Loading audit logs...</div>
+    <div class="small" style="margin-top:8px">If this takes more than a few seconds, the app will show the error instead of staying stuck.</div>
+  `);
+
+  try{
+    const query = db
+      .from("admin_audit_logs")
+      .select("id,created_at,action,table_name,row_id,player_id,actor_id,actor_role,details")
+      .order("created_at", { ascending:false })
+      .limit(300);
+
+    const result = typeof withTimeoutPromise === "function"
+      ? await withTimeoutPromise(query, 12000, "Admin audit logs load")
+      : await query;
+
+    const { data, error } = result;
+    if(error) throw error;
+
+    setAuditLogRows410(data || []);
+
+    const body = `
+      <div class="filter-grid">
+        <div>
+          <label>Action</label>
+          <select id="auditActionFilter" onchange="renderAuditLogRows()">
+            <option value="">All</option>
+            <option value="rating">Rating edits</option>
+            <option value="player_added">Player added</option>
+            <option value="player_deleted">Player deleted</option>
+            <option value="game_deleted">Game deleted/voided</option>
+            <option value="winner">Winner selected/cleared</option>
+            <option value="season">Season archive</option>
+          </select>
+        </div>
+        <div><label>Search</label><input id="auditSearch" placeholder="Search details..." oninput="renderAuditLogRows()"></div>
+        <div><label>&nbsp;</label><button class="btn-secondary" type="button" onclick="downloadAuditLogsCsv()">Export CSV</button></div>
+        <div><label>&nbsp;</label><button class="btn-secondary" type="button" onclick="openAuditLogsModal()">Reload</button></div>
+      </div>
+      <div id="auditLogsList"></div>
+    `;
+
+    makeDynamicModal("auditLogsModal", "Admin Audit Logs", body);
+    renderAuditLogRows();
+  }catch(e){
+    console.error("Audit logs load error", e);
+    makeDynamicModal("auditLogsModal", "Admin Audit Logs", `
+      <div class="notice">
+        Admin audit logs could not load.<br><br>
+        <strong>Error:</strong> ${escapeHtml(e?.message || e)}
+      </div>
+      <div class="small" style="margin-top:10px">
+        Common causes: the admin_audit_logs table/policy was not created, your account is not admin, or the connection timed out.
+      </div>
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn-secondary" type="button" onclick="openAuditLogsModal()">Try Again</button>
+      </div>
+    `);
+  }
+}
+
+function downloadAuditLogsCsv(){
+  const rows = [["Created At","Action","Table","Row ID","Player ID","Actor ID","Actor Role","Details"], ...getAuditLogRows410().map(l => [
+    l.created_at || "",
+    l.action || "",
+    l.table_name || "",
+    l.row_id || "",
+    l.player_id || "",
+    l.actor_id || "",
+    l.actor_role || "",
+    JSON.stringify(l.details || {})
+  ])];
+  downloadBlob(`${getDatePrefix()}_admin_audit_logs.csv`, rows.map(r => r.map(escapeCsv).join(",")).join("\n"), "text/csv");
+}
+
+Object.assign(window, {
+  getAuditLogRows410,
+  setAuditLogRows410,
+  auditLogMatchesAction410,
+  renderAuditLogRows,
+  openAuditLogsModal,
+  downloadAuditLogsCsv
 });
 
