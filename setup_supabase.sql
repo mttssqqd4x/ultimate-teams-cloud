@@ -1830,3 +1830,55 @@ create policy attendance_update_authorized_4116 on public.attendance
   using(public.can_mark_attendance_for_player(player_id))
   with check(public.can_mark_attendance_for_player(player_id));
 
+
+
+-- 4.11.7: Reliable captain/admin one-time player removal.
+create or replace function public.remove_temporary_player_from_app(
+  p_player_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_player public.players%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception using message = 'Sign in required.';
+  end if;
+
+  if not (public.is_admin() or public.can_manage_games()) then
+    raise exception using message = 'Captain or Admin only.';
+  end if;
+
+  select * into v_player
+  from public.players
+  where id = p_player_id
+  for update;
+
+  if v_player.id is null then
+    raise exception using message = 'Player not found.';
+  end if;
+
+  if coalesce(v_player.temporary, false) is not true then
+    raise exception using message = 'Only one-time players can be removed here.';
+  end if;
+
+  -- Attendance cascades from the player delete in new installs, but delete it
+  -- explicitly first so older schemas or partial migrations still clean up.
+  delete from public.attendance
+  where player_id = p_player_id;
+
+  delete from public.players
+  where id = p_player_id
+    and temporary is true;
+
+  if not found then
+    raise exception using message = 'One-time player could not be removed.';
+  end if;
+end;
+$$;
+
+grant execute on function public.remove_temporary_player_from_app(uuid) to authenticated;
+

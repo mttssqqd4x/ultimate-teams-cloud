@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.6";
+const APP_VERSION = "4.11.7";
 
 let db = null;
 let currentUser = null;
@@ -6336,5 +6336,93 @@ Object.assign(window, {
   updateStats,
   renderManageAccountsRows,
   saveManagedAccountRole
+});
+
+
+
+/* ===== 4.11.7 Player toggle cleanup + reliable one-time removal ===== */
+
+function updateAttendanceFilterToggles(){
+  const inactiveBtn = document.getElementById("toggleInactiveBtn");
+  const attendingBtn = document.getElementById("showOnlyAttendingBtn");
+
+  if(inactiveBtn){
+    makeToggleButton(inactiveBtn, !!state.showInactive, "Inactive Players");
+  }
+
+  if(attendingBtn){
+    const hideForPlayer = isPlayerRole && isPlayerRole();
+    attendingBtn.classList.toggle("player-role-hide", !!hideForPlayer);
+    attendingBtn.style.display = hideForPlayer ? "none" : "";
+    if(!hideForPlayer){
+      makeToggleButton(attendingBtn, !!state.showOnlyAttending, "Present Only");
+    }
+  }
+}
+
+async function removePlayer(id){
+  if(!canManageGames()){
+    alert("Captain or Admin only.");
+    return;
+  }
+
+  const p = playerById(id);
+  if(!p){
+    alert("Player not found.");
+    return;
+  }
+
+  if(!p.temporary){
+    alert("Only one-time players can be removed here.");
+    return;
+  }
+
+  const ok = confirm(`Remove one-time player ${p.fullName} from the attendance list?`);
+  if(!ok) return;
+
+  await withLoading("Removing one-time player...", async () => {
+    let usedRpc = false;
+
+    if(db.rpc){
+      const { error } = await db.rpc("remove_temporary_player_from_app", {
+        p_player_id: id
+      });
+
+      if(!error){
+        usedRpc = true;
+      }else{
+        const msg = String(error.message || "");
+        const missingFunction = msg.includes("remove_temporary_player_from_app") || msg.includes("Could not find the function");
+        if(!missingFunction){
+          throw error;
+        }
+      }
+    }
+
+    if(!usedRpc){
+      // Backward-compatible fallback for sites where the SQL has not been run yet.
+      const { error } = await db.from("players")
+        .delete()
+        .eq("id", id)
+        .eq("temporary", true);
+
+      if(error) throw error;
+    }
+
+    // Clean up local state immediately so the removed temp player disappears even before realtime returns.
+    state.players = state.players.filter(pl => String(pl.id) !== String(id));
+    state.currentTeams = (state.currentTeams || []).map(team => (team || []).filter(pl => String(pl.id) !== String(id)));
+    state.selectedWinnerIndex = null;
+
+    await loadCloudData();
+    renderAll();
+  }).catch(e => {
+    alert("Could not remove one-time player: " + (e?.message || e));
+  });
+}
+
+Object.assign(window, {
+  updateAttendanceFilterToggles,
+  removePlayer
 });
 

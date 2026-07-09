@@ -1105,3 +1105,18 @@ Implementation notes:
 Deployment notes:
 - Run the updated setup_supabase.sql once before assigning the Teammate role.
 - No Edge Function redeploy required.
+
+
+## 4.11.7 Player toggle cleanup and one-time player removal fix
+
+Changes:
+- regular Player accounts no longer see the Present Only attendance toggle
+- Teammates, Captains, and Admins still see Present Only where appropriate
+- one-time player removal now uses a backend RPC for reliable captain/admin removal
+- one-time player removal explicitly cleans attendance first, then deletes the temporary player
+- added a local UI cleanup so removed one-time players disappear immediately after removal
+- kept root CNAME
+- no Edge Function redeploy required
+
+Deployment notes:
+- Run the updated setup_supabase.sql once so the new remove_temporary_player_from_app RPC exists.
