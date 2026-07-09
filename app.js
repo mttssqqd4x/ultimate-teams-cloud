@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.5";
+const APP_VERSION = "4.11.6";
 
 let db = null;
 let currentUser = null;
@@ -6032,5 +6032,309 @@ Object.assign(window, {
   renderAuditLogRows,
   openAuditLogsModal,
   downloadAuditLogsCsv
+});
+
+
+
+/* ===== 4.11.6 four-role permission model ===== */
+/*
+  Display roles:
+  - Player: can only mark themselves present/out.
+  - Teammate: can mark themselves and others.
+  - Captain: can mark others, generate teams, save games, and use captain tools.
+  - Admin: full control.
+
+  Database compatibility:
+  - Existing profiles.role = "user" is treated as Player.
+  - profiles.role = "teammate" is the new Teammate role.
+*/
+
+function normalizedRole(){
+  const r = String(profile?.role || "").trim().toLowerCase();
+  if(r === "admin") return "admin";
+  if(r === "captain") return "captain";
+  if(r === "teammate") return "teammate";
+  if(r === "player" || r === "user") return "player";
+  return currentUser ? "player" : "guest";
+}
+
+function roleLabel(role = normalizedRole()){
+  const r = String(role || "").toLowerCase();
+  if(r === "admin") return "Admin";
+  if(r === "captain") return "Captain";
+  if(r === "teammate") return "Teammate";
+  if(r === "player" || r === "user") return "Player";
+  return "Guest";
+}
+
+function roleValueForDatabase(role){
+  const r = String(role || "").toLowerCase();
+  if(r === "player") return "user";
+  if(["user","teammate","captain","admin"].includes(r)) return r;
+  return "user";
+}
+
+function isAdmin(){ return normalizedRole() === "admin"; }
+function isCaptain(){ return normalizedRole() === "captain"; }
+function isTeammate(){ return normalizedRole() === "teammate"; }
+function isPlayerRole(){ return normalizedRole() === "player"; }
+function isCaptainOrAdmin(){ return isAdmin() || isCaptain(); }
+function canManageGames(){ return isCaptainOrAdmin(); }
+function canAccessDataPage(){ return isCaptainOrAdmin(); }
+function canGenerateTeams(){ return isCaptainOrAdmin(); }
+function canMarkOthersAttendance(){ return isAdmin() || isCaptain() || isTeammate(); }
+function isPlainUserOrGuest(){ return isGuest() || isPlayerRole() || isTeammate(); }
+function canMarkAttendance(){ return !!currentUser; }
+function isGuest(){ return !currentUser; }
+
+function currentUserPlayer(){
+  if(!currentUser) return null;
+  if(profile?.player_id){
+    const byLinkedId = playerById(profile.player_id);
+    if(byLinkedId) return byLinkedId;
+  }
+  return state.players.find(p => isCurrentSignedInPlayer(p)) || null;
+}
+
+function canMarkAttendanceForPlayer(playerOrId){
+  if(!currentUser) return false;
+  const p = typeof playerOrId === "object" ? playerOrId : playerById(playerOrId);
+  if(!p) return false;
+  if(canMarkOthersAttendance()) return true;
+  return isCurrentSignedInPlayer(p);
+}
+
+function attendancePermissionMessage(){
+  return "Players can only mark themselves present. Ask a Teammate, Captain, or Admin to update someone else.";
+}
+
+function renderPlayers(){
+  const list = document.getElementById("playerList");
+  if(!list) return;
+  if(isGuest()){
+    list.innerHTML = '<div class="small">Sign in to mark attendance.</div>';
+    return;
+  }
+
+  const search = (document.getElementById("playerSearch")?.value || "").trim().toLowerCase();
+  let players = [...state.players];
+
+  if(isPlayerRole()){
+    const me = currentUserPlayer();
+    if(!me){
+      list.innerHTML = '<div class="notice">Your account is not matched to a roster player yet. Ask an Admin to match your account name to your roster name.</div>';
+      removePresentPlayersSection?.();
+      updateAttendanceHeaderCount?.();
+      updateAttendanceFilterToggles?.();
+      return;
+    }
+    players = [me];
+  }else{
+    players = players
+      .filter(p => canManageGames() ? (state.showInactive || p.active || p.attending) : true)
+      .filter(p => !search || p.fullName.toLowerCase().includes(search));
+  }
+
+  players = players.sort(compareAttendancePlayers);
+
+  if(!players.length){
+    list.innerHTML = '<div class="small">No players match that search.</div>';
+    return;
+  }
+
+  list.innerHTML = "";
+
+  players.forEach(p => {
+    const allowed = canMarkAttendanceForPlayer(p);
+    const row = document.createElement("div");
+    row.className = "player" + (allowed ? " clickable" : "") + (p.attending ? " attend-on" : "") + (canManageGames() && !p.active ? " inactive" : "") + (p.temporary ? " temp" : "");
+    row.onclick = e => {
+      if(e.target.closest("button")) return;
+      if(!allowed){
+        alert(attendancePermissionMessage());
+        return;
+      }
+      toggleAttendance(p.id);
+    };
+
+    const controls = canManageGames()
+      ? `<div class="toggle-wrap">
+          <button class="${injuryButtonClass(p)}" onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">${injuryButtonLabel(p)}</button>
+          ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
+        </div>`
+      : "";
+
+    row.innerHTML = `
+      <div>
+        <div class="player-name">${escapeHtml(p.fullName)}${isCurrentSignedInPlayer(p) ? ' <span class="chip">You</span>' : ""}</div>
+        ${canManageGames() && !p.active ? '<div class="small">Inactive</div>' : ""}
+        ${!allowed ? '<div class="small">Only Teammates, Captains, and Admins can mark others.</div>' : ""}
+      </div>
+      ${controls}
+    `;
+    list.appendChild(row);
+  });
+
+  removePresentPlayersSection?.();
+  updateAttendanceHeaderCount?.();
+  updateAttendanceFilterToggles?.();
+}
+
+async function saveAttendanceFromApp(playerId, present){
+  if(db.rpc){
+    const { error } = await db.rpc("mark_attendance_from_app", {
+      p_player_id: playerId,
+      p_present: present
+    });
+    if(!error) return { error: null };
+
+    const msg = String(error.message || "");
+    const missingFunction = msg.includes("mark_attendance_from_app") || msg.includes("Could not find the function");
+    if(!missingFunction) return { error };
+  }
+
+  const payload = {
+    player_id: playerId,
+    present,
+    updated_at: new Date().toISOString(),
+    updated_by: currentUser?.id || null
+  };
+
+  const { error } = await db.from("attendance").upsert(payload, { onConflict: "player_id" });
+  if(error) return { error };
+
+  if(present){
+    const p = playerById(playerId);
+    if(p && !p.active){
+      const { error: activeError } = await db.from("players")
+        .update({ active: true, updated_at: new Date().toISOString() })
+        .eq("id", playerId);
+      if(activeError && canManageGames()) return { error: activeError };
+    }
+  }
+
+  return { error: null };
+}
+
+async function toggleAttendance(id){
+  if(!canMarkAttendance()){
+    alert("Create an account or sign in to mark attendance.");
+    toggleSignInBox();
+    return;
+  }
+
+  const p = playerById(id);
+  if(!p) return;
+
+  if(!canMarkAttendanceForPlayer(p)){
+    alert(attendancePermissionMessage());
+    return;
+  }
+
+  const next = !p.attending;
+  const wasActive = p.active;
+  p.attending = next;
+  if(next && !p.active) p.active = true;
+
+  renderAll();
+
+  const { error } = await saveAttendanceFromApp(p.id, next);
+  if(error){
+    alert("Attendance save error: " + (error.message || error));
+    p.attending = !next;
+    p.active = wasActive;
+    renderAll();
+    return;
+  }
+
+  await loadCloudData();
+  renderAll();
+}
+
+function updateStats(){
+  const playerCount = state.players.length;
+  const attendingCount = state.players.filter(p => p.attending).length;
+  const role = roleLabel();
+
+  const setText = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = String(val); };
+
+  setText("userEmail", currentUser?.email || "Guest");
+  setText("userEmailData", currentUser?.email || "Guest");
+  setText("userRole", role);
+  setText("statPlayers", playerCount);
+  setText("statAttending", attendingCount);
+  setText("statPlayersData", playerCount);
+  setText("statAttendingData", attendingCount);
+  setText("statRoleData", role);
+}
+
+function renderManageAccountsRows(){
+  const out = document.getElementById("manageAccountsRows");
+  if(!out) return;
+  const q = (document.getElementById("accountSearch")?.value || "").toLowerCase();
+  const rows = (window.__profiles410 || []).filter(p => !q || JSON.stringify(p).toLowerCase().includes(q));
+  out.innerHTML = rows.length ? rows.map(p => {
+    const full = p.full_name || `${p.first_name || ""} ${p.last_name || ""}`.trim();
+    const linkedMatch = p.player_id ? playerById(p.player_id) : null;
+    const nameMatch = state.players.find(pl => normalizeNameForMatch(pl.fullName) === normalizeNameForMatch(full));
+    const match = linkedMatch || nameMatch;
+    const current = roleValueForDatabase(p.role || "user");
+    return `<div class="history-card">
+      <div class="player-name">${escapeHtml(full || p.email || p.id)}</div>
+      <div class="small">${escapeHtml(p.email || "")}</div>
+      <div class="small">Role: ${escapeHtml(roleLabel(current))}</div>
+      <div class="small">Matched player: ${escapeHtml(match?.fullName || "No roster match")}</div>
+      <div class="toolbar" style="margin-top:8px">
+        <select id="role-${escapeHtml(String(p.id))}" style="max-width:190px">
+          <option value="user" ${current === "user" ? "selected" : ""}>Player</option>
+          <option value="teammate" ${current === "teammate" ? "selected" : ""}>Teammate</option>
+          <option value="captain" ${current === "captain" ? "selected" : ""}>Captain</option>
+          <option value="admin" ${current === "admin" ? "selected" : ""}>Admin</option>
+        </select>
+        <button class="btn-secondary" type="button" onclick="saveManagedAccountRole('${escapeHtml(String(p.id))}')">Save Role</button>
+      </div>
+      <div class="small" style="margin-top:6px">
+        Player: marks self only · Teammate: marks anyone · Captain: team tools · Admin: full control
+      </div>
+    </div>`;
+  }).join("") : '<div class="small">No accounts found.</div>';
+}
+
+async function saveManagedAccountRole(profileId){
+  if(!isAdmin()) return;
+  const role = document.getElementById(`role-${profileId}`)?.value || "user";
+  const { error } = await db.from("profiles").update({ role }).eq("id", profileId);
+  if(error){ alert(error.message); return; }
+  const p = (window.__profiles410 || []).find(x => String(x.id) === String(profileId));
+  if(p) p.role = role;
+  alert("Role saved.");
+  renderManageAccountsRows();
+}
+
+Object.assign(window, {
+  normalizedRole,
+  roleLabel,
+  roleValueForDatabase,
+  isAdmin,
+  isCaptain,
+  isTeammate,
+  isPlayerRole,
+  isCaptainOrAdmin,
+  canManageGames,
+  canAccessDataPage,
+  canGenerateTeams,
+  canMarkOthersAttendance,
+  isPlainUserOrGuest,
+  canMarkAttendance,
+  isGuest,
+  currentUserPlayer,
+  canMarkAttendanceForPlayer,
+  attendancePermissionMessage,
+  renderPlayers,
+  saveAttendanceFromApp,
+  toggleAttendance,
+  updateStats,
+  renderManageAccountsRows,
+  saveManagedAccountRole
 });
 

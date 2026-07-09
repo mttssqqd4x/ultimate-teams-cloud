@@ -1696,3 +1696,137 @@ $$;
 
 grant execute on function public.clear_game_winner_from_history(uuid) to authenticated;
 
+
+
+-- 4.11.6: Four role model.
+-- Internal compatibility note:
+--   profiles.role = 'user' is displayed/treated as "Player".
+--   New enum value 'teammate' allows users who can mark attendance for anyone
+--   without getting Captain/Admin tools.
+do $$
+begin
+  if exists (select 1 from pg_type where typname = 'app_role')
+     and not exists (
+       select 1
+       from pg_enum e
+       join pg_type t on t.oid = e.enumtypid
+       where t.typname = 'app_role'
+         and e.enumlabel = 'teammate'
+     ) then
+    alter type public.app_role add value 'teammate';
+  end if;
+end $$;
+
+alter table public.profiles add column if not exists player_id uuid references public.players(id);
+
+-- Backfill account-to-player links using exact profile name/roster name matches.
+update public.profiles pr
+set player_id = pl.id
+from public.players pl
+where pr.player_id is null
+  and lower(trim(coalesce(nullif(pr.full_name,''), trim(coalesce(pr.first_name,'') || ' ' || coalesce(pr.last_name,''))))) = lower(trim(pl.full_name));
+
+create or replace function public.profile_matches_player(
+  p_user_id uuid,
+  p_player_id uuid
+)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists(
+    select 1
+    from public.profiles pr
+    join public.players pl on pl.id = p_player_id
+    where pr.id = p_user_id
+      and (
+        pr.player_id = pl.id
+        or lower(trim(coalesce(nullif(pr.full_name,''), trim(coalesce(pr.first_name,'') || ' ' || coalesce(pr.last_name,''))))) = lower(trim(pl.full_name))
+        or (
+          lower(trim(coalesce(pr.first_name,''))) = lower(trim(pl.first_name))
+          and lower(trim(coalesce(pr.last_name,''))) = lower(trim(pl.last_name))
+          and coalesce(pr.first_name,'') <> ''
+          and coalesce(pr.last_name,'') <> ''
+        )
+      )
+  );
+$$;
+
+create or replace function public.can_mark_attendance_for_player(
+  p_player_id uuid
+)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists(
+    select 1
+    from public.profiles pr
+    where pr.id = auth.uid()
+      and (
+        pr.role::text in ('admin','captain','teammate')
+        or public.profile_matches_player(auth.uid(), p_player_id)
+      )
+  );
+$$;
+
+-- Mark attendance from the app.
+-- Player/user accounts can only mark their matched roster player.
+-- Teammates, captains, and admins can mark anyone.
+create or replace function public.mark_attendance_from_app(
+  p_player_id uuid,
+  p_present boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception using message = 'Sign in required.';
+  end if;
+
+  if not public.can_mark_attendance_for_player(p_player_id) then
+    raise exception using message = 'Players can only mark themselves present. Ask a Teammate, Captain, or Admin to update someone else.';
+  end if;
+
+  insert into public.attendance(player_id, present, updated_at, updated_by)
+  values (p_player_id, p_present, now(), auth.uid())
+  on conflict (player_id)
+  do update set
+    present = excluded.present,
+    updated_at = excluded.updated_at,
+    updated_by = excluded.updated_by;
+
+  if p_present then
+    update public.players
+    set active = true,
+        updated_at = now()
+    where id = p_player_id
+      and active is distinct from true;
+  end if;
+end;
+$$;
+
+grant execute on function public.profile_matches_player(uuid, uuid) to authenticated;
+grant execute on function public.can_mark_attendance_for_player(uuid) to authenticated;
+grant execute on function public.mark_attendance_from_app(uuid, boolean) to authenticated;
+
+-- Tighten direct attendance writes so the browser cannot bypass the role model.
+drop policy if exists attendance_insert_authenticated on public.attendance;
+drop policy if exists attendance_update_authenticated on public.attendance;
+drop policy if exists attendance_insert_authorized_4116 on public.attendance;
+drop policy if exists attendance_update_authorized_4116 on public.attendance;
+
+create policy attendance_insert_authorized_4116 on public.attendance
+  for insert to authenticated
+  with check(public.can_mark_attendance_for_player(player_id));
+
+create policy attendance_update_authorized_4116 on public.attendance
+  for update to authenticated
+  using(public.can_mark_attendance_for_player(player_id))
+  with check(public.can_mark_attendance_for_player(player_id));
+

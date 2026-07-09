@@ -1083,3 +1083,25 @@ Changes:
 - made audit log rendering safer if one row has unexpected details data
 - kept CSV export
 - no Supabase SQL changes
+
+
+## 4.11.6 Four-role account permissions
+
+Added role model:
+- Player: can only mark themselves present/out
+- Teammate: can mark themselves and others present/out
+- Captain: Teammate attendance permissions plus team/game tools
+- Admin: full control
+
+Implementation notes:
+- Existing database role `user` is now displayed as Player for backward compatibility.
+- Added new Supabase enum value `teammate`.
+- Added profile-to-player matching helper functions.
+- Tightened direct attendance write policies so users cannot bypass the app UI.
+- Manage Accounts now shows Player, Teammate, Captain, and Admin.
+- Player accounts only see their matched roster row in Attendance.
+- If a Player account is not matched to a roster player, the app tells them to ask an Admin.
+
+Deployment notes:
+- Run the updated setup_supabase.sql once before assigning the Teammate role.
+- No Edge Function redeploy required.
