@@ -1120,3 +1120,22 @@ Changes:
 
 Deployment notes:
 - Run the updated setup_supabase.sql once so the new remove_temporary_player_from_app RPC exists.
+
+
+## 4.11.8 One-time player removal audit FK fix
+
+Fix:
+- fixed error when removing a one-time player:
+  - `admin_audit_logs_player_id_fkey`
+- deleted-player audit logs now keep:
+  - row_id = deleted player id
+  - details.deleted_player_id
+  - details.player_name
+  - details.temporary
+- deleted-player audit logs now set `player_id = null` so they do not reference a deleted player row
+- one-time player removal RPC was recreated after the audit trigger fix
+- app now shows a clearer message if the SQL update has not been run yet
+
+Deployment notes:
+- Run the updated setup_supabase.sql once.
+- No Edge Function redeploy required.

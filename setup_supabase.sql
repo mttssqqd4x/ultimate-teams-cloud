@@ -1882,3 +1882,124 @@ $$;
 
 grant execute on function public.remove_temporary_player_from_app(uuid) to authenticated;
 
+
+
+-- 4.11.8: Fix deleted-player audit FK issue.
+-- When a player is deleted, admin_audit_logs.player_id cannot point to that
+-- same deleted player row. Keep row_id and details for traceability, but store
+-- player_id as null so the audit log does not violate its FK constraint.
+create or replace function public.log_player_admin_audit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_role public.app_role;
+  v_action text;
+  v_row_id uuid;
+  v_player_id uuid;
+  v_details jsonb;
+begin
+  if current_setting('app.audit_context', true) in ('game_result','void_game') then
+    if tg_op = 'DELETE' then return old; else return new; end if;
+  end if;
+
+  select role into v_role from public.profiles where id = auth.uid();
+
+  if tg_op = 'INSERT' then
+    v_action := 'player_added';
+    v_row_id := new.id;
+    v_player_id := new.id;
+    v_details := jsonb_build_object(
+      'new', to_jsonb(new),
+      'player_name', new.full_name
+    );
+  elsif tg_op = 'DELETE' then
+    v_action := 'player_deleted';
+    v_row_id := old.id;
+    v_player_id := null;
+    v_details := jsonb_build_object(
+      'old', to_jsonb(old),
+      'deleted_player_id', old.id,
+      'player_name', old.full_name,
+      'temporary', old.temporary
+    );
+  elsif tg_op = 'UPDATE' then
+    if new.handling is distinct from old.handling
+       or new.cutting is distinct from old.cutting
+       or new.defense is distinct from old.defense
+       or new.win_loss is distinct from old.win_loss then
+      v_action := 'rating_edit';
+      v_row_id := new.id;
+      v_player_id := new.id;
+      v_details := jsonb_build_object(
+        'old', jsonb_build_object('handling', old.handling, 'cutting', old.cutting, 'defense', old.defense, 'win_loss', old.win_loss),
+        'new', jsonb_build_object('handling', new.handling, 'cutting', new.cutting, 'defense', new.defense, 'win_loss', new.win_loss),
+        'player_name', new.full_name
+      );
+    else
+      return new;
+    end if;
+  end if;
+
+  insert into public.admin_audit_logs(action, table_name, row_id, player_id, actor_id, actor_role, details)
+  values(v_action, tg_table_name, v_row_id, v_player_id, auth.uid(), v_role, coalesce(v_details, '{}'::jsonb));
+
+  if tg_op = 'DELETE' then return old; else return new; end if;
+end;
+$$;
+
+drop trigger if exists log_player_admin_audit_trigger on public.players;
+create trigger log_player_admin_audit_trigger
+after insert or update or delete on public.players
+for each row execute function public.log_player_admin_audit();
+
+-- Recreate the one-time player removal RPC after the audit fix.
+create or replace function public.remove_temporary_player_from_app(
+  p_player_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_player public.players%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception using message = 'Sign in required.';
+  end if;
+
+  if not (public.is_admin() or public.can_manage_games()) then
+    raise exception using message = 'Captain or Admin only.';
+  end if;
+
+  select * into v_player
+  from public.players
+  where id = p_player_id
+  for update;
+
+  if v_player.id is null then
+    raise exception using message = 'Player not found.';
+  end if;
+
+  if coalesce(v_player.temporary, false) is not true then
+    raise exception using message = 'Only one-time players can be removed here.';
+  end if;
+
+  delete from public.attendance
+  where player_id = p_player_id;
+
+  delete from public.players
+  where id = p_player_id
+    and temporary is true;
+
+  if not found then
+    raise exception using message = 'One-time player could not be removed.';
+  end if;
+end;
+$$;
+
+grant execute on function public.remove_temporary_player_from_app(uuid) to authenticated;
+

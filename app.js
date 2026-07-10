@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.7";
+const APP_VERSION = "4.11.8";
 
 let db = null;
 let currentUser = null;
@@ -6423,6 +6423,59 @@ async function removePlayer(id){
 
 Object.assign(window, {
   updateAttendanceFilterToggles,
+  removePlayer
+});
+
+
+
+/* ===== 4.11.8 one-time removal audit FK hint ===== */
+
+async function removePlayer(id){
+  if(!canManageGames()){
+    alert("Captain or Admin only.");
+    return;
+  }
+
+  const p = playerById(id);
+  if(!p){
+    alert("Player not found.");
+    return;
+  }
+
+  if(!p.temporary){
+    alert("Only one-time players can be removed here.");
+    return;
+  }
+
+  const ok = confirm(`Remove one-time player ${p.fullName} from the attendance list?`);
+  if(!ok) return;
+
+  await withLoading("Removing one-time player...", async () => {
+    const { error } = await db.rpc("remove_temporary_player_from_app", {
+      p_player_id: id
+    });
+
+    if(error) throw error;
+
+    state.players = state.players.filter(pl => String(pl.id) !== String(id));
+    state.currentTeams = (state.currentTeams || []).map(team => (team || []).filter(pl => String(pl.id) !== String(id)));
+    state.selectedWinnerIndex = null;
+
+    await loadCloudData();
+    renderAll();
+  }).catch(e => {
+    const msg = String(e?.message || e);
+    if(msg.includes("admin_audit_logs_player_id_fkey")){
+      alert("Could not remove one-time player because the database still has the old audit trigger. Run setup_supabase.sql from version 4.11.8, then try again.");
+    }else if(msg.includes("remove_temporary_player_from_app") || msg.includes("Could not find the function")){
+      alert("Could not remove one-time player because the database function is missing. Run setup_supabase.sql from version 4.11.8, then try again.");
+    }else{
+      alert("Could not remove one-time player: " + msg);
+    }
+  });
+}
+
+Object.assign(window, {
   removePlayer
 });
 

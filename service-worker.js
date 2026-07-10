@@ -1,4 +1,4 @@
-const CACHE='ultimate-teams-cloud-4-11-7';
+const CACHE='ultimate-teams-cloud-4-11-8';
 const ASSETS=['./','./index.html','./app.js','./config.js','./manifest.json'];
 
 self.addEventListener('install',e=>{
