@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.9";
+const APP_VERSION = "4.11.10";
 
 let db = null;
 let currentUser = null;
@@ -6519,5 +6519,117 @@ Object.assign(window, {
   updateAttendanceSearchVisibility,
   renderPlayers,
   renderAll
+});
+
+
+
+/* ===== 4.11.10 stronger Attendance search hiding for Player accounts ===== */
+
+function shouldShowAttendanceSearch(){
+  // Only roles that can mark other people need Attendance search.
+  return !!(currentUser && typeof canMarkOthersAttendance === "function" && canMarkOthersAttendance());
+}
+
+function findAttendanceSearchRows(){
+  const rows = [];
+  document.querySelectorAll("#playerSearch").forEach(input => {
+    const row = input.closest(".search-row") || input.closest(".modal-search-row") || input.parentElement;
+    if(row && !rows.includes(row)) rows.push(row);
+  });
+
+  // Fallback: find any search row containing the attendance search input.
+  document.querySelectorAll(".search-row").forEach(row => {
+    if(row.querySelector("#playerSearch") && !rows.includes(row)) rows.push(row);
+  });
+
+  return rows;
+}
+
+function updateAttendanceSearchVisibility(){
+  const show = shouldShowAttendanceSearch();
+  const rows = findAttendanceSearchRows();
+
+  rows.forEach(row => {
+    row.dataset.attendanceSearchRow = "true";
+    row.classList.toggle("attendance-search-hidden", !show);
+    if(show){
+      row.style.removeProperty("display");
+      row.style.removeProperty("visibility");
+      row.style.removeProperty("height");
+      row.style.removeProperty("margin");
+      row.style.removeProperty("padding");
+      row.style.removeProperty("overflow");
+    }else{
+      row.style.setProperty("display", "none", "important");
+      row.style.setProperty("visibility", "hidden", "important");
+      row.style.setProperty("height", "0", "important");
+      row.style.setProperty("margin", "0", "important");
+      row.style.setProperty("padding", "0", "important");
+      row.style.setProperty("overflow", "hidden", "important");
+    }
+  });
+
+  if(!show){
+    document.querySelectorAll("#playerSearch").forEach(input => {
+      if(input.value) input.value = "";
+      input.setAttribute("tabindex", "-1");
+      input.setAttribute("aria-hidden", "true");
+    });
+  }else{
+    document.querySelectorAll("#playerSearch").forEach(input => {
+      input.removeAttribute("tabindex");
+      input.removeAttribute("aria-hidden");
+    });
+  }
+}
+
+const renderPlayersBefore41110 = renderPlayers;
+renderPlayers = function(){
+  renderPlayersBefore41110();
+  updateAttendanceSearchVisibility();
+};
+
+const renderAllBefore41110 = renderAll;
+renderAll = function(){
+  renderAllBefore41110();
+  updateAttendanceSearchVisibility();
+};
+
+const updateStatsBefore41110 = updateStats;
+updateStats = function(){
+  updateStatsBefore41110();
+  updateAttendanceSearchVisibility();
+};
+
+function startAttendanceSearchVisibilityWatcher41110(){
+  updateAttendanceSearchVisibility();
+
+  [0, 100, 300, 700, 1500, 3000, 6000, 10000].forEach(ms => {
+    setTimeout(updateAttendanceSearchVisibility, ms);
+  });
+
+  if(window.__attendanceSearchObserver41110) return;
+  if(!document.body) return;
+
+  window.__attendanceSearchObserver41110 = new MutationObserver(() => {
+    updateAttendanceSearchVisibility();
+  });
+  window.__attendanceSearchObserver41110.observe(document.body, { childList:true, subtree:true });
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", startAttendanceSearchVisibilityWatcher41110);
+}else{
+  startAttendanceSearchVisibilityWatcher41110();
+}
+
+Object.assign(window, {
+  shouldShowAttendanceSearch,
+  findAttendanceSearchRows,
+  updateAttendanceSearchVisibility,
+  startAttendanceSearchVisibilityWatcher41110,
+  renderPlayers,
+  renderAll,
+  updateStats
 });
 

@@ -1148,3 +1148,14 @@ Changes:
 - Guest view also hides the Attendance search bar
 - Teammates, Captains, and Admins still see Attendance search because they can mark others
 - no Supabase SQL changes
+
+
+## 4.11.10 Stronger Attendance search hiding for Player accounts
+
+Fix:
+- regular Player accounts should no longer see the Attendance search row
+- Guest view also hides the Attendance search row
+- visibility is now based on whether the role can mark others
+- Teammate, Captain, and Admin still see Attendance search
+- added stronger CSS and a small watcher so cached/static layout does not leave the search visible
+- no Supabase SQL changes
