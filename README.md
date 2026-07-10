@@ -1189,3 +1189,19 @@ Fix:
 - Player accounts still do not see Present Only
 - Player accounts still do not see the Attendance search row
 - no Supabase SQL changes
+
+
+## 4.11.13 Player present-view and Teammate inactive-present fix
+
+Changes:
+- Player accounts can now see other players who are marked present
+- Player accounts can only tap/select their own row
+- other present players are shown as read-only in the Player attendance view
+- fixed attendance permission helper to honor explicit `profiles.player_id` links
+- Teammate marking an inactive player present no longer makes that player active
+- Captain/Admin marking an inactive player present still makes that player active
+- local UI behavior now matches the database behavior
+- no Edge Function redeploy required
+
+Deployment notes:
+- Run the updated setup_supabase.sql once so the attendance RPC uses the corrected active/inactive behavior.

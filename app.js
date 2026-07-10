@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.12";
+const APP_VERSION = "4.11.13";
 
 let db = null;
 let currentUser = null;
@@ -7111,5 +7111,184 @@ Object.assign(window, {
   toggleShowOnlyAttending,
   updateAttendanceFilterToggles,
   renderPlayers
+});
+
+
+
+/* ===== 4.11.13 Player present-view + Teammate inactive-present fix ===== */
+
+function canMarkAttendanceForPlayer(playerOrId){
+  if(!currentUser) return false;
+  const p = typeof playerOrId === "object" ? playerOrId : playerById(playerOrId);
+  if(!p) return false;
+  if(canMarkOthersAttendance()) return true;
+  if(profile?.player_id && String(profile.player_id) === String(p.id)) return true;
+  return isCurrentSignedInPlayer(p);
+}
+
+function playerAttendanceRowsForPlayerRole(){
+  const me = currentUserPlayer();
+  const presentOthers = state.players
+    .filter(p => p.attending)
+    .filter(p => !me || String(p.id) !== String(me.id))
+    .sort(compareAttendancePlayers);
+
+  return me ? [me, ...presentOthers] : presentOthers;
+}
+
+function renderAttendancePlayerRow(p){
+  const allowed = canMarkAttendanceForPlayer(p);
+  const row = document.createElement("div");
+  row.className = "player" + (allowed ? " clickable" : "") + (p.attending ? " attend-on" : "") + (canManageGames() && !p.active ? " inactive" : "") + (p.temporary ? " temp" : "");
+
+  if(allowed){
+    row.onclick = e => {
+      if(e.target.closest("button")) return;
+      toggleAttendance(p.id);
+    };
+  }
+
+  const controls = canManageGames()
+    ? `<div class="toggle-wrap">
+        <button class="${injuryButtonClass(p)}" onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">${injuryButtonLabel(p)}</button>
+        ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
+      </div>`
+    : "";
+
+  const statusLine = isPlayerRole() && !allowed
+    ? '<div class="small">Present</div>'
+    : (canManageGames() && !p.active ? '<div class="small">Inactive</div>' : "");
+
+  row.innerHTML = `
+    <div>
+      <div class="player-name">${escapeHtml(p.fullName)}${isCurrentSignedInPlayer(p) || (profile?.player_id && String(profile.player_id) === String(p.id)) ? ' <span class="chip">You</span>' : ""}</div>
+      ${statusLine}
+      ${!isPlayerRole() && !allowed ? '<div class="small">Only Teammates, Captains, and Admins can mark others.</div>' : ""}
+    </div>
+    ${controls}
+  `;
+
+  return row;
+}
+
+function renderPlayers(){
+  ensureAttendanceSearchForCurrentRole();
+
+  const list = document.getElementById("playerList");
+  if(!list) return;
+
+  if(isGuest()){
+    list.innerHTML = '<div class="small">Sign in to mark attendance.</div>';
+    ensureAttendanceSearchForCurrentRole();
+    updateAttendanceFilterToggles?.();
+    return;
+  }
+
+  let noticeHtml = "";
+  let players = [];
+
+  if(isPlayerRole()){
+    const me = currentUserPlayer();
+
+    if(!me){
+      noticeHtml = '<div class="notice">Your account is not matched to a roster player yet. Ask an Admin to link your account in Manage Accounts.</div>';
+    }
+
+    players = playerAttendanceRowsForPlayerRole();
+
+    list.innerHTML = noticeHtml;
+    if(!players.length){
+      list.innerHTML += '<div class="small">No players are currently marked present.</div>';
+      removePresentPlayersSection?.();
+      updateAttendanceHeaderCount?.();
+      updateAttendanceFilterToggles?.();
+      ensureAttendanceSearchForCurrentRole();
+      return;
+    }
+
+    players.forEach(p => list.appendChild(renderAttendancePlayerRow(p)));
+
+    removePresentPlayersSection?.();
+    updateAttendanceHeaderCount?.();
+    updateAttendanceFilterToggles?.();
+    ensureAttendanceSearchForCurrentRole();
+    return;
+  }
+
+  const search = (document.getElementById("playerSearch")?.value || "").trim().toLowerCase();
+
+  players = [...state.players]
+    .filter(p => canManageGames() ? (state.showInactive || p.active || p.attending) : true)
+    .filter(p => !state.showOnlyAttending || p.attending)
+    .filter(p => !search || p.fullName.toLowerCase().includes(search))
+    .sort(compareAttendancePlayers);
+
+  if(!players.length){
+    list.innerHTML = state.showOnlyAttending
+      ? '<div class="small">No players are currently marked present.</div>'
+      : '<div class="small">No players match that search.</div>';
+    removePresentPlayersSection?.();
+    updateAttendanceHeaderCount?.();
+    updateAttendanceFilterToggles?.();
+    ensureAttendanceSearchForCurrentRole();
+    return;
+  }
+
+  list.innerHTML = "";
+  players.forEach(p => list.appendChild(renderAttendancePlayerRow(p)));
+
+  removePresentPlayersSection?.();
+  updateAttendanceHeaderCount?.();
+  updateAttendanceFilterToggles?.();
+  ensureAttendanceSearchForCurrentRole();
+}
+
+async function toggleAttendance(id){
+  if(!canMarkAttendance()){
+    alert("Create an account or sign in to mark attendance.");
+    toggleSignInBox();
+    return;
+  }
+
+  const p = playerById(id);
+  if(!p) return;
+
+  if(!canMarkAttendanceForPlayer(p)){
+    if(isPlayerRole()){
+      return;
+    }
+    alert(attendancePermissionMessage());
+    return;
+  }
+
+  const next = !p.attending;
+  const wasActive = p.active;
+  p.attending = next;
+
+  // Only Captain/Admin should locally reactivate inactive players when marking present.
+  // Teammate and Player attendance changes should not change active/inactive status.
+  if(next && !p.active && canManageGames()) p.active = true;
+
+  renderAll();
+
+  const { error } = await saveAttendanceFromApp(p.id, next);
+  if(error){
+    alert("Attendance save error: " + (error.message || error));
+    p.attending = !next;
+    p.active = wasActive;
+    renderAll();
+    return;
+  }
+
+  await loadCloudData();
+  renderAll();
+}
+
+Object.assign(window, {
+  canMarkAttendanceForPlayer,
+  playerAttendanceRowsForPlayerRole,
+  renderAttendancePlayerRow,
+  renderPlayers,
+  toggleAttendance
 });
 

@@ -2205,3 +2205,53 @@ grant execute on function public.profile_matches_player(uuid, uuid) to authentic
 grant execute on function public.can_mark_attendance_for_player(uuid) to authenticated;
 grant execute on function public.mark_attendance_from_app(uuid, boolean) to authenticated;
 
+
+
+-- 4.11.13: Teammates can mark inactive players present without making them active.
+-- Captain/Admin still make an inactive player active when marking them present.
+create or replace function public.mark_attendance_from_app(
+  p_player_id uuid,
+  p_present boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_role public.app_role;
+begin
+  if auth.uid() is null then
+    raise exception using message = 'Sign in required.';
+  end if;
+
+  if not public.can_mark_attendance_for_player(p_player_id) then
+    raise exception using message = 'Your account is not linked to this roster player yet. Ask an Admin to link your account in Manage Accounts.';
+  end if;
+
+  select role into v_role
+  from public.profiles
+  where id = auth.uid();
+
+  insert into public.attendance(player_id, present, updated_at, updated_by)
+  values (p_player_id, p_present, now(), auth.uid())
+  on conflict (player_id)
+  do update set
+    present = excluded.present,
+    updated_at = excluded.updated_at,
+    updated_by = excluded.updated_by;
+
+  -- Only Captain/Admin marking someone present should reactivate inactive players.
+  -- Teammate and Player roles can mark attendance but should not change roster active status.
+  if p_present and v_role::text in ('admin','captain') then
+    update public.players
+    set active = true,
+        updated_at = now()
+    where id = p_player_id
+      and active is distinct from true;
+  end if;
+end;
+$$;
+
+grant execute on function public.mark_attendance_from_app(uuid, boolean) to authenticated;
+
