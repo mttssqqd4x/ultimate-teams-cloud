@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.10";
+const APP_VERSION = "4.11.11";
 
 let db = null;
 let currentUser = null;
@@ -6631,5 +6631,366 @@ Object.assign(window, {
   renderPlayers,
   renderAll,
   updateStats
+});
+
+
+
+/* ===== 4.11.11 real Attendance search removal + self-match sync ===== */
+
+function roleCanSearchAttendance(){
+  return !!(currentUser && typeof canMarkOthersAttendance === "function" && canMarkOthersAttendance());
+}
+
+function getAttendanceSearchMount(){
+  const playerList = document.getElementById("playerList");
+  if(!playerList) return null;
+
+  let mount = document.getElementById("attendanceSearchMount");
+  if(!mount){
+    mount = document.createElement("div");
+    mount.id = "attendanceSearchMount";
+    playerList.parentElement.insertBefore(mount, playerList);
+  }
+
+  return mount;
+}
+
+function removeStrayAttendanceSearchRows41111(){
+  document.querySelectorAll("#playerSearch").forEach(input => {
+    const row = input.closest(".search-row") || input.closest(".modal-search-row") || input.parentElement;
+    if(row) row.remove();
+    else input.remove();
+  });
+}
+
+function ensureAttendanceSearchForCurrentRole(){
+  const mount = getAttendanceSearchMount();
+  if(!mount) return;
+
+  if(!roleCanSearchAttendance()){
+    removeStrayAttendanceSearchRows41111();
+    mount.innerHTML = "";
+    mount.classList.add("attendance-search-hidden");
+    mount.style.setProperty("display", "none", "important");
+    return;
+  }
+
+  mount.classList.remove("attendance-search-hidden");
+  mount.style.removeProperty("display");
+
+  if(!document.getElementById("playerSearch")){
+    mount.innerHTML = `
+      <div class="search-row" id="attendanceSearchRow" style="margin-top:10px">
+        <div>
+          <label>Search Players</label>
+          <input id="playerSearch" type="text" placeholder="Search by name..." oninput="renderPlayers()">
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <button class="btn-secondary" style="width:auto" type="button" onclick="clearPlayerSearch()">Clear</button>
+        </div>
+      </div>
+    `;
+  }
+}
+
+function shouldShowAttendanceSearch(){
+  return roleCanSearchAttendance();
+}
+
+function findAttendanceSearchRows(){
+  return Array.from(document.querySelectorAll("#attendanceSearchRow, #attendanceSearchMount .search-row, .search-row"))
+    .filter(row => row.id === "attendanceSearchRow" || row.querySelector("#playerSearch"));
+}
+
+function updateAttendanceSearchVisibility(){
+  ensureAttendanceSearchForCurrentRole();
+}
+
+function currentUserNamePartsForMatch(){
+  const meta = currentUser?.user_metadata || {};
+  const profileFull = profile?.full_name || "";
+  const first = profile?.first_name || meta.first_name || "";
+  const last = profile?.last_name || meta.last_name || "";
+  const full = profileFull || meta.full_name || `${first} ${last}`.trim();
+  return { full, first, last };
+}
+
+async function ensureMyProfileLinkedToPlayer(player){
+  if(!currentUser || !player || canMarkOthersAttendance()) return true;
+
+  if(profile?.player_id && String(profile.player_id) === String(player.id)) return true;
+
+  // If the local app thinks this is the signed-in player, sync that match into Supabase
+  // so the database permission check can pass too.
+  if(!isCurrentSignedInPlayer(player)) return false;
+
+  const names = currentUserNamePartsForMatch();
+
+  const { data, error } = await db.rpc("sync_my_profile_player_match", {
+    p_player_id: player.id,
+    p_full_name: names.full || "",
+    p_first_name: names.first || "",
+    p_last_name: names.last || ""
+  });
+
+  if(error){
+    console.warn("Profile/player sync failed", error);
+    return false;
+  }
+
+  if(data === true){
+    profile = {
+      ...(profile || {}),
+      player_id: player.id,
+      full_name: profile?.full_name || names.full || player.fullName,
+      first_name: profile?.first_name || names.first || player.firstName,
+      last_name: profile?.last_name || names.last || player.lastName
+    };
+    return true;
+  }
+
+  return false;
+}
+
+async function saveAttendanceFromApp(playerId, present){
+  const p = playerById(playerId);
+
+  if(!canMarkOthersAttendance()){
+    const linked = await ensureMyProfileLinkedToPlayer(p);
+    if(!linked){
+      return { error: { message: "Your account is not linked to this roster player yet. Ask an Admin to link your account in Manage Accounts." } };
+    }
+  }
+
+  const { error } = await db.rpc("mark_attendance_from_app", {
+    p_player_id: playerId,
+    p_present: present
+  });
+
+  return { error: error || null };
+}
+
+async function toggleAttendance(id){
+  if(!canMarkAttendance()){
+    alert("Create an account or sign in to mark attendance.");
+    toggleSignInBox();
+    return;
+  }
+
+  const p = playerById(id);
+  if(!p) return;
+
+  if(!canMarkAttendanceForPlayer(p)){
+    alert(attendancePermissionMessage());
+    return;
+  }
+
+  const next = !p.attending;
+  const wasActive = p.active;
+  p.attending = next;
+  if(next && !p.active) p.active = true;
+
+  renderAll();
+
+  const { error } = await saveAttendanceFromApp(p.id, next);
+  if(error){
+    alert("Attendance save error: " + (error.message || error));
+    p.attending = !next;
+    p.active = wasActive;
+    renderAll();
+    return;
+  }
+
+  await loadCloudData();
+  renderAll();
+}
+
+function renderPlayers(){
+  ensureAttendanceSearchForCurrentRole();
+
+  const list = document.getElementById("playerList");
+  if(!list) return;
+
+  if(isGuest()){
+    list.innerHTML = '<div class="small">Sign in to mark attendance.</div>';
+    ensureAttendanceSearchForCurrentRole();
+    return;
+  }
+
+  const search = (document.getElementById("playerSearch")?.value || "").trim().toLowerCase();
+  let players = [...state.players];
+
+  if(isPlayerRole()){
+    const me = currentUserPlayer();
+    if(!me){
+      list.innerHTML = '<div class="notice">Your account is not matched to a roster player yet. Ask an Admin to link your account in Manage Accounts.</div>';
+      removePresentPlayersSection?.();
+      updateAttendanceHeaderCount?.();
+      updateAttendanceFilterToggles?.();
+      ensureAttendanceSearchForCurrentRole();
+      return;
+    }
+    players = [me];
+  }else{
+    players = players
+      .filter(p => canManageGames() ? (state.showInactive || p.active || p.attending) : true)
+      .filter(p => !search || p.fullName.toLowerCase().includes(search));
+  }
+
+  players = players.sort(compareAttendancePlayers);
+
+  if(!players.length){
+    list.innerHTML = '<div class="small">No players match that search.</div>';
+    ensureAttendanceSearchForCurrentRole();
+    return;
+  }
+
+  list.innerHTML = "";
+
+  players.forEach(p => {
+    const allowed = canMarkAttendanceForPlayer(p);
+    const row = document.createElement("div");
+    row.className = "player" + (allowed ? " clickable" : "") + (p.attending ? " attend-on" : "") + (canManageGames() && !p.active ? " inactive" : "") + (p.temporary ? " temp" : "");
+    row.onclick = e => {
+      if(e.target.closest("button")) return;
+      if(!allowed){
+        alert(attendancePermissionMessage());
+        return;
+      }
+      toggleAttendance(p.id);
+    };
+
+    const controls = canManageGames()
+      ? `<div class="toggle-wrap">
+          <button class="${injuryButtonClass(p)}" onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">${injuryButtonLabel(p)}</button>
+          ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
+        </div>`
+      : "";
+
+    row.innerHTML = `
+      <div>
+        <div class="player-name">${escapeHtml(p.fullName)}${isCurrentSignedInPlayer(p) ? ' <span class="chip">You</span>' : ""}</div>
+        ${canManageGames() && !p.active ? '<div class="small">Inactive</div>' : ""}
+        ${!allowed ? '<div class="small">Only Teammates, Captains, and Admins can mark others.</div>' : ""}
+      </div>
+      ${controls}
+    `;
+    list.appendChild(row);
+  });
+
+  removePresentPlayersSection?.();
+  updateAttendanceHeaderCount?.();
+  updateAttendanceFilterToggles?.();
+  ensureAttendanceSearchForCurrentRole();
+}
+
+function renderManageAccountsRows(){
+  const out = document.getElementById("manageAccountsRows");
+  if(!out) return;
+
+  const q = (document.getElementById("accountSearch")?.value || "").toLowerCase();
+  const rows = (window.__profiles410 || []).filter(p => !q || JSON.stringify(p).toLowerCase().includes(q));
+  const playerOptions = (selectedId) => [
+    `<option value="">No linked player</option>`,
+    ...state.players.slice().sort(comparePlayersByLastName).map(pl =>
+      `<option value="${escapeHtml(String(pl.id))}" ${String(selectedId || "") === String(pl.id) ? "selected" : ""}>${escapeHtml(pl.fullName)}</option>`
+    )
+  ].join("");
+
+  out.innerHTML = rows.length ? rows.map(p => {
+    const full = p.full_name || `${p.first_name || ""} ${p.last_name || ""}`.trim();
+    const linkedMatch = p.player_id ? playerById(p.player_id) : null;
+    const nameMatch = state.players.find(pl => normalizeNameForMatch(pl.fullName) === normalizeNameForMatch(full));
+    const match = linkedMatch || nameMatch;
+    const current = roleValueForDatabase(p.role || "user");
+    return `<div class="history-card">
+      <div class="player-name">${escapeHtml(full || p.email || p.id)}</div>
+      <div class="small">${escapeHtml(p.email || "")}</div>
+      <div class="small">Role: ${escapeHtml(roleLabel(current))}</div>
+      <div class="small">Matched player: ${escapeHtml(match?.fullName || "No roster match")}</div>
+
+      <div class="grid grid-2" style="margin-top:8px">
+        <div>
+          <label>Role</label>
+          <select id="role-${escapeHtml(String(p.id))}">
+            <option value="user" ${current === "user" ? "selected" : ""}>Player</option>
+            <option value="teammate" ${current === "teammate" ? "selected" : ""}>Teammate</option>
+            <option value="captain" ${current === "captain" ? "selected" : ""}>Captain</option>
+            <option value="admin" ${current === "admin" ? "selected" : ""}>Admin</option>
+          </select>
+        </div>
+        <div>
+          <label>Linked Roster Player</label>
+          <select id="playerlink-${escapeHtml(String(p.id))}">
+            ${playerOptions(p.player_id || match?.id || "")}
+          </select>
+        </div>
+      </div>
+
+      <div class="toolbar" style="margin-top:8px">
+        <button class="btn-secondary" type="button" onclick="saveManagedAccountRole('${escapeHtml(String(p.id))}')">Save Role</button>
+        <button class="btn-secondary" type="button" onclick="saveManagedAccountPlayerLink('${escapeHtml(String(p.id))}')">Save Player Link</button>
+      </div>
+
+      <div class="small" style="margin-top:6px">
+        Player: marks linked self only · Teammate: marks anyone · Captain: team tools · Admin: full control
+      </div>
+    </div>`;
+  }).join("") : '<div class="small">No accounts found.</div>';
+}
+
+async function saveManagedAccountPlayerLink(profileId){
+  if(!isAdmin()) return;
+
+  const playerId = document.getElementById(`playerlink-${profileId}`)?.value || null;
+  const { error } = await db.from("profiles")
+    .update({ player_id: playerId || null })
+    .eq("id", profileId);
+
+  if(error){
+    alert("Could not save player link: " + error.message);
+    return;
+  }
+
+  const p = (window.__profiles410 || []).find(x => String(x.id) === String(profileId));
+  if(p) p.player_id = playerId || null;
+
+  alert("Player link saved.");
+  renderManageAccountsRows();
+}
+
+function startAttendanceSearchVisibilityWatcher41111(){
+  ensureAttendanceSearchForCurrentRole();
+  [0, 50, 150, 300, 700, 1500, 3000, 6000].forEach(ms => setTimeout(ensureAttendanceSearchForCurrentRole, ms));
+
+  if(window.__attendanceSearchObserver41111) return;
+  if(!document.body) return;
+  window.__attendanceSearchObserver41111 = new MutationObserver(() => ensureAttendanceSearchForCurrentRole());
+  window.__attendanceSearchObserver41111.observe(document.body, { childList:true, subtree:true });
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", startAttendanceSearchVisibilityWatcher41111);
+}else{
+  startAttendanceSearchVisibilityWatcher41111();
+}
+
+Object.assign(window, {
+  roleCanSearchAttendance,
+  getAttendanceSearchMount,
+  removeStrayAttendanceSearchRows41111,
+  ensureAttendanceSearchForCurrentRole,
+  shouldShowAttendanceSearch,
+  findAttendanceSearchRows,
+  updateAttendanceSearchVisibility,
+  currentUserNamePartsForMatch,
+  ensureMyProfileLinkedToPlayer,
+  saveAttendanceFromApp,
+  toggleAttendance,
+  renderPlayers,
+  renderManageAccountsRows,
+  saveManagedAccountPlayerLink,
+  startAttendanceSearchVisibilityWatcher41111
 });
 

@@ -2003,3 +2003,205 @@ $$;
 
 grant execute on function public.remove_temporary_player_from_app(uuid) to authenticated;
 
+
+
+-- 4.11.11: Profile/player matching sync for Player self-attendance.
+-- This lets a regular Player account link to its matching roster player before
+-- marking attendance, so the database-side permission check can pass.
+
+create or replace function public.match_norm_41111(p_text text)
+returns text
+language sql
+immutable
+as $$
+  select lower(regexp_replace(trim(coalesce(p_text, '')), '\s+', ' ', 'g'));
+$$;
+
+create or replace function public.sync_my_profile_player_match(
+  p_player_id uuid,
+  p_full_name text default null,
+  p_first_name text default null,
+  p_last_name text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_player public.players%rowtype;
+  v_profile public.profiles%rowtype;
+  v_profile_exists boolean := false;
+  v_player_full text;
+  v_player_first text;
+  v_player_last text;
+  v_supplied_full text;
+  v_supplied_parts text;
+  v_profile_full text;
+  v_profile_parts text;
+  v_allowed boolean := false;
+begin
+  if auth.uid() is null then
+    raise exception using message = 'Sign in required.';
+  end if;
+
+  select * into v_player
+  from public.players
+  where id = p_player_id;
+
+  if v_player.id is null then
+    raise exception using message = 'Player not found.';
+  end if;
+
+  select * into v_profile
+  from public.profiles
+  where id = auth.uid();
+
+  v_profile_exists := found;
+
+  if not v_profile_exists then
+    insert into public.profiles(id, role, full_name, first_name, last_name, player_id)
+    values(auth.uid(), 'user', coalesce(p_full_name,''), coalesce(p_first_name,''), coalesce(p_last_name,''), null)
+    on conflict (id) do nothing;
+
+    select * into v_profile
+    from public.profiles
+    where id = auth.uid();
+
+    v_profile_exists := found;
+  end if;
+
+  v_player_full := public.match_norm_41111(v_player.full_name);
+  v_player_first := public.match_norm_41111(v_player.first_name);
+  v_player_last := public.match_norm_41111(v_player.last_name);
+
+  v_supplied_full := public.match_norm_41111(coalesce(nullif(p_full_name,''), trim(coalesce(p_first_name,'') || ' ' || coalesce(p_last_name,''))));
+  v_supplied_parts := public.match_norm_41111(trim(coalesce(p_first_name,'') || ' ' || coalesce(p_last_name,'')));
+
+  v_profile_full := public.match_norm_41111(coalesce(nullif(v_profile.full_name,''), trim(coalesce(v_profile.first_name,'') || ' ' || coalesce(v_profile.last_name,''))));
+  v_profile_parts := public.match_norm_41111(trim(coalesce(v_profile.first_name,'') || ' ' || coalesce(v_profile.last_name,'')));
+
+  v_allowed :=
+    v_profile.player_id = v_player.id
+    or (v_profile_full <> '' and v_profile_full = v_player_full)
+    or (v_profile_parts <> '' and v_profile_parts = v_player_full)
+    or (v_supplied_full <> '' and v_supplied_full = v_player_full)
+    or (v_supplied_parts <> '' and v_supplied_parts = v_player_full)
+    or (
+      public.match_norm_41111(coalesce(v_profile.first_name,'')) <> ''
+      and public.match_norm_41111(coalesce(v_profile.last_name,'')) <> ''
+      and public.match_norm_41111(v_profile.first_name) = v_player_first
+      and public.match_norm_41111(v_profile.last_name) = v_player_last
+    )
+    or (
+      public.match_norm_41111(coalesce(p_first_name,'')) <> ''
+      and public.match_norm_41111(coalesce(p_last_name,'')) <> ''
+      and public.match_norm_41111(p_first_name) = v_player_first
+      and public.match_norm_41111(p_last_name) = v_player_last
+    );
+
+  if not v_allowed then
+    return false;
+  end if;
+
+  update public.profiles
+  set player_id = v_player.id,
+      full_name = coalesce(nullif(full_name,''), nullif(p_full_name,''), v_player.full_name),
+      first_name = coalesce(nullif(first_name,''), nullif(p_first_name,''), v_player.first_name),
+      last_name = coalesce(nullif(last_name,''), nullif(p_last_name,''), v_player.last_name)
+  where id = auth.uid();
+
+  return true;
+end;
+$$;
+
+grant execute on function public.match_norm_41111(text) to authenticated;
+grant execute on function public.sync_my_profile_player_match(uuid, text, text, text) to authenticated;
+
+-- Recreate profile_matches_player using the explicit player_id link first.
+create or replace function public.profile_matches_player(
+  p_user_id uuid,
+  p_player_id uuid
+)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists(
+    select 1
+    from public.profiles pr
+    join public.players pl on pl.id = p_player_id
+    where pr.id = p_user_id
+      and (
+        pr.player_id = pl.id
+        or public.match_norm_41111(coalesce(nullif(pr.full_name,''), trim(coalesce(pr.first_name,'') || ' ' || coalesce(pr.last_name,'')))) = public.match_norm_41111(pl.full_name)
+        or (
+          public.match_norm_41111(coalesce(pr.first_name,'')) <> ''
+          and public.match_norm_41111(coalesce(pr.last_name,'')) <> ''
+          and public.match_norm_41111(pr.first_name) = public.match_norm_41111(pl.first_name)
+          and public.match_norm_41111(pr.last_name) = public.match_norm_41111(pl.last_name)
+        )
+      )
+  );
+$$;
+
+create or replace function public.can_mark_attendance_for_player(
+  p_player_id uuid
+)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists(
+    select 1
+    from public.profiles pr
+    where pr.id = auth.uid()
+      and (
+        pr.role::text in ('admin','captain','teammate')
+        or public.profile_matches_player(auth.uid(), p_player_id)
+      )
+  );
+$$;
+
+create or replace function public.mark_attendance_from_app(
+  p_player_id uuid,
+  p_present boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception using message = 'Sign in required.';
+  end if;
+
+  if not public.can_mark_attendance_for_player(p_player_id) then
+    raise exception using message = 'Your account is not linked to this roster player yet. Ask an Admin to link your account in Manage Accounts.';
+  end if;
+
+  insert into public.attendance(player_id, present, updated_at, updated_by)
+  values (p_player_id, p_present, now(), auth.uid())
+  on conflict (player_id)
+  do update set
+    present = excluded.present,
+    updated_at = excluded.updated_at,
+    updated_by = excluded.updated_by;
+
+  if p_present then
+    update public.players
+    set active = true,
+        updated_at = now()
+    where id = p_player_id
+      and active is distinct from true;
+  end if;
+end;
+$$;
+
+grant execute on function public.profile_matches_player(uuid, uuid) to authenticated;
+grant execute on function public.can_mark_attendance_for_player(uuid) to authenticated;
+grant execute on function public.mark_attendance_from_app(uuid, boolean) to authenticated;
+

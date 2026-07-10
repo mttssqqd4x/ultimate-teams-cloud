@@ -1159,3 +1159,23 @@ Fix:
 - Teammate, Captain, and Admin still see Attendance search
 - added stronger CSS and a small watcher so cached/static layout does not leave the search visible
 - no Supabase SQL changes
+
+
+## 4.11.11 Attendance search removal and Player self-attendance fix
+
+Fixes:
+- removed the static Attendance search row from index.html completely
+- Attendance search is now created dynamically only for roles that can mark other people:
+  - Teammate
+  - Captain
+  - Admin
+- Player and Guest accounts have no Attendance search row to hide, so cached/static layout should not leave it visible
+- fixed Player self-attendance failing with:
+  - `Players can only mark themselves present...`
+- added database RPC `sync_my_profile_player_match(...)`
+- before a Player marks attendance, the app syncs their matched roster player into `profiles.player_id`
+- added Admin Manage Accounts roster-player link dropdown for manual fixing if names do not match
+
+Deployment notes:
+- Run the updated setup_supabase.sql once.
+- No Edge Function redeploy required.
