@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.8";
+const APP_VERSION = "4.11.9";
 
 let db = null;
 let currentUser = null;
@@ -6477,5 +6477,47 @@ async function removePlayer(id){
 
 Object.assign(window, {
   removePlayer
+});
+
+
+
+/* ===== 4.11.9 hide Attendance search for Player accounts ===== */
+
+function updateAttendanceSearchVisibility(){
+  const input = document.getElementById("playerSearch");
+  if(!input) return;
+
+  const shouldHide = isGuest() || isPlayerRole();
+  const wrap = input.closest(".modal-search-row,.search-row,.field,.subbox") || input.parentElement;
+
+  if(wrap){
+    wrap.classList.toggle("attendance-search-hidden", !!shouldHide);
+    wrap.style.display = shouldHide ? "none" : "";
+  }else{
+    input.classList.toggle("attendance-search-hidden", !!shouldHide);
+    input.style.display = shouldHide ? "none" : "";
+  }
+
+  if(shouldHide && input.value){
+    input.value = "";
+  }
+}
+
+const renderPlayersBefore4119 = renderPlayers;
+renderPlayers = function(){
+  renderPlayersBefore4119();
+  updateAttendanceSearchVisibility();
+};
+
+const renderAllBefore4119 = renderAll;
+renderAll = function(){
+  renderAllBefore4119();
+  updateAttendanceSearchVisibility();
+};
+
+Object.assign(window, {
+  updateAttendanceSearchVisibility,
+  renderPlayers,
+  renderAll
 });
 

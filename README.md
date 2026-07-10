@@ -1139,3 +1139,12 @@ Fix:
 Deployment notes:
 - Run the updated setup_supabase.sql once.
 - No Edge Function redeploy required.
+
+
+## 4.11.9 Hide Attendance search for Player accounts
+
+Changes:
+- regular Player accounts no longer see the Attendance search bar
+- Guest view also hides the Attendance search bar
+- Teammates, Captains, and Admins still see Attendance search because they can mark others
+- no Supabase SQL changes
