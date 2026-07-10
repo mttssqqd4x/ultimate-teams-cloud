@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.11";
+const APP_VERSION = "4.11.12";
 
 let db = null;
 let currentUser = null;
@@ -6992,5 +6992,124 @@ Object.assign(window, {
   renderManageAccountsRows,
   saveManagedAccountPlayerLink,
   startAttendanceSearchVisibilityWatcher41111
+});
+
+
+
+/* ===== 4.11.12 restore Present Only filter after Player attendance cleanup ===== */
+
+function toggleShowOnlyAttending(){
+  state.showOnlyAttending = !state.showOnlyAttending;
+  renderPlayers();
+}
+
+function updateAttendanceFilterToggles(){
+  const inactiveBtn = document.getElementById("toggleInactiveBtn");
+  const attendingBtn = document.getElementById("showOnlyAttendingBtn");
+
+  if(inactiveBtn){
+    makeToggleButton(inactiveBtn, !!state.showInactive, "Inactive Players");
+  }
+
+  if(attendingBtn){
+    const hideForPlayer = isPlayerRole && isPlayerRole();
+    attendingBtn.classList.toggle("player-role-hide", !!hideForPlayer);
+    attendingBtn.style.display = hideForPlayer ? "none" : "";
+    if(!hideForPlayer){
+      makeToggleButton(attendingBtn, !!state.showOnlyAttending, "Present Only");
+    }
+  }
+}
+
+function renderPlayers(){
+  ensureAttendanceSearchForCurrentRole();
+
+  const list = document.getElementById("playerList");
+  if(!list) return;
+
+  if(isGuest()){
+    list.innerHTML = '<div class="small">Sign in to mark attendance.</div>';
+    ensureAttendanceSearchForCurrentRole();
+    updateAttendanceFilterToggles?.();
+    return;
+  }
+
+  const search = (document.getElementById("playerSearch")?.value || "").trim().toLowerCase();
+  let players = [...state.players];
+
+  if(isPlayerRole()){
+    const me = currentUserPlayer();
+    if(!me){
+      list.innerHTML = '<div class="notice">Your account is not matched to a roster player yet. Ask an Admin to link your account in Manage Accounts.</div>';
+      removePresentPlayersSection?.();
+      updateAttendanceHeaderCount?.();
+      updateAttendanceFilterToggles?.();
+      ensureAttendanceSearchForCurrentRole();
+      return;
+    }
+    players = [me];
+  }else{
+    players = players
+      .filter(p => canManageGames() ? (state.showInactive || p.active || p.attending) : true)
+      .filter(p => !state.showOnlyAttending || p.attending)
+      .filter(p => !search || p.fullName.toLowerCase().includes(search));
+  }
+
+  players = players.sort(compareAttendancePlayers);
+
+  if(!players.length){
+    list.innerHTML = state.showOnlyAttending
+      ? '<div class="small">No players are currently marked present.</div>'
+      : '<div class="small">No players match that search.</div>';
+    removePresentPlayersSection?.();
+    updateAttendanceHeaderCount?.();
+    updateAttendanceFilterToggles?.();
+    ensureAttendanceSearchForCurrentRole();
+    return;
+  }
+
+  list.innerHTML = "";
+
+  players.forEach(p => {
+    const allowed = canMarkAttendanceForPlayer(p);
+    const row = document.createElement("div");
+    row.className = "player" + (allowed ? " clickable" : "") + (p.attending ? " attend-on" : "") + (canManageGames() && !p.active ? " inactive" : "") + (p.temporary ? " temp" : "");
+    row.onclick = e => {
+      if(e.target.closest("button")) return;
+      if(!allowed){
+        alert(attendancePermissionMessage());
+        return;
+      }
+      toggleAttendance(p.id);
+    };
+
+    const controls = canManageGames()
+      ? `<div class="toggle-wrap">
+          <button class="${injuryButtonClass(p)}" onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">${injuryButtonLabel(p)}</button>
+          ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
+        </div>`
+      : "";
+
+    row.innerHTML = `
+      <div>
+        <div class="player-name">${escapeHtml(p.fullName)}${isCurrentSignedInPlayer(p) ? ' <span class="chip">You</span>' : ""}</div>
+        ${canManageGames() && !p.active ? '<div class="small">Inactive</div>' : ""}
+        ${!allowed ? '<div class="small">Only Teammates, Captains, and Admins can mark others.</div>' : ""}
+      </div>
+      ${controls}
+    `;
+    list.appendChild(row);
+  });
+
+  removePresentPlayersSection?.();
+  updateAttendanceHeaderCount?.();
+  updateAttendanceFilterToggles?.();
+  ensureAttendanceSearchForCurrentRole();
+}
+
+Object.assign(window, {
+  toggleShowOnlyAttending,
+  updateAttendanceFilterToggles,
+  renderPlayers
 });
 

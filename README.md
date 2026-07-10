@@ -1179,3 +1179,13 @@ Fixes:
 Deployment notes:
 - Run the updated setup_supabase.sql once.
 - No Edge Function redeploy required.
+
+
+## 4.11.12 Present Only filter fix
+
+Fix:
+- restored the Present Only attendance filter for Teammate, Captain, and Admin views
+- Present Only now filters the Attendance list to only players marked present
+- Player accounts still do not see Present Only
+- Player accounts still do not see the Attendance search row
+- no Supabase SQL changes
