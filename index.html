@@ -216,6 +216,13 @@
     #attendanceSearchMount:empty{display:none!important}
     .attendance-search-hidden{display:none!important;visibility:hidden!important;height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}
 
+
+    .player.player-self-attendance{padding:18px 16px;border-width:2px;border-color:#22c55e;background:rgba(34,197,94,.12);box-shadow:0 0 0 1px rgba(34,197,94,.22) inset}
+    .player.player-self-attendance .player-name{font-size:18px}
+    .self-attendance-hint{margin-top:6px;font-size:13px;font-weight:700;color:#bbf7d0}
+    .player.player-readonly-present{cursor:default;opacity:.86}
+    .player.player-readonly-present:hover{transform:none}
+
 </style>
 </head>
 <body>
@@ -474,15 +481,8 @@
     <div class="notice" style="margin-top:12px;line-height:1.45">
       <div id="accountEmailLine">Signed in</div>
     </div>
-
-    <div class="subbox" id="selfProfileBox" style="margin-top:12px">
-      <div class="player-name">My player profile</div>
-      <div class="small">View your own attendance/game history and Win/Loss record.</div>
-      <div class="toolbar" style="margin-top:10px">
-        <button id="myProfileBtn" class="btn-secondary" type="button" onclick="openMyProfileModal()">My Profile</button>
-        <button id="myAttendanceHistoryBtn" class="btn-secondary" type="button" onclick="openMyAttendanceHistoryModal()">My Attendance History</button>
-        <button id="myWinLossRecordBtn" class="btn-secondary" type="button" onclick="openMyWinLossRecordModal()">My Win/Loss Record</button>
-      </div>
+    <div class="toolbar" id="accountProfileToolbar" style="margin-top:12px">
+      <button id="myProfileBtn" class="btn-secondary" type="button" onclick="openMyProfileModal()">My Profile</button>
     </div>
 
     <div class="subbox" id="pushNotificationsBox" style="margin-top:12px">

@@ -1205,3 +1205,17 @@ Changes:
 
 Deployment notes:
 - Run the updated setup_supabase.sql once so the attendance RPC uses the corrected active/inactive behavior.
+
+
+## 4.11.14 Player attendance clarity and account popup cleanup
+
+Changes:
+- Player attendance view no longer shows the word "Present" under other present players
+- Player's own row is larger and highlighted
+- Player's own row tells them they can tap it to mark themselves present/out
+- Other present players remain visible but read-only
+- Account popup profile area now only shows the My Profile button
+- Removed My Attendance History and My Win/Loss Record buttons from the Account popup
+- Disabled the captain welcome popup when someone is made a captain
+- Saving a role in Manage Accounts no longer shows a "Role saved" alert popup
+- no Supabase SQL changes

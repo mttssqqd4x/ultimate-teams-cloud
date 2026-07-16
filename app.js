@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.13";
+const APP_VERSION = "4.11.14";
 
 let db = null;
 let currentUser = null;
@@ -7290,5 +7290,155 @@ Object.assign(window, {
   renderAttendancePlayerRow,
   renderPlayers,
   toggleAttendance
+});
+
+
+
+/* ===== 4.11.14 Player attendance clarity + account popup cleanup ===== */
+
+function renderAttendancePlayerRow(p){
+  const allowed = canMarkAttendanceForPlayer(p);
+  const isLinkedSelf = !!(profile?.player_id && String(profile.player_id) === String(p.id));
+  const isSelf = !!(isCurrentSignedInPlayer(p) || isLinkedSelf);
+  const isPlayerSelfRow = !!(isPlayerRole() && allowed && isSelf);
+  const isPlayerReadOnlyPresent = !!(isPlayerRole() && !allowed);
+
+  const row = document.createElement("div");
+  row.className =
+    "player"
+    + (allowed ? " clickable" : "")
+    + (p.attending ? " attend-on" : "")
+    + (canManageGames() && !p.active ? " inactive" : "")
+    + (p.temporary ? " temp" : "")
+    + (isPlayerSelfRow ? " player-self-attendance" : "")
+    + (isPlayerReadOnlyPresent ? " player-readonly-present" : "");
+
+  if(allowed){
+    row.onclick = e => {
+      if(e.target.closest("button")) return;
+      toggleAttendance(p.id);
+    };
+  }
+
+  const controls = canManageGames()
+    ? `<div class="toggle-wrap">
+        <button class="${injuryButtonClass(p)}" onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">${injuryButtonLabel(p)}</button>
+        ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
+      </div>`
+    : "";
+
+  let statusLine = "";
+  if(isPlayerSelfRow){
+    statusLine = `<div class="self-attendance-hint">${p.attending ? "You are marked present. Tap to mark yourself out." : "Tap here to mark yourself present."}</div>`;
+  }else if(canManageGames() && !p.active){
+    statusLine = '<div class="small">Inactive</div>';
+  }
+
+  row.innerHTML = `
+    <div>
+      <div class="player-name">${escapeHtml(p.fullName)}${isSelf ? ' <span class="chip">You</span>' : ""}</div>
+      ${statusLine}
+      ${!isPlayerRole() && !allowed ? '<div class="small">Only Teammates, Captains, and Admins can mark others.</div>' : ""}
+    </div>
+    ${controls}
+  `;
+
+  return row;
+}
+
+function cleanAccountProfileSection(){
+  const oldAttendanceBtn = document.getElementById("myAttendanceHistoryBtn");
+  if(oldAttendanceBtn) oldAttendanceBtn.remove();
+
+  const oldRecordBtn = document.getElementById("myWinLossRecordBtn");
+  if(oldRecordBtn) oldRecordBtn.remove();
+
+  let btn = document.getElementById("myProfileBtn");
+  if(!btn){
+    btn = document.createElement("button");
+    btn.id = "myProfileBtn";
+    btn.className = "btn-secondary";
+    btn.type = "button";
+    btn.onclick = openMyProfileModal;
+    btn.textContent = "My Profile";
+  }
+
+  let box = document.getElementById("selfProfileBox");
+  if(box){
+    box.className = "toolbar";
+    box.id = "accountProfileToolbar";
+    box.style.marginTop = "12px";
+    box.innerHTML = "";
+    box.appendChild(btn);
+  }else{
+    let toolbar = document.getElementById("accountProfileToolbar");
+    if(!toolbar){
+      const emailNotice = document.getElementById("accountEmailLine")?.closest(".notice");
+      toolbar = document.createElement("div");
+      toolbar.id = "accountProfileToolbar";
+      toolbar.className = "toolbar";
+      toolbar.style.marginTop = "12px";
+      if(emailNotice && emailNotice.parentElement){
+        emailNotice.parentElement.insertBefore(toolbar, emailNotice.nextSibling);
+      }
+    }
+    if(toolbar && !toolbar.contains(btn)){
+      toolbar.innerHTML = "";
+      toolbar.appendChild(btn);
+    }
+  }
+}
+
+const openAccountModalBefore41114 = openAccountModal;
+openAccountModal = function(){
+  if(!currentUser){
+    openAccountModalBefore41114();
+    return;
+  }
+  cleanAccountProfileSection();
+  openAccountModalBefore41114();
+  cleanAccountProfileSection();
+};
+
+function showCaptainWelcomeMessage(){
+  // Disabled by request: no popup notification when someone is made a captain.
+}
+
+async function handleRoleMilestones(){
+  if(!currentUser) return;
+
+  if(normalizedRole() === "captain"){
+    const key = `ultimateTeamsCaptainWelcomeShown_${currentUser.id}`;
+    if(!localStorage.getItem(key)){
+      localStorage.setItem(key, "1");
+      // Keep the informational email behavior, but do not show a popup.
+      await sendAppInfoEmail("captain");
+    }
+  }
+}
+
+async function saveManagedAccountRole(profileId){
+  if(!isAdmin()) return;
+  const role = document.getElementById(`role-${profileId}`)?.value || "user";
+  const { error } = await db.from("profiles").update({ role }).eq("id", profileId);
+  if(error){ alert(error.message); return; }
+  const p = (window.__profiles410 || []).find(x => String(x.id) === String(profileId));
+  if(p) p.role = role;
+  renderManageAccountsRows();
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", cleanAccountProfileSection);
+}else{
+  cleanAccountProfileSection();
+}
+
+Object.assign(window, {
+  renderAttendancePlayerRow,
+  cleanAccountProfileSection,
+  openAccountModal,
+  showCaptainWelcomeMessage,
+  handleRoleMilestones,
+  saveManagedAccountRole
 });
 
