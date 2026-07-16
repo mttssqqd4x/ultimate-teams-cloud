@@ -1219,3 +1219,15 @@ Changes:
 - Disabled the captain welcome popup when someone is made a captain
 - Saving a role in Manage Accounts no longer shows a "Role saved" alert popup
 - no Supabase SQL changes
+
+
+## 4.11.15 Account popup cleanup and player attendance row polish
+
+Changes:
+- removed the special green highlight from the Player's own attendance row when they are not present
+- the Player's own row still gives tap guidance, but present/not-present state is easier to tell apart
+- Account popup cleanup is now stronger:
+  - removes the old My Profile section completely
+  - removes My Attendance History and My Win/Loss Record buttons
+  - leaves only a full-width My Profile button
+- no Supabase SQL changes

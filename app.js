@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.14";
+const APP_VERSION = "4.11.15";
 
 let db = null;
 let currentUser = null;
@@ -7440,5 +7440,156 @@ Object.assign(window, {
   showCaptainWelcomeMessage,
   handleRoleMilestones,
   saveManagedAccountRole
+});
+
+
+
+/* ===== 4.11.15 remove self-row highlight + fully clean Account popup ===== */
+
+function renderAttendancePlayerRow(p){
+  const allowed = canMarkAttendanceForPlayer(p);
+  const isLinkedSelf = !!(profile?.player_id && String(profile.player_id) === String(p.id));
+  const isSelf = !!(isCurrentSignedInPlayer(p) || isLinkedSelf);
+  const isPlayerSelfRow = !!(isPlayerRole() && allowed && isSelf);
+  const isPlayerReadOnlyPresent = !!(isPlayerRole() && !allowed);
+
+  const row = document.createElement("div");
+  row.className =
+    "player"
+    + (allowed ? " clickable" : "")
+    + (p.attending ? " attend-on" : "")
+    + (canManageGames() && !p.active ? " inactive" : "")
+    + (p.temporary ? " temp" : "")
+    + (isPlayerSelfRow ? " player-self-attendance" : "")
+    + (isPlayerReadOnlyPresent ? " player-readonly-present" : "");
+
+  if(allowed){
+    row.onclick = e => {
+      if(e.target.closest("button")) return;
+      toggleAttendance(p.id);
+    };
+  }
+
+  const controls = canManageGames()
+    ? `<div class="toggle-wrap">
+        <button class="${injuryButtonClass(p)}" onclick="event.stopPropagation(); setInjuryPrompt('${p.id}')">${injuryButtonLabel(p)}</button>
+        ${p.temporary ? `<button class="btn-danger" onclick="event.stopPropagation(); removePlayer('${p.id}')">Remove</button>` : ""}
+      </div>`
+    : "";
+
+  let statusLine = "";
+  if(isPlayerSelfRow){
+    statusLine = `<div class="self-attendance-hint">${p.attending ? "You are marked present. Tap to mark yourself out." : "Tap your name to mark yourself present."}</div>`;
+  }else if(canManageGames() && !p.active){
+    statusLine = '<div class="small">Inactive</div>';
+  }
+
+  row.innerHTML = `
+    <div>
+      <div class="player-name">${escapeHtml(p.fullName)}${isSelf ? ' <span class="chip">You</span>' : ""}</div>
+      ${statusLine}
+      ${!isPlayerRole() && !allowed ? '<div class="small">Only Teammates, Captains, and Admins can mark others.</div>' : ""}
+    </div>
+    ${controls}
+  `;
+
+  return row;
+}
+
+function removeLegacyAccountProfileSections41115(root = document){
+  // Remove the old descriptive My Profile section and the two extra buttons wherever they appear.
+  root.querySelectorAll("#selfProfileBox").forEach(el => el.remove());
+  root.querySelectorAll("#myAttendanceHistoryBtn, #myWinLossRecordBtn").forEach(el => {
+    const toolbar = el.closest(".toolbar");
+    el.remove();
+    if(toolbar && !toolbar.querySelector("#myProfileBtn") && toolbar.children.length === 0){
+      toolbar.remove();
+    }
+  });
+
+  // Remove any old box that contains the "My player profile" label.
+  root.querySelectorAll(".subbox, .history-card, div").forEach(el => {
+    if(el.id === "accountProfileToolbar") return;
+    const text = (el.textContent || "").trim();
+    if(text.includes("My player profile") || text.includes("View your own attendance/game history")){
+      el.remove();
+    }
+  });
+}
+
+function ensureFullWidthMyProfileButton41115(root = document){
+  if(!currentUser) return;
+
+  removeLegacyAccountProfileSections41115(root);
+
+  const modal =
+    document.getElementById("accountModal")
+    || Array.from(document.querySelectorAll(".modal,.modal-card,.popup,.card")).find(el => (el.textContent || "").includes("Account"))
+    || document;
+
+  let toolbar = document.getElementById("accountProfileToolbar");
+  if(!toolbar){
+    toolbar = document.createElement("div");
+    toolbar.id = "accountProfileToolbar";
+    toolbar.style.width = "100%";
+    toolbar.style.marginTop = "12px";
+
+    const insertAfter =
+      document.getElementById("accountEmailLine")?.closest(".notice")
+      || modal.querySelector(".notice")
+      || modal.querySelector("h2,h3")
+      || modal.firstElementChild;
+
+    if(insertAfter && insertAfter.parentElement){
+      insertAfter.parentElement.insertBefore(toolbar, insertAfter.nextSibling);
+    }else{
+      modal.appendChild(toolbar);
+    }
+  }
+
+  toolbar.className = "";
+  toolbar.style.width = "100%";
+  toolbar.style.display = "block";
+  toolbar.style.marginTop = "12px";
+
+  toolbar.innerHTML = `
+    <button id="myProfileBtn" class="btn-secondary" type="button" style="width:100%;display:block" onclick="openMyProfileModal()">My Profile</button>
+  `;
+}
+
+const openAccountModalBefore41115 = openAccountModal;
+openAccountModal = function(){
+  openAccountModalBefore41115();
+  setTimeout(() => ensureFullWidthMyProfileButton41115(), 0);
+  setTimeout(() => ensureFullWidthMyProfileButton41115(), 50);
+  setTimeout(() => ensureFullWidthMyProfileButton41115(), 250);
+};
+
+function startAccountPopupCleaner41115(){
+  ensureFullWidthMyProfileButton41115();
+  if(window.__accountCleanerObserver41115) return;
+  if(!document.body) return;
+  window.__accountCleanerObserver41115 = new MutationObserver(() => {
+    const hasOldButtons = document.getElementById("myAttendanceHistoryBtn") || document.getElementById("myWinLossRecordBtn") || document.getElementById("selfProfileBox");
+    const hasAccountText = document.body.textContent && (document.body.textContent.includes("My player profile") || document.body.textContent.includes("View your own attendance/game history"));
+    if(hasOldButtons || hasAccountText){
+      ensureFullWidthMyProfileButton41115();
+    }
+  });
+  window.__accountCleanerObserver41115.observe(document.body, { childList:true, subtree:true });
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", startAccountPopupCleaner41115);
+}else{
+  startAccountPopupCleaner41115();
+}
+
+Object.assign(window, {
+  renderAttendancePlayerRow,
+  removeLegacyAccountProfileSections41115,
+  ensureFullWidthMyProfileButton41115,
+  openAccountModal,
+  startAccountPopupCleaner41115
 });
 
