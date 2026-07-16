@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.15";
+const APP_VERSION = "4.11.16";
 
 let db = null;
 let currentUser = null;
@@ -873,27 +873,6 @@ function ensureV490FeatureUi(){
     const clearBtn = document.getElementById("clearTeamsBtn");
     if(clearBtn) saveWrap.insertBefore(btn, clearBtn);
     else saveWrap.appendChild(btn);
-  }
-
-  const accountModal = document.getElementById("accountModal");
-  if(accountModal && !document.getElementById("selfProfileBox")){
-    const modalCard = accountModal.querySelector(".modal-card");
-    const pushBox = document.getElementById("pushNotificationsBox");
-    if(modalCard){
-      const box = document.createElement("div");
-      box.className = "subbox";
-      box.id = "selfProfileBox";
-      box.style.marginTop = "12px";
-      box.innerHTML = `
-        <div class="player-name">My player profile</div>
-        <div class="small">View your own attendance/game history and Win/Loss record.</div>
-        <div class="toolbar" style="margin-top:10px">
-          <button id="myAttendanceHistoryBtn" class="btn-secondary" type="button" onclick="openMyAttendanceHistoryModal()">My Attendance History</button>
-          <button id="myWinLossRecordBtn" class="btn-secondary" type="button" onclick="openMyWinLossRecordModal()">My Win/Loss Record</button>
-        </div>`;
-      if(pushBox && pushBox.parentElement === modalCard) modalCard.insertBefore(box, pushBox);
-      else modalCard.appendChild(box);
-    }
   }
 }
 
@@ -3620,18 +3599,6 @@ function ensureV410FeatureUi(){
     };
     addTool("archiveSeasonBtn", "Archive Season", "btn-secondary admin-only", openArchiveSeasonModal);
     addTool("manageAccountsBtn", "Manage Accounts", "btn-secondary admin-only", openManageAccountsModal);
-  }
-
-  const selfBox = document.getElementById("selfProfileBox");
-  if(selfBox && !document.getElementById("myProfileBtn")){
-    const toolbar = selfBox.querySelector(".toolbar") || selfBox;
-    const b = document.createElement("button");
-    b.id = "myProfileBtn";
-    b.className = "btn-secondary";
-    b.type = "button";
-    b.textContent = "My Profile";
-    b.onclick = openMyProfileModal;
-    toolbar.insertBefore(b, toolbar.firstChild);
   }
 
   const attendanceControls = document.querySelector("#attendanceCard .grid.grid-2");
@@ -7591,5 +7558,152 @@ Object.assign(window, {
   ensureFullWidthMyProfileButton41115,
   openAccountModal,
   startAccountPopupCleaner41115
+});
+
+
+
+/* ===== 4.11.16 remove old Account My Profile section at source ===== */
+
+function purgeOldAccountProfileUi41116(){
+  const accountModal = document.getElementById("accountModal");
+  if(!accountModal) return;
+
+  accountModal.querySelectorAll("#selfProfileBox").forEach(el => el.remove());
+  accountModal.querySelectorAll("#myAttendanceHistoryBtn, #myWinLossRecordBtn").forEach(el => {
+    const parent = el.parentElement;
+    el.remove();
+    if(parent && parent.id !== "accountProfileToolbar" && parent.classList.contains("toolbar") && !parent.children.length){
+      parent.remove();
+    }
+  });
+
+  accountModal.querySelectorAll(".subbox").forEach(el => {
+    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if(text.includes("My player profile") || text.includes("View your own attendance/game history")){
+      el.remove();
+    }
+  });
+
+  Array.from(accountModal.querySelectorAll("div")).forEach(el => {
+    if(el.id === "accountModal" || el.classList.contains("modal-card") || el.id === "accountProfileToolbar" || el.id === "pushNotificationsBox") return;
+    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if(text && text.includes("My player profile")){
+      el.remove();
+    }
+  });
+}
+
+function ensureAccountHasOnlyFullWidthMyProfile41116(){
+  const accountModal = document.getElementById("accountModal");
+  if(!accountModal || !currentUser) return;
+
+  purgeOldAccountProfileUi41116();
+
+  const card = accountModal.querySelector(".modal-card") || accountModal;
+  const pushBox = document.getElementById("pushNotificationsBox");
+  const notice = document.getElementById("accountEmailLine")?.closest(".notice");
+
+  const toolbars = Array.from(accountModal.querySelectorAll("#accountProfileToolbar"));
+  toolbars.slice(1).forEach(el => el.remove());
+
+  let toolbar = toolbars[0];
+  if(!toolbar){
+    toolbar = document.createElement("div");
+    toolbar.id = "accountProfileToolbar";
+    if(pushBox && pushBox.parentElement === card){
+      card.insertBefore(toolbar, pushBox);
+    }else if(notice && notice.parentElement === card){
+      card.insertBefore(toolbar, notice.nextSibling);
+    }else{
+      card.appendChild(toolbar);
+    }
+  }else if(pushBox && pushBox.parentElement === card && toolbar.nextElementSibling !== pushBox){
+    card.insertBefore(toolbar, pushBox);
+  }
+
+  toolbar.className = "";
+  toolbar.style.cssText = "width:100%;display:block;margin-top:12px";
+  toolbar.innerHTML = '<button id="myProfileBtn" class="btn-secondary" type="button" style="width:100%;display:block" onclick="openMyProfileModal()">My Profile</button>';
+}
+
+if(typeof ensureV490FeatureUi === "function" && !window.__ensureV490FeatureUiWrapped41116){
+  const ensureV490FeatureUiBefore41116 = ensureV490FeatureUi;
+  ensureV490FeatureUi = function(){
+    ensureV490FeatureUiBefore41116();
+    purgeOldAccountProfileUi41116();
+    ensureAccountHasOnlyFullWidthMyProfile41116();
+  };
+  window.__ensureV490FeatureUiWrapped41116 = true;
+}
+
+if(typeof ensureV410FeatureUi === "function" && !window.__ensureV410FeatureUiWrapped41116){
+  const ensureV410FeatureUiBefore41116 = ensureV410FeatureUi;
+  ensureV410FeatureUi = function(){
+    ensureV410FeatureUiBefore41116();
+    purgeOldAccountProfileUi41116();
+    ensureAccountHasOnlyFullWidthMyProfile41116();
+  };
+  window.__ensureV410FeatureUiWrapped41116 = true;
+}
+
+function openAccountModal(){
+  if(!currentUser){
+    toggleSignInBox();
+    return;
+  }
+
+  const emailLine = document.getElementById("accountEmailLine");
+  if(emailLine) emailLine.textContent = `Signed in as ${currentUser.email || profile?.email || "user"}`;
+
+  purgeOldAccountProfileUi41116();
+  ensureAccountHasOnlyFullWidthMyProfile41116();
+
+  showModal("accountModal");
+
+  purgeOldAccountProfileUi41116();
+  ensureAccountHasOnlyFullWidthMyProfile41116();
+  updateNotificationUi();
+
+  [0, 50, 150, 400, 1000].forEach(ms => setTimeout(() => {
+    purgeOldAccountProfileUi41116();
+    ensureAccountHasOnlyFullWidthMyProfile41116();
+  }, ms));
+}
+
+function startAccountPopupCleaner41116(){
+  purgeOldAccountProfileUi41116();
+  ensureAccountHasOnlyFullWidthMyProfile41116();
+
+  if(window.__accountCleanerObserver41116 || !document.body) return;
+  window.__accountCleanerObserver41116 = new MutationObserver(() => {
+    const accountModal = document.getElementById("accountModal");
+    if(!accountModal) return;
+
+    const badUi =
+      accountModal.querySelector("#selfProfileBox")
+      || accountModal.querySelector("#myAttendanceHistoryBtn")
+      || accountModal.querySelector("#myWinLossRecordBtn")
+      || (accountModal.textContent || "").includes("My player profile")
+      || (accountModal.textContent || "").includes("View your own attendance/game history");
+
+    if(badUi){
+      purgeOldAccountProfileUi41116();
+      ensureAccountHasOnlyFullWidthMyProfile41116();
+    }
+  });
+  window.__accountCleanerObserver41116.observe(document.body, { childList:true, subtree:true });
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", startAccountPopupCleaner41116);
+}else{
+  startAccountPopupCleaner41116();
+}
+
+Object.assign(window, {
+  purgeOldAccountProfileUi41116,
+  ensureAccountHasOnlyFullWidthMyProfile41116,
+  openAccountModal,
+  startAccountPopupCleaner41116
 });
 

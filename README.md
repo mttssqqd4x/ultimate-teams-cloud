@@ -1231,3 +1231,14 @@ Changes:
   - removes My Attendance History and My Win/Loss Record buttons
   - leaves only a full-width My Profile button
 - no Supabase SQL changes
+
+
+## 4.11.16 Account My Profile section removal fix
+
+Fix:
+- removed the old Account popup My Profile section injector from app.js at the source
+- removed the older fallback that inserted the My Profile button into `selfProfileBox`
+- Account popup now keeps only one full-width My Profile button
+- My Attendance History and My Win/Loss Record are removed from Account popup
+- added a final cleanup wrapper around older feature UI fallbacks so the old section cannot be recreated
+- no Supabase SQL changes
