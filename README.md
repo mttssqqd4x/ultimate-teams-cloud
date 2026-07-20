@@ -1242,3 +1242,20 @@ Fix:
 - My Attendance History and My Win/Loss Record are removed from Account popup
 - added a final cleanup wrapper around older feature UI fallbacks so the old section cannot be recreated
 - no Supabase SQL changes
+
+
+## 4.11.17 Linked profiles, local Teammate generation, counts, and flexible team sizes
+
+Changes:
+- manually linked accounts now use `profiles.player_id` everywhere
+- My Profile refreshes its profile link before opening
+- linked roster player sorts to the top of Attendance for Player, Teammate, Captain, and Admin
+- profile changes refresh through realtime, focus/visibility checks, and a periodic safeguard
+- Captain/Admin Current Game headers now show player count along with team rating
+- Teammates can generate teams
+- Teammate-generated games are local to that account/browser and expire at the end of the local calendar day
+- Teammate generation never saves game results or global teammate pairings
+- a newer Captain/Admin cloud game overwrites and removes an older local Teammate game
+- optimizer may move a player without a swap, with a maximum team-count spread of two
+- Manage Accounts now explicitly shows the name entered when the account was created
+- no Supabase SQL changes

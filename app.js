@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.16";
+const APP_VERSION = "4.11.17";
 
 let db = null;
 let currentUser = null;
@@ -7705,5 +7705,567 @@ Object.assign(window, {
   ensureAccountHasOnlyFullWidthMyProfile41116,
   openAccountModal,
   startAccountPopupCleaner41116
+});
+
+
+
+/* ===== 4.11.17 linked profiles + local Teammate generation + flexible team sizes ===== */
+
+function linkedRosterPlayer(){
+  if(!currentUser || !profile?.player_id) return null;
+  return playerById(profile.player_id) || null;
+}
+
+function currentUserPlayer(){
+  return linkedRosterPlayer() || state.players.find(p => isCurrentSignedInPlayer(p)) || null;
+}
+
+function currentSignedInPlayer(){
+  return currentUserPlayer();
+}
+
+function isCurrentSignedInPlayer(p){
+  if(!currentUser || !p) return false;
+
+  if(profile?.player_id && String(profile.player_id) === String(p.id)){
+    return true;
+  }
+
+  const userName = currentUserFullNameForMatch();
+  const playerName = normalizeNameForMatch(p.fullName || `${p.firstName || ""} ${p.lastName || ""}`.trim());
+  if(userName && playerName && userName === playerName) return true;
+
+  const meta = currentUser.user_metadata || {};
+  const userFirst = normalizeNameForMatch(profile?.first_name || meta.first_name);
+  const userLast = normalizeNameForMatch(profile?.last_name || meta.last_name);
+  const playerFirst = normalizeNameForMatch(p.firstName);
+  const playerLast = normalizeNameForMatch(p.lastName);
+
+  return !!(userFirst && userLast && userFirst === playerFirst && userLast === playerLast);
+}
+
+function compareAttendancePlayers(a, b){
+  const linkedId = profile?.player_id ? String(profile.player_id) : "";
+  const aMe = linkedId ? String(a.id) === linkedId : isCurrentSignedInPlayer(a);
+  const bMe = linkedId ? String(b.id) === linkedId : isCurrentSignedInPlayer(b);
+
+  if(aMe && !bMe) return -1;
+  if(!aMe && bMe) return 1;
+  return comparePlayersByLastName(a, b);
+}
+
+async function refreshSignedInProfile41117(){
+  if(!currentUser || !db) return null;
+  const { data, error } = await db.from("profiles").select("*").eq("id", currentUser.id).maybeSingle();
+  if(error){
+    console.warn("Could not refresh signed-in profile", error);
+    return null;
+  }
+  if(data){
+    profile = data;
+    updateAuthButtons?.();
+  }
+  return data || null;
+}
+
+const loadCloudDataBefore41117 = loadCloudData;
+loadCloudData = async function(){
+  const result = await loadCloudDataBefore41117();
+  if(currentUser){
+    await refreshSignedInProfile41117();
+  }
+  applyLocalTeammateGame41117();
+  return result;
+};
+
+const scheduleLiveRefreshBefore41117 = scheduleLiveRefresh;
+scheduleLiveRefresh = function(){
+  if(liveRefreshTimer) clearTimeout(liveRefreshTimer);
+  liveRefreshTimer = setTimeout(async () => {
+    try{
+      await refreshSignedInProfile41117();
+      await loadCloudDataBefore41117();
+      applyLocalTeammateGame41117();
+      renderAll();
+    }catch(e){
+      console.warn("Live refresh failed", e);
+    }
+  }, 150);
+};
+
+function canGenerateTeams(){
+  return isAdmin() || isCaptain() || isTeammate();
+}
+
+function canSaveGameResults41117(){
+  return isAdmin() || isCaptain();
+}
+
+function teammateLocalGameKey41117(){
+  return currentUser ? `ultimateTeamsLocalGame41117:${currentUser.id}` : "";
+}
+
+function localDayKey41117(value = new Date()){
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+function clearLocalTeammateGame41117(){
+  const key = teammateLocalGameKey41117();
+  if(key) localStorage.removeItem(key);
+}
+
+function saveLocalTeammateGame41117(){
+  if(!isTeammate() || !state.currentGame || !currentUser) return;
+  const payload = {
+    ownerUserId: currentUser.id,
+    day: localDayKey41117(),
+    generatedAt: state.currentGameGeneratedAt || new Date().toISOString(),
+    teams: serializableTeams()
+  };
+  localStorage.setItem(teammateLocalGameKey41117(), JSON.stringify(payload));
+}
+
+function readLocalTeammateGame41117(){
+  if(!isTeammate() || !currentUser) return null;
+  const key = teammateLocalGameKey41117();
+  if(!key) return null;
+
+  try{
+    const local = JSON.parse(localStorage.getItem(key) || "null");
+    if(!local || local.ownerUserId !== currentUser.id || local.day !== localDayKey41117()){
+      localStorage.removeItem(key);
+      return null;
+    }
+    return local;
+  }catch(e){
+    localStorage.removeItem(key);
+    return null;
+  }
+}
+
+function applyLocalTeammateGame41117(){
+  if(!isTeammate()) return;
+
+  const local = readLocalTeammateGame41117();
+  if(!local) return;
+
+  const localTime = new Date(local.generatedAt || 0).getTime() || 0;
+  const cloudTime = new Date(state.currentGameGeneratedAt || 0).getTime() || 0;
+
+  // A Captain/Admin-generated cloud game always wins if it is newer.
+  if(cloudTime > localTime){
+    clearLocalTeammateGame41117();
+    return;
+  }
+
+  if(Array.isArray(local.teams) && local.teams.length){
+    state.currentGame = hydrateGame(local.teams);
+    state.currentGameGeneratedAt = local.generatedAt;
+    state.selectedWinnerIndex = null;
+    state.resultsSavedForCurrentGame = false;
+    state.currentGameIsLocalTeammate41117 = true;
+  }
+}
+
+function maxAllowedTeamCountSpread41117(playerCount, numTeams){
+  // Allow limited unequal sizes. A spread of 2 means one team may have one fewer
+  // player than another after a single move. This is the practical limit for
+  // handling an unusually strong player without creating extreme mismatches.
+  return 2;
+}
+
+function teamCountSpread41117(teams){
+  const counts = teams.map(t => t.length);
+  return Math.max(...counts) - Math.min(...counts);
+}
+
+function optimizeTeams(initial, repeatWeight = state.settings.repeatWeight){
+  let best = cloneTeams(initial);
+  let bestScore = scoreTeams(best, repeatWeight);
+  let improved = true;
+  let passes = 0;
+  const playerCount = best.reduce((n, team) => n + team.length, 0);
+  const maxSpread = maxAllowedTeamCountSpread41117(playerCount, best.length);
+
+  while(improved && passes < 300){
+    improved = false;
+    passes++;
+
+    // Existing swap optimization.
+    for(let a = 0; a < best.length; a++){
+      for(let b = a + 1; b < best.length; b++){
+        for(let i = 0; i < best[a].length; i++){
+          for(let j = 0; j < best[b].length; j++){
+            const candidate = cloneTeams(best);
+            [candidate[a][i], candidate[b][j]] = [candidate[b][j], candidate[a][i]];
+            const score = scoreTeams(candidate, repeatWeight);
+            if(score < bestScore){
+              best = candidate;
+              bestScore = score;
+              improved = true;
+            }
+          }
+        }
+      }
+    }
+
+    // Also allow a player to move without a swap, within the limited size spread.
+    for(let from = 0; from < best.length; from++){
+      if(best[from].length <= 1) continue;
+      for(let to = 0; to < best.length; to++){
+        if(from === to) continue;
+        for(let i = 0; i < best[from].length; i++){
+          const candidate = cloneTeams(best);
+          const [moved] = candidate[from].splice(i, 1);
+          candidate[to].push(moved);
+
+          if(teamCountSpread41117(candidate) > maxSpread) continue;
+
+          const score = scoreTeams(candidate, repeatWeight);
+          if(score < bestScore){
+            best = candidate;
+            bestScore = score;
+            improved = true;
+          }
+        }
+      }
+    }
+  }
+
+  return { teams: best, score: bestScore };
+}
+
+async function generateGame(sendPushNotification = false){
+  if(!canGenerateTeams()){
+    alert("Only Teammates, Captains, and Admins can generate teams.");
+    return;
+  }
+
+  await refreshSignedInProfile41117();
+  await loadCloudDataBefore41117();
+
+  const players = presentPlayers();
+  const numTeams = Math.max(2, Number(document.getElementById("numTeams")?.value || 2));
+
+  if(players.length < numTeams){
+    alert("Not enough attending players for that many teams.");
+    return;
+  }
+
+  let best = null;
+  for(let i = 0; i < 60; i++){
+    const candidate = optimizeTeams(makeInitialTeams(players, numTeams), Number(state.settings.repeatWeight || 4));
+    if(!best || candidate.score < best.score) best = candidate;
+  }
+
+  state.currentGameGeneratedAt = new Date().toISOString();
+  state.currentGame = { teams: best.teams };
+  state.selectedWinnerIndex = null;
+  state.resultsSavedForCurrentGame = false;
+
+  if(isTeammate()){
+    state.currentGameIsLocalTeammate41117 = true;
+    saveLocalTeammateGame41117();
+  }else{
+    state.currentGameIsLocalTeammate41117 = false;
+    // Captain/Admin cloud generation supersedes any local Teammate game on this device.
+    clearLocalTeammateGame41117();
+    await saveCurrentGameToDb(false);
+    if(sendPushNotification) await sendTeamGeneratedNotification();
+  }
+
+  renderAll();
+  updateTeamsDetailsOpenState();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function generateTeamsButton(){
+  if(!canGenerateTeams()){
+    alert("Only Teammates, Captains, and Admins can generate teams.");
+    return;
+  }
+
+  try{
+    if(isTeammate()){
+      // Teammate games are entirely local. Replacing one never saves global pairings.
+      await withLoading("Generating local teams...", async () => {
+        await generateGame(false);
+      });
+      return;
+    }
+
+    if(state.currentGame && !state.resultsSavedForCurrentGame){
+      const continueWithoutResults = await confirmContinueWithoutResults();
+      if(!continueWithoutResults) return;
+
+      await withLoading("Saving current pairings...", async () => {
+        await savePairingsOnlyForCurrentGame();
+      });
+    }
+
+    const sendPush = await askAdminWhetherToSendTeamNotification();
+
+    await withLoading("Generating teams...", async () => {
+      await generateGame(sendPush);
+    });
+  }catch(e){
+    clearLoading();
+    console.error("Generate teams failed", e);
+    alert("Generate teams failed: " + (e?.message || e));
+  }
+}
+
+function renderTeams(){
+  updateGameStartTime();
+  const out = document.getElementById("teamsOutput");
+  const resultMessage = document.getElementById("resultMessage");
+  if(resultMessage) resultMessage.textContent = "";
+  if(!out) return;
+
+  if(!state.currentGame){
+    out.innerHTML = '<div class="small">No game generated yet.</div>';
+    return;
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "grid grid-3";
+
+  state.currentGame.teams.forEach((team, idx) => {
+    const stats = teamStats(team);
+    const box = document.createElement("div");
+    let cls = "teambox";
+    if(canManageGames()) cls += " team-clickable";
+    if(state.selectedWinnerIndex !== null) cls += idx === state.selectedWinnerIndex ? " team-win" : " team-loss";
+    box.className = cls;
+    if(canManageGames()) box.onclick = () => selectWinner(idx);
+
+    const teamMeta = canManageGames()
+      ? `<span class="small">${team.length} players · ${stats.overall.toFixed(2)}</span>`
+      : `<span class="small">${team.length} players</span>`;
+
+    const ratings = canManageGames()
+      ? `<div class="small">H ${stats.handling.toFixed(1)} · C ${stats.cutting.toFixed(1)} · D ${stats.defense.toFixed(1)}</div>`
+      : "";
+
+    const rows = team.map(p => canManageGames()
+      ? `<div class="row" style="justify-content:space-between"><span>${escapeHtml(p.fullName)}</span><span class="small">${overall(p).toFixed(2)}</span></div>`
+      : `<div class="row" style="justify-content:space-between"><span>${escapeHtml(p.fullName)}</span></div>`
+    ).join("");
+
+    box.innerHTML = `<div class="teamhead"><strong>Team ${idx + 1}</strong>${teamMeta}</div>${ratings}<div class="hr"></div>${rows}`;
+    wrap.appendChild(box);
+  });
+
+  out.innerHTML = "";
+  out.appendChild(wrap);
+}
+
+async function openMyProfileModal(){
+  if(!currentUser){ alert("Sign in first."); return; }
+
+  await refreshSignedInProfile41117();
+  await loadCloudDataBefore41117();
+
+  const me = currentUserPlayer();
+  if(!me){
+    makeDynamicModal("myProfileModal", "My Profile", '<div class="notice">This account is not linked to a roster player. Ask an Admin to link it in Manage Accounts.</div>');
+    return;
+  }
+
+  const { data, error } = await db.from("teammate_history")
+    .select("*")
+    .or(`player_a.eq.${me.id},player_b.eq.${me.id}`)
+    .order("count", { ascending:false })
+    .limit(10);
+
+  const top = error ? [] : teammateRowsForPlayer(me.id, data || []);
+  const topHtml = top.length
+    ? top.map(r => `<div class="history-card"><div class="row" style="justify-content:space-between"><div>${escapeHtml(r.other)}</div><strong>${r.count}</strong></div></div>`).join("")
+    : '<div class="small">No teammate history yet.</div>';
+
+  const pct = me.gamesPlayed ? ((me.wins / me.gamesPlayed) * 100).toFixed(1) + "%" : "0.0%";
+  const body = `
+    <div class="notice">Linked roster player: ${escapeHtml(me.fullName)}</div>
+    <div class="profile-stat-grid">
+      <div class="profile-stat"><strong>${me.gamesPlayed}</strong><span class="small">Games</span></div>
+      <div class="profile-stat"><strong>${me.wins}-${me.losses}</strong><span class="small">Record</span></div>
+      <div class="profile-stat"><strong>${pct}</strong><span class="small">Win %</span></div>
+    </div>
+    <div class="hr"></div>
+    <h3 style="margin:0 0 8px">Most common teammates</h3>
+    <div class="mini-table">${topHtml}</div>`;
+
+  makeDynamicModal("myProfileModal", "My Profile", body);
+}
+
+function accountEnteredName41117(p){
+  return String(
+    p?.full_name
+    || `${p?.first_name || ""} ${p?.last_name || ""}`.trim()
+    || p?.email
+    || ""
+  ).trim();
+}
+
+function renderManageAccountsRows(){
+  const out = document.getElementById("manageAccountsRows");
+  if(!out) return;
+
+  const q = (document.getElementById("accountSearch")?.value || "").toLowerCase();
+  const rows = (window.__profiles410 || []).filter(p => !q || JSON.stringify(p).toLowerCase().includes(q));
+
+  const playerOptions = selectedId => [
+    '<option value="">No linked player</option>',
+    ...state.players.slice().sort(comparePlayersByLastName).map(pl =>
+      `<option value="${escapeHtml(String(pl.id))}" ${String(selectedId || "") === String(pl.id) ? "selected" : ""}>${escapeHtml(pl.fullName)}</option>`
+    )
+  ].join("");
+
+  out.innerHTML = rows.length ? rows.map(p => {
+    const enteredName = accountEnteredName41117(p);
+    const linked = p.player_id ? playerById(p.player_id) : null;
+    const current = roleValueForDatabase(p.role || "user");
+
+    return `<div class="history-card">
+      <div class="player-name">${escapeHtml(p.email || enteredName || p.id)}</div>
+      <div class="small"><strong>Account name entered:</strong> ${escapeHtml(enteredName || "No name entered")}</div>
+      <div class="small"><strong>Linked roster player:</strong> ${escapeHtml(linked?.fullName || "No linked player")}</div>
+      <div class="small"><strong>Role:</strong> ${escapeHtml(roleLabel(current))}</div>
+
+      <div class="grid grid-2" style="margin-top:8px">
+        <div>
+          <label>Role</label>
+          <select id="role-${escapeHtml(String(p.id))}">
+            <option value="user" ${current === "user" ? "selected" : ""}>Player</option>
+            <option value="teammate" ${current === "teammate" ? "selected" : ""}>Teammate</option>
+            <option value="captain" ${current === "captain" ? "selected" : ""}>Captain</option>
+            <option value="admin" ${current === "admin" ? "selected" : ""}>Admin</option>
+          </select>
+        </div>
+        <div>
+          <label>Linked Roster Player</label>
+          <select id="playerlink-${escapeHtml(String(p.id))}">
+            ${playerOptions(p.player_id || "")}
+          </select>
+        </div>
+      </div>
+
+      <div class="toolbar" style="margin-top:8px">
+        <button class="btn-secondary" type="button" onclick="saveManagedAccountRole('${escapeHtml(String(p.id))}')">Save Role</button>
+        <button class="btn-secondary" type="button" onclick="saveManagedAccountPlayerLink('${escapeHtml(String(p.id))}')">Save Player Link</button>
+      </div>
+
+      <div class="small" style="margin-top:6px">
+        Player: linked self only · Teammate: local team generation · Captain: team tools · Admin: full control
+      </div>
+    </div>`;
+  }).join("") : '<div class="small">No accounts found.</div>';
+}
+
+async function saveManagedAccountPlayerLink(profileId){
+  if(!isAdmin()) return;
+
+  const playerId = document.getElementById(`playerlink-${profileId}`)?.value || null;
+  const { data, error } = await db.from("profiles")
+    .update({ player_id: playerId || null })
+    .eq("id", profileId)
+    .select("*")
+    .maybeSingle();
+
+  if(error){
+    alert("Could not save player link: " + error.message);
+    return;
+  }
+
+  const p = (window.__profiles410 || []).find(x => String(x.id) === String(profileId));
+  if(p){
+    if(data) Object.assign(p, data);
+    else p.player_id = playerId || null;
+  }
+
+  // If an admin is linking their own account, update immediately.
+  if(currentUser && String(profileId) === String(currentUser.id)){
+    if(data) profile = data;
+    else profile = { ...(profile || {}), player_id: playerId || null };
+    await loadCloudDataBefore41117();
+    renderAll();
+  }
+
+  renderManageAccountsRows();
+}
+
+function subscribeToProfileUpdates(){
+  if(!db) return;
+  unsubscribeFromProfileUpdates();
+  if(!currentUser) return;
+
+  profileChannel = db
+    .channel(`profile-live-${currentUser.id}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "profiles", filter: `id=eq.${currentUser.id}` },
+      async payload => {
+        await refreshSignedInProfile41117();
+        await loadCloudDataBefore41117();
+        applyLocalTeammateGame41117();
+        updateAuthButtons();
+        renderAll();
+        await handleRoleMilestones();
+      }
+    )
+    .subscribe(status => console.log("Profile live updates:", status));
+}
+
+function startProfileRefreshSafeguards41117(){
+  const refresh = async () => {
+    if(!currentUser) return;
+    const before = String(profile?.player_id || "");
+    await refreshSignedInProfile41117();
+    const after = String(profile?.player_id || "");
+    if(before !== after){
+      await loadCloudDataBefore41117();
+      applyLocalTeammateGame41117();
+      renderAll();
+    }
+  };
+
+  window.addEventListener("focus", refresh);
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState === "visible") refresh();
+  });
+  setInterval(refresh, 15000);
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", startProfileRefreshSafeguards41117);
+}else{
+  startProfileRefreshSafeguards41117();
+}
+
+Object.assign(window, {
+  linkedRosterPlayer,
+  currentUserPlayer,
+  currentSignedInPlayer,
+  isCurrentSignedInPlayer,
+  compareAttendancePlayers,
+  refreshSignedInProfile41117,
+  loadCloudData,
+  scheduleLiveRefresh,
+  canGenerateTeams,
+  teammateLocalGameKey41117,
+  clearLocalTeammateGame41117,
+  saveLocalTeammateGame41117,
+  readLocalTeammateGame41117,
+  applyLocalTeammateGame41117,
+  optimizeTeams,
+  generateGame,
+  generateTeamsButton,
+  renderTeams,
+  openMyProfileModal,
+  renderManageAccountsRows,
+  saveManagedAccountPlayerLink,
+  subscribeToProfileUpdates
 });
 
