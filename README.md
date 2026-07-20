@@ -1259,3 +1259,15 @@ Changes:
 - optimizer may move a player without a swap, with a maximum team-count spread of two
 - Manage Accounts now explicitly shows the name entered when the account was created
 - no Supabase SQL changes
+
+
+## 4.11.18 My Profile and Teammate Generate fixes
+
+Fixes:
+- My Profile button now uses one delegated click handler instead of relying on conflicting inline handlers
+- My Profile opens a loading modal immediately, then fetches the linked player directly from the database
+- My Profile displays a visible error instead of silently doing nothing if loading fails
+- Teammates now see the existing sticky Generate Teams button on the Main page
+- Teammates can also see and change Number Of Teams
+- Teammates still cannot save results or use Captain/Admin-only controls
+- no Supabase SQL changes

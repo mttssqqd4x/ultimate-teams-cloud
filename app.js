@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.17";
+const APP_VERSION = "4.11.18";
 
 let db = null;
 let currentUser = null;
@@ -456,7 +456,6 @@ async function signIn(){
   hideSignInBox();
   await afterAuthChange();
 }
-async 
 function openAccountModal(){
   if(!currentUser){
     toggleSignInBox();
@@ -7520,7 +7519,7 @@ function ensureFullWidthMyProfileButton41115(root = document){
   toolbar.style.marginTop = "12px";
 
   toolbar.innerHTML = `
-    <button id="myProfileBtn" class="btn-secondary" type="button" style="width:100%;display:block" onclick="openMyProfileModal()">My Profile</button>
+    <button id="myProfileBtn" class="btn-secondary" type="button" style="width:100%;display:block" data-open-my-profile="true">My Profile</button>
   `;
 }
 
@@ -7623,7 +7622,7 @@ function ensureAccountHasOnlyFullWidthMyProfile41116(){
 
   toolbar.className = "";
   toolbar.style.cssText = "width:100%;display:block;margin-top:12px";
-  toolbar.innerHTML = '<button id="myProfileBtn" class="btn-secondary" type="button" style="width:100%;display:block" onclick="openMyProfileModal()">My Profile</button>';
+  toolbar.innerHTML = '<button id="myProfileBtn" class="btn-secondary" type="button" style="width:100%;display:block" data-open-my-profile="true">My Profile</button>';
 }
 
 if(typeof ensureV490FeatureUi === "function" && !window.__ensureV490FeatureUiWrapped41116){
@@ -8267,5 +8266,211 @@ Object.assign(window, {
   renderManageAccountsRows,
   saveManagedAccountPlayerLink,
   subscribeToProfileUpdates
+});
+
+
+
+/* ===== 4.11.18 My Profile button + Teammate Generate button fix ===== */
+
+function mapRosterPlayerRow41118(r){
+  if(!r) return null;
+  const existing = playerById(r.id);
+  return {
+    id: r.id,
+    firstName: r.first_name || existing?.firstName || "",
+    lastName: r.last_name || existing?.lastName || "",
+    fullName: r.full_name || `${r.first_name || ""} ${r.last_name || ""}`.trim() || existing?.fullName || "",
+    handling: Number(r.handling ?? existing?.handling ?? 0),
+    cutting: Number(r.cutting ?? existing?.cutting ?? 0),
+    defense: Number(r.defense ?? existing?.defense ?? 0),
+    winLossRating: Number(r.win_loss ?? existing?.winLossRating ?? 0),
+    active: r.active === undefined ? !!existing?.active : !!r.active,
+    injuryPct: Number(r.injury_pct ?? existing?.injuryPct ?? 1),
+    temporary: r.temporary === undefined ? !!existing?.temporary : !!r.temporary,
+    gamesPlayed: Number(r.games_played ?? existing?.gamesPlayed ?? 0),
+    wins: Number(r.wins ?? existing?.wins ?? 0),
+    losses: Number(r.losses ?? existing?.losses ?? 0),
+    attending: !!existing?.attending
+  };
+}
+
+function myProfileErrorHtml41118(message){
+  return `<div class="notice">${escapeHtml(message || "My Profile could not load.")}</div>`;
+}
+
+async function openMyProfileModal41118(){
+  if(!currentUser){
+    alert("Sign in first.");
+    return;
+  }
+
+  // Open immediately so the click always gives visible feedback.
+  hideModal("accountModal");
+  makeDynamicModal("myProfileModal", "My Profile", '<div class="small">Loading your profile...</div>');
+
+  try{
+    if(typeof refreshSignedInProfile41117 === "function"){
+      await refreshSignedInProfile41117();
+    }
+
+    const linkedId = profile?.player_id || currentUserPlayer()?.id || null;
+    if(!linkedId){
+      makeDynamicModal(
+        "myProfileModal",
+        "My Profile",
+        myProfileErrorHtml41118("This account is not linked to a roster player. Ask an Admin to link it in Manage Accounts.")
+      );
+      return;
+    }
+
+    const [playerResult, historyResult] = await Promise.all([
+      db.from("players").select("*").eq("id", linkedId).maybeSingle(),
+      db.from("teammate_history")
+        .select("*")
+        .or(`player_a.eq.${linkedId},player_b.eq.${linkedId}`)
+        .order("count", { ascending:false })
+        .limit(10)
+    ]);
+
+    if(playerResult?.error) throw playerResult.error;
+
+    const me = mapRosterPlayerRow41118(playerResult?.data) || playerById(linkedId);
+    if(!me){
+      makeDynamicModal(
+        "myProfileModal",
+        "My Profile",
+        myProfileErrorHtml41118("The linked roster player could not be found. Ask an Admin to check the player link.")
+      );
+      return;
+    }
+
+    // Keep the current in-memory player synchronized with the fresh database row.
+    const existingIndex = state.players.findIndex(p => String(p.id) === String(me.id));
+    if(existingIndex >= 0){
+      state.players[existingIndex] = { ...state.players[existingIndex], ...me };
+    }
+
+    const history = historyResult?.error ? [] : (historyResult?.data || []);
+    const top = teammateRowsForPlayer(me.id, history);
+    const topHtml = top.length
+      ? top.map(r => `<div class="history-card"><div class="row" style="justify-content:space-between"><div>${escapeHtml(r.other)}</div><strong>${r.count}</strong></div></div>`).join("")
+      : '<div class="small">No teammate history yet.</div>';
+
+    const pct = me.gamesPlayed ? ((me.wins / me.gamesPlayed) * 100).toFixed(1) + "%" : "0.0%";
+    const body = `
+      <div class="notice">Linked roster player: ${escapeHtml(me.fullName)}</div>
+      <div class="profile-stat-grid">
+        <div class="profile-stat"><strong>${me.gamesPlayed}</strong><span class="small">Games</span></div>
+        <div class="profile-stat"><strong>${me.wins}-${me.losses}</strong><span class="small">Record</span></div>
+        <div class="profile-stat"><strong>${pct}</strong><span class="small">Win %</span></div>
+      </div>
+      <div class="hr"></div>
+      <h3 style="margin:0 0 8px">Most common teammates</h3>
+      <div class="mini-table">${topHtml}</div>`;
+
+    makeDynamicModal("myProfileModal", "My Profile", body);
+  }catch(e){
+    console.error("My Profile load failed", e);
+    makeDynamicModal(
+      "myProfileModal",
+      "My Profile",
+      myProfileErrorHtml41118(`My Profile could not load: ${e?.message || e}`)
+    );
+  }
+}
+
+// Reassign the existing global binding and window property.
+openMyProfileModal = openMyProfileModal41118;
+window.openMyProfileModal = openMyProfileModal41118;
+
+function normalizeMyProfileButton41118(){
+  const btn = document.getElementById("myProfileBtn");
+  if(!btn) return;
+  btn.type = "button";
+  btn.removeAttribute("onclick");
+  btn.setAttribute("data-open-my-profile", "true");
+  btn.style.width = "100%";
+  btn.style.display = "block";
+  btn.onclick = null;
+}
+
+function installMyProfileButtonHandler41118(){
+  if(window.__myProfileButtonHandler41118) return;
+  window.__myProfileButtonHandler41118 = true;
+
+  // Capture phase prevents older inline/property handlers from interfering.
+  document.addEventListener("click", event => {
+    const target = event.target instanceof Element
+      ? event.target.closest("#myProfileBtn, [data-open-my-profile='true']")
+      : null;
+    if(!target) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    openMyProfileModal41118();
+  }, true);
+
+  normalizeMyProfileButton41118();
+
+  const observer = new MutationObserver(() => normalizeMyProfileButton41118());
+  if(document.body) observer.observe(document.body, { childList:true, subtree:true });
+  window.__myProfileButtonObserver41118 = observer;
+}
+
+const updateRoleVisibilityBefore41118 = updateRoleVisibility;
+updateRoleVisibility = function(){
+  updateRoleVisibilityBefore41118();
+
+  const teammateCanGenerate = isTeammate();
+  const mainVisible = document.getElementById("mainPage")?.style.display !== "none";
+
+  // Teammates may choose the number of teams and use the same sticky Generate Teams button.
+  const numTeamsSection = document.getElementById("numTeamsSection");
+  const numTeams = document.getElementById("numTeams");
+  if(teammateCanGenerate){
+    if(numTeamsSection){
+      numTeamsSection.classList.remove("hidden");
+      numTeamsSection.style.display = "";
+    }
+    if(numTeams) numTeams.disabled = false;
+  }
+
+  const sticky = document.getElementById("stickybar");
+  if(sticky){
+    const show = canGenerateTeams() && mainVisible;
+    sticky.classList.toggle("hidden", !show);
+    sticky.style.display = show ? "" : "none";
+  }
+
+  // Teammates still cannot save results or use Captain/Admin-only game controls.
+  if(teammateCanGenerate){
+    const saveWrap = document.getElementById("saveResultsWrap");
+    if(saveWrap){
+      saveWrap.classList.add("hidden");
+      saveWrap.style.display = "none";
+    }
+  }
+};
+window.updateRoleVisibility = updateRoleVisibility;
+
+function start41118UiFixes(){
+  installMyProfileButtonHandler41118();
+  normalizeMyProfileButton41118();
+  updateRoleVisibility();
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", start41118UiFixes);
+}else{
+  start41118UiFixes();
+}
+
+Object.assign(window, {
+  openMyProfileModal: openMyProfileModal41118,
+  openMyProfileModal41118,
+  normalizeMyProfileButton41118,
+  installMyProfileButtonHandler41118,
+  updateRoleVisibility
 });
 
