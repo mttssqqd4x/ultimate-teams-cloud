@@ -1271,3 +1271,17 @@ Fixes:
 - Teammates can also see and change Number Of Teams
 - Teammates still cannot save results or use Captain/Admin-only controls
 - no Supabase SQL changes
+
+
+## 4.11.19 Daily local Teammate pairing history
+
+Changes:
+- each Teammate generation records the previous local game's teammate pairings once
+- local pairing counts are saved per signed-in account and per local calendar day
+- local pairings automatically expire when the day changes
+- subsequent Teammate generations use local daily pairing counts to discourage repeats
+- exact repetition of the previous team grouping receives a very large penalty
+- Teammate generation refreshes and uses the official cloud pair rules and settings
+- the original scoring remains active, including elite balance, handler separation, pair rules, global history, ratings, and injury modifiers
+- Captain/Admin generation remains official and clears the local Teammate game/history on that device
+- no Supabase SQL changes

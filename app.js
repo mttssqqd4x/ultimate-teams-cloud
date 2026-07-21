@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.18";
+const APP_VERSION = "4.11.19";
 
 let db = null;
 let currentUser = null;
@@ -8472,5 +8472,262 @@ Object.assign(window, {
   normalizeMyProfileButton41118,
   installMyProfileButtonHandler41118,
   updateRoleVisibility
+});
+
+
+
+/* ===== 4.11.19 daily local Teammate pairing history + fresh generations ===== */
+
+function teammateLocalPairHistoryKey41119(){
+  return currentUser ? `ultimateTeamsLocalPairHistory41119:${currentUser.id}` : "";
+}
+
+function emptyLocalPairHistory41119(){
+  return {
+    ownerUserId: currentUser?.id || null,
+    day: localDayKey41117(),
+    pairCounts: {},
+    recordedGameIds: [],
+    lastTeamSignature: ""
+  };
+}
+
+function readLocalTeammatePairHistory41119(){
+  if(!isTeammate() || !currentUser) return emptyLocalPairHistory41119();
+
+  const key = teammateLocalPairHistoryKey41119();
+  try{
+    const saved = JSON.parse(localStorage.getItem(key) || "null");
+    if(
+      !saved
+      || saved.ownerUserId !== currentUser.id
+      || saved.day !== localDayKey41117()
+    ){
+      const fresh = emptyLocalPairHistory41119();
+      localStorage.setItem(key, JSON.stringify(fresh));
+      return fresh;
+    }
+
+    saved.pairCounts = saved.pairCounts || {};
+    saved.recordedGameIds = Array.isArray(saved.recordedGameIds) ? saved.recordedGameIds : [];
+    saved.lastTeamSignature = saved.lastTeamSignature || "";
+    return saved;
+  }catch(e){
+    const fresh = emptyLocalPairHistory41119();
+    localStorage.setItem(key, JSON.stringify(fresh));
+    return fresh;
+  }
+}
+
+function saveLocalTeammatePairHistory41119(history){
+  if(!isTeammate() || !currentUser) return;
+  const key = teammateLocalPairHistoryKey41119();
+  localStorage.setItem(key, JSON.stringify({
+    ...history,
+    ownerUserId: currentUser.id,
+    day: localDayKey41117()
+  }));
+}
+
+function clearLocalTeammatePairHistory41119(){
+  const key = teammateLocalPairHistoryKey41119();
+  if(key) localStorage.removeItem(key);
+}
+
+function normalizedTeamSignature41119(teams){
+  return (teams || [])
+    .map(team => team.map(p => String(p.id)).sort().join(","))
+    .sort()
+    .join("||");
+}
+
+function recordCurrentLocalGamePairings41119(){
+  if(
+    !isTeammate()
+    || !state.currentGame
+    || !state.currentGameIsLocalTeammate41117
+  ) return false;
+
+  const gameId = String(state.currentGameGeneratedAt || "");
+  if(!gameId) return false;
+
+  const history = readLocalTeammatePairHistory41119();
+  if(history.recordedGameIds.includes(gameId)) return false;
+
+  (state.currentGame.teams || []).forEach(team => {
+    for(let i = 0; i < team.length; i++){
+      for(let j = i + 1; j < team.length; j++){
+        const key = pairKey(team[i].id, team[j].id);
+        history.pairCounts[key] = Number(history.pairCounts[key] || 0) + 1;
+      }
+    }
+  });
+
+  history.recordedGameIds.push(gameId);
+  // Keep the daily record bounded even on a very long day.
+  if(history.recordedGameIds.length > 100){
+    history.recordedGameIds = history.recordedGameIds.slice(-100);
+  }
+  history.lastTeamSignature = normalizedTeamSignature41119(state.currentGame.teams);
+  saveLocalTeammatePairHistory41119(history);
+  return true;
+}
+
+function localTeammatePairPenalty41119(teams, repeatWeight){
+  if(!isTeammate()) return 0;
+
+  const history = readLocalTeammatePairHistory41119();
+  const weight = Math.max(1, Number(repeatWeight || state.settings.repeatWeight || 4));
+  let penalty = 0;
+
+  teams.forEach(team => {
+    for(let i = 0; i < team.length; i++){
+      for(let j = i + 1; j < team.length; j++){
+        penalty += Number(history.pairCounts[pairKey(team[i].id, team[j].id)] || 0) * weight;
+      }
+    }
+  });
+
+  // Never deliberately return the exact same grouping when another valid
+  // optimized arrangement is available.
+  const signature = normalizedTeamSignature41119(teams);
+  if(history.lastTeamSignature && signature === history.lastTeamSignature){
+    penalty += 100000;
+  }
+
+  return penalty;
+}
+
+const scoreTeamsBefore41119 = scoreTeams;
+scoreTeams = function(teams, repeatWeight = state.settings.repeatWeight){
+  // The original score contains all official cloud-controlled behavior:
+  // pair rules, locked/together/apart rules, global anti-repeat history,
+  // elite balance, handler separation, ratings, and injury-adjusted strengths.
+  return scoreTeamsBefore41119(teams, repeatWeight)
+    + localTeammatePairPenalty41119(teams, repeatWeight);
+};
+window.scoreTeams = scoreTeams;
+
+function saveLocalTeammateGame41117(){
+  if(!isTeammate() || !state.currentGame || !currentUser) return;
+  const payload = {
+    ownerUserId: currentUser.id,
+    day: localDayKey41117(),
+    generatedAt: state.currentGameGeneratedAt || new Date().toISOString(),
+    teams: serializableTeams(),
+    localPairHistoryDay: localDayKey41117()
+  };
+  localStorage.setItem(teammateLocalGameKey41117(), JSON.stringify(payload));
+}
+
+async function generateGame(sendPushNotification = false){
+  if(!canGenerateTeams()){
+    alert("Only Teammates, Captains, and Admins can generate teams.");
+    return;
+  }
+
+  await refreshSignedInProfile41117();
+
+  // Load the official cloud state directly. This refreshes attendance,
+  // Captain/Admin pair rules, handler separation, elite balance, settings,
+  // ratings, injuries, and global teammate history without restoring the old
+  // local game before this new generation.
+  await loadCloudDataBefore41117();
+
+  const players = presentPlayers();
+  const numTeams = Math.max(2, Number(document.getElementById("numTeams")?.value || 2));
+
+  if(players.length < numTeams){
+    alert("Not enough attending players for that many teams.");
+    return;
+  }
+
+  let best = null;
+  // More randomized starts help produce a genuinely new optimized arrangement
+  // while the local daily pairing penalties discourage repeated teammates.
+  for(let i = 0; i < 120; i++){
+    const candidate = optimizeTeams(
+      makeInitialTeams(players, numTeams),
+      Number(state.settings.repeatWeight || 4)
+    );
+    if(!best || candidate.score < best.score) best = candidate;
+  }
+
+  state.currentGameGeneratedAt = new Date().toISOString();
+  state.currentGame = { teams: best.teams };
+  state.selectedWinnerIndex = null;
+  state.resultsSavedForCurrentGame = false;
+
+  if(isTeammate()){
+    state.currentGameIsLocalTeammate41117 = true;
+    saveLocalTeammateGame41117();
+  }else{
+    state.currentGameIsLocalTeammate41117 = false;
+
+    // The official game replaces the local current game. Daily local pairing
+    // history is also cleared because the Captain/Admin game becomes the source
+    // of truth on this device.
+    clearLocalTeammateGame41117();
+    clearLocalTeammatePairHistory41119();
+
+    await saveCurrentGameToDb(false);
+    if(sendPushNotification) await sendTeamGeneratedNotification();
+  }
+
+  renderAll();
+  updateTeamsDetailsOpenState();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function generateTeamsButton(){
+  if(!canGenerateTeams()){
+    alert("Only Teammates, Captains, and Admins can generate teams.");
+    return;
+  }
+
+  try{
+    if(isTeammate()){
+      await withLoading("Generating new local teams...", async () => {
+        // Before replacing the current local game, save its teammate pairings
+        // exactly once. These counts remain local and expire with the day.
+        recordCurrentLocalGamePairings41119();
+        await generateGame(false);
+      });
+      return;
+    }
+
+    if(state.currentGame && !state.resultsSavedForCurrentGame){
+      const continueWithoutResults = await confirmContinueWithoutResults();
+      if(!continueWithoutResults) return;
+
+      await withLoading("Saving current pairings...", async () => {
+        await savePairingsOnlyForCurrentGame();
+      });
+    }
+
+    const sendPush = await askAdminWhetherToSendTeamNotification();
+
+    await withLoading("Generating teams...", async () => {
+      await generateGame(sendPush);
+    });
+  }catch(e){
+    clearLoading();
+    console.error("Generate teams failed", e);
+    alert("Generate teams failed: " + (e?.message || e));
+  }
+}
+
+Object.assign(window, {
+  teammateLocalPairHistoryKey41119,
+  readLocalTeammatePairHistory41119,
+  saveLocalTeammatePairHistory41119,
+  clearLocalTeammatePairHistory41119,
+  normalizedTeamSignature41119,
+  recordCurrentLocalGamePairings41119,
+  localTeammatePairPenalty41119,
+  scoreTeams,
+  saveLocalTeammateGame41117,
+  generateGame,
+  generateTeamsButton
 });
 
