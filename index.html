@@ -239,7 +239,7 @@
 
 </style>
 
-  <link rel="stylesheet" href="theme-4.12.5.css">
+  <link rel="stylesheet" href="theme-4.12.6.css">
 
   <!-- 4.11.21 startup performance -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -248,8 +248,8 @@
   <link rel="dns-prefetch" href="//fsdqkozqjshqooqwvmhq.supabase.co">
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script" crossorigin="anonymous">
   <link rel="preload" href="config.js" as="script">
-  <link rel="preload" href="legacy-core-4.12.5.js" as="script">
-  <link rel="preload" href="app-4.12.5.js" as="script">
+  <link rel="preload" href="legacy-core-4.12.6.js" as="script">
+  <link rel="preload" href="app-4.12.6.js" as="script">
 
 </head>
 <body>
@@ -343,23 +343,21 @@
   <div class="card admin-only" id="dataAdminLoadEdit">
     <details open>
       <summary><span class="summary-title">Roster & App Settings</span><span></span></summary>
-      <div class="notice" style="margin-top:10px">Paste CSV with columns: First Name, Last Name, Handling, Cutting, Defense, Win/Loss. Optional extra column allowed: Combined.</div>
-
       <div class="grid grid-2" style="margin-top:10px">
         <div>
-          <label>Active Ratings CSV</label>
+          <label>Active Players CSV</label>
           <textarea id="activeCsv" placeholder="First Name,Last Name,Handling,Cutting,Defense,Win/Loss"></textarea>
           <div class="toolbar" style="margin-top:10px">
-            <button class="btn-secondary" type="button" onclick="previewCsv(false)">Preview Active CSV</button>
-            <button class="btn" type="button" onclick="importCsv(false)">Import Active CSV</button>
+            <button class="btn-secondary" type="button" onclick="previewCsv(false)">Preview</button>
+            <button class="btn" type="button" onclick="importCsv(false)">Import</button>
           </div>
         </div>
         <div>
-          <label>Inactive Ratings CSV</label>
+          <label>Inactive Players CSV</label>
           <textarea id="inactiveCsv" placeholder="First Name,Last Name,Handling,Cutting,Defense,Win/Loss"></textarea>
           <div class="toolbar" style="margin-top:10px">
-            <button class="btn-secondary" type="button" onclick="previewCsv(true)">Preview Inactive CSV</button>
-            <button class="btn" type="button" onclick="importCsv(true)">Import Inactive CSV</button>
+            <button class="btn-secondary" type="button" onclick="previewCsv(true)">Preview</button>
+            <button class="btn" type="button" onclick="importCsv(true)">Import</button>
           </div>
         </div>
       </div>
@@ -378,8 +376,8 @@
       <label>Season Stats CSV</label>
       <textarea id="seasonStatsCsv" placeholder="First Name,Last Name,Games Played,Wins,Losses,Win %,Win/Loss"></textarea>
       <div class="toolbar" style="margin-top:10px">
-        <button class="btn-secondary" type="button" onclick="previewSeasonStatsCsv()">Preview Season Stats CSV</button>
-        <button class="btn" type="button" onclick="importSeasonStatsCsv()">Import Season Stats CSV</button>
+        <button class="btn-secondary" type="button" onclick="previewSeasonStatsCsv()">Preview</button>
+        <button class="btn" type="button" onclick="importSeasonStatsCsv()">Import</button>
       </div>
 
       <div id="seasonPreviewBox" class="subbox" style="display:none">
@@ -394,17 +392,17 @@
       <div class="hr"></div>
 
       <div class="grid grid-3">
-        <div><label>Handling Weight</label><input id="weightHandling" type="number" min="0" max="1" step="0.01" value="0.35"></div>
-        <div><label>Cutting Weight</label><input id="weightCutting" type="number" min="0" max="1" step="0.01" value="0.35"></div>
-        <div><label>Defense Weight</label><input id="weightDefense" type="number" min="0" max="1" step="0.01" value="0.30"></div>
+        <div><label>Handling</label><input id="weightHandling" type="number" min="0" max="1" step="0.01" value="0.35"></div>
+        <div><label>Cutting</label><input id="weightCutting" type="number" min="0" max="1" step="0.01" value="0.35"></div>
+        <div><label>Defense</label><input id="weightDefense" type="number" min="0" max="1" step="0.01" value="0.30"></div>
       </div>
       <div class="grid grid-4" style="margin-top:10px">
-        <div><label>K-Factor</label><input id="kFactor" type="number" min="0" max="1" step="0.01" value="0.08"><div class="small">Typical 0.02-0.20. Higher = ratings move faster.</div></div>
-        <div><label>Anti-Repeat Strength</label><input id="repeatWeight" type="number" min="0" max="20" step="0.5" value="4"><div class="small">Typical 2-8. Higher = fewer repeat teammates.</div></div>
-        <div><label>Handler Separation Boost</label><input id="handlerSeparationBoost" type="number" min="0" max="10" step="0.5" value="2"><div class="small">Typical 1-4. Used when handler separation is on.</div></div>
-        <div><label>Elite Balance Boost</label><input id="eliteBalanceBoost" type="number" min="0" max="10" step="0.5" value="2"><div class="small">Typical 1-4. Used when elite balance is on.</div></div>
+        <div><label>K-Factor</label><input id="kFactor" type="number" min="0" max="1" step="0.01" value="0.08"></div>
+        <div><label>Anti-Repeat</label><input id="repeatWeight" type="number" min="0" max="20" step="0.5" value="4"></div>
+        <div><label>Handler Boost</label><input id="handlerSeparationBoost" type="number" min="0" max="10" step="0.5" value="2"></div>
+        <div><label>Elite Boost</label><input id="eliteBalanceBoost" type="number" min="0" max="10" step="0.5" value="2"></div>
       </div>
-      <div class="grid grid-2" style="margin-top:10px">
+      <div class="grid grid-1" style="margin-top:10px">
         <div>
           <label>Reshuffle Mode</label>
           <select id="reshuffleModeSetting">
@@ -412,11 +410,7 @@
             <option value="maximum">Maximum Reshuffle</option>
             <option value="balance">Balance Only</option>
           </select>
-          <div class="small">Normal uses repeat history. Maximum strongly avoids the previous game's teammates. Balance Only ignores repeat history and focuses on team quality.</div>
-        </div>
-        <div class="subbox compact-info-box">
-          <div class="player-name">Team Generator</div>
-          <div class="small">Pair Rules, Handler Separation, Elite Balance, injuries, and allowed unequal team sizes still apply in every mode.</div>
+          
         </div>
       </div>
       <div class="toolbar" style="margin-top:10px">
@@ -432,8 +426,8 @@
 
       <label>Backup / Restore</label>
       <div class="toolbar">
-        <button class="btn-secondary" type="button" onclick="downloadBackupJson()">Export Backup JSON</button>
-        <button class="btn-secondary" type="button" onclick="document.getElementById('importBackupJsonInput').click()">Import Backup JSON</button>
+        <button class="btn-secondary" type="button" onclick="downloadBackupJson()">Export Backup</button>
+        <button class="btn-secondary" type="button" onclick="document.getElementById('importBackupJsonInput').click()">Import Backup</button>
         <input id="importBackupJsonInput" type="file" accept="application/json,.json" style="display:none" onchange="importBackupJsonFile(event)">
       </div>
 
@@ -662,6 +656,6 @@
 </div>
 
 <div class="stickybar" id="stickybar"><div class="inner"><button type="button" class="btn-success" onclick="generateTeamsButton()">Generate Teams</button></div></div>
-<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="version-4.12.5.js"></script><script src="legacy-core-4.12.5.js"></script><script src="app-4.12.5.js"></script><script src="sandbox-host-4.12.5.js"></script>
+<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="version-4.12.6.js"></script><script src="legacy-core-4.12.6.js"></script><script src="app-4.12.6.js"></script><script src="sandbox-host-4.12.6.js"></script>
 <div id="loadingOverlay" class="loading-backdrop"><div class="loading-card"><div class="spinner"></div><div id="loadingMessage">Working...</div></div></div>
 </body></html>

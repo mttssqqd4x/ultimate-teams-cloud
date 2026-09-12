@@ -1,3 +1,16 @@
+# Ultimate Teams Cloud — 4.12.6
+
+## UI cleanup from 4.12.5
+
+- Darkened the fixed header so it is only slightly translucent.
+- Removed the remaining top-edge blur/haze from the header.
+- Removed the empty rounded result bubble above **Save Results**.
+- Removed the black header-style bar around **Team Notifications** in the Account popup.
+- Removed the descriptive paragraph from **Roster & App Settings** and shortened redundant labels/helper text.
+- Preserves sandbox parity, simulated roles, team generation, Supabase behavior, and the 4.12.0 database schema. No new SQL is required.
+
+---
+
 # Ultimate Teams Cloud — 4.12.0
 
 ## Major refactor release
