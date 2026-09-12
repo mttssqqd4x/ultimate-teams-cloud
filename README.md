@@ -1,5 +1,6 @@
-# Ultimate Teams Cloud — 4.14.0
+# Ultimate Teams Cloud — 4.14.1
 
+- 4.14.1: removes direct One-Time controls from Attendance and hides the 100% injury control; injured players keep a visible read-only injury indicator while all editing/actions are accessed by press-and-hold.
 - 4.14.0: adds press-and-hold player actions to Attendance, including injury/availability and active/inactive controls, plus Make Permanent/Remove for one-time players. One-time players now carry a visible **ONE-TIME** badge in Attendance and Edit Player.
 - 4.13.1: combines one-time player **Make Permanent** and **Remove** controls into one compact **One-Time ▾** action button.
 - 4.13.0: keeps only the outer Sandbox controls blue, adds in-place Make Permanent for one-time players, and removes Current Game start time.

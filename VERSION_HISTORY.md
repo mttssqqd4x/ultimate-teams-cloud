@@ -1,3 +1,9 @@
+### 4.14.1
+- Removed the One-Time action button from Attendance player cards.
+- Removed the 100% injury button from Attendance player cards.
+- Players below 100% availability keep a compact read-only injury indicator so reduced availability stays visible.
+- Injury editing, active/inactive, and one-time-player actions in Attendance are now accessed through press-and-hold only.
+
 ### 4.14.0
 - Added press-and-hold actions to every Attendance player row for Captains/Admins.
 - Hold actions include Injury / Availability and Active / Inactive for every player.
