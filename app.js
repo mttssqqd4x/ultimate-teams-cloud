@@ -4,7 +4,7 @@ const SUPABASE_URL = (CONFIG.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "").r
 const SUPABASE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || CONFIG.SUPABASE_ANON_KEY || "";
 const APP_AUTH_REDIRECT_URL = CONFIG.AUTH_REDIRECT_URL || "https://nmultimateteams.app";
 const VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || "";
-const APP_VERSION = "4.11.19";
+const APP_VERSION = "4.11.21";
 
 let db = null;
 let currentUser = null;
@@ -8729,5 +8729,569 @@ Object.assign(window, {
   saveLocalTeammateGame41117,
   generateGame,
   generateTeamsButton
+});
+
+
+
+/* ===== 4.11.20 default Inactive Players off on every load/reload ===== */
+
+function forceInactivePlayersOff41120(){
+  if(state){
+    if("showInactive" in state) state.showInactive = false;
+    if("showInactivePlayers" in state) state.showInactivePlayers = false;
+    if("includeInactive" in state) state.includeInactive = false;
+  }
+
+  const selectors = [
+    "#showInactive",
+    "#showInactivePlayers",
+    "#includeInactive",
+    "#inactivePlayersToggle",
+    "#inactivePlayersCheckbox",
+    'input[type="checkbox"][name="showInactive"]',
+    'input[type="checkbox"][name="showInactivePlayers"]',
+    'input[type="checkbox"][name="includeInactive"]'
+  ];
+
+  selectors.forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => {
+      if("checked" in el) el.checked = false;
+      el.setAttribute("aria-checked", "false");
+    });
+  });
+
+  document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+    const id = el.id || "";
+    const name = el.name || "";
+    const label = el.closest("label")?.textContent || "";
+    const text = `${id} ${name} ${label}`.toLowerCase();
+    if(text.includes("inactive")){
+      el.checked = false;
+      el.setAttribute("aria-checked", "false");
+    }
+  });
+}
+
+function installInactivePlayersDefault41120(){
+  forceInactivePlayersOff41120();
+
+  [0, 50, 150, 400, 1000].forEach(ms => {
+    setTimeout(() => {
+      forceInactivePlayersOff41120();
+      try{
+        renderAttendance?.();
+      }catch(e){}
+    }, ms);
+  });
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", installInactivePlayersDefault41120);
+}else{
+  installInactivePlayersDefault41120();
+}
+
+window.addEventListener("pageshow", () => {
+  forceInactivePlayersOff41120();
+  try{
+    renderAttendance?.();
+  }catch(e){}
+});
+
+Object.assign(window, {
+  forceInactivePlayersOff41120,
+  installInactivePlayersDefault41120
+});
+
+
+
+/* ===== 4.11.21 fast startup + code-health cleanup ===== */
+
+const STARTUP_SNAPSHOT_KEY_41121 = "ultimateTeamsSafeStartupSnapshot41121";
+const STARTUP_PROFILE_KEY_PREFIX_41121 = "ultimateTeamsSafeProfile41121:";
+let cloudLoadPromise41121 = null;
+let notificationUiQueued41121 = false;
+
+function idle41121(fn, timeout = 1200){
+  if("requestIdleCallback" in window) return requestIdleCallback(fn, { timeout });
+  return setTimeout(fn, Math.min(timeout, 250));
+}
+
+function mapCloudPlayer41121(r, attendance){
+  return {
+    id: r.id,
+    firstName: r.first_name || "",
+    lastName: r.last_name || "",
+    fullName: r.full_name || `${r.first_name || ""} ${r.last_name || ""}`.trim(),
+    handling: Number(r.handling || 0),
+    cutting: Number(r.cutting || 0),
+    defense: Number(r.defense || 0),
+    winLossRating: Number(r.win_loss || 0),
+    active: !!r.active,
+    injuryPct: Number(r.injury_pct ?? 1),
+    temporary: !!r.temporary,
+    gamesPlayed: Number(r.games_played || 0),
+    wins: Number(r.wins || 0),
+    losses: Number(r.losses || 0),
+    attending: !!attendance[r.id]
+  };
+}
+
+function applyBootstrapPayload41121(payload, includeProfile = true){
+  payload = payload || {};
+
+  if(includeProfile && currentUser && payload.profile){
+    profile = payload.profile;
+  }
+
+  const attendance = {};
+  (payload.attendance || []).forEach(a => attendance[a.player_id] = !!a.present);
+
+  state.players = (payload.players || []).map(r => mapCloudPlayer41121(r, attendance));
+
+  state.pairRules = (payload.pair_rules || []).map(r => ({
+    id: r.id,
+    player1Id: r.player1_id,
+    player2Id: r.player2_id,
+    type: r.rule_type,
+    strength: Number(r.strength || 1),
+    createdBy: r.created_by || null,
+    createdByRole: r.created_by_role || null
+  }));
+
+  state.history = {};
+  (payload.teammate_history || []).forEach(h => {
+    state.history[pairKey(h.player_a, h.player_b)] = Number(h.count || 0);
+  });
+
+  const s = payload.settings;
+  if(s){
+    state.settings = {
+      weightHandling: Number(s.weight_handling ?? 0.35),
+      weightCutting: Number(s.weight_cutting ?? 0.35),
+      weightDefense: Number(s.weight_defense ?? 0.30),
+      kFactor: Number(s.k_factor ?? 0.08),
+      repeatWeight: Number(s.repeat_weight ?? 4),
+      prioritizeHandlerSeparation: !!s.prioritize_handler_separation,
+      handlerSeparationBoost: Number(s.handler_separation_boost ?? 2),
+      prioritizeEliteBalance: !!s.prioritize_elite_balance,
+      eliteBalanceBoost: Number(s.elite_balance_boost ?? 2)
+    };
+  }
+
+  const game = payload.current_game;
+  if(game?.teams && Array.isArray(game.teams) && game.teams.length){
+    state.currentGame = hydrateGame(game.teams);
+    state.currentGameGeneratedAt = game.generated_at || null;
+    state.selectedWinnerIndex = game.selected_winner_index ?? null;
+    state.resultsSavedForCurrentGame = !!game.results_saved;
+  }else{
+    state.currentGame = null;
+    state.currentGameGeneratedAt = null;
+    state.selectedWinnerIndex = null;
+    state.resultsSavedForCurrentGame = false;
+  }
+
+  state.showInactive = false;
+  syncSettingsForm();
+}
+
+function saveSafeStartupSnapshot41121(){
+  try{
+    localStorage.setItem(STARTUP_SNAPSHOT_KEY_41121, JSON.stringify({
+      savedAt: Date.now(),
+      players: state.players.map(p => ({
+        id:p.id,
+        firstName:p.firstName,
+        lastName:p.lastName,
+        fullName:p.fullName,
+        active:!!p.active,
+        temporary:!!p.temporary,
+        gamesPlayed:Number(p.gamesPlayed || 0),
+        wins:Number(p.wins || 0),
+        losses:Number(p.losses || 0),
+        attending:!!p.attending
+      })),
+      currentGameTeams: (state.currentGame?.teams || []).map(team => team.map(p => p.id)),
+      currentGameGeneratedAt: state.currentGameGeneratedAt || null,
+      selectedWinnerIndex: state.selectedWinnerIndex ?? null,
+      resultsSavedForCurrentGame: !!state.resultsSavedForCurrentGame
+    }));
+
+    if(currentUser){
+      localStorage.setItem(STARTUP_PROFILE_KEY_PREFIX_41121 + currentUser.id, JSON.stringify({
+        player_id: profile?.player_id || null,
+        first_name: profile?.first_name || "",
+        last_name: profile?.last_name || "",
+        full_name: profile?.full_name || ""
+      }));
+    }
+  }catch(e){}
+}
+
+function restoreSafeStartupSnapshot41121(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(STARTUP_SNAPSHOT_KEY_41121) || "null");
+    if(!raw || !Array.isArray(raw.players)) return false;
+
+    state.players = raw.players.map(p => ({
+      ...p,
+      handling:0,
+      cutting:0,
+      defense:0,
+      winLossRating:0,
+      injuryPct:1
+    }));
+
+    state.currentGame = raw.currentGameTeams?.length ? hydrateGame(raw.currentGameTeams) : null;
+    state.currentGameGeneratedAt = raw.currentGameGeneratedAt || null;
+    state.selectedWinnerIndex = raw.selectedWinnerIndex ?? null;
+    state.resultsSavedForCurrentGame = !!raw.resultsSavedForCurrentGame;
+    state.showInactive = false;
+
+    if(currentUser){
+      const cached = JSON.parse(localStorage.getItem(STARTUP_PROFILE_KEY_PREFIX_41121 + currentUser.id) || "null");
+      profile = {
+        role:"user",
+        email:currentUser.email,
+        player_id:cached?.player_id || null,
+        first_name:cached?.first_name || "",
+        last_name:cached?.last_name || "",
+        full_name:cached?.full_name || ""
+      };
+    }
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+async function fallbackBootstrap41121(includeProfile = true){
+  const profilePromise = currentUser && includeProfile
+    ? db.from("profiles").select("id,email,role,first_name,last_name,full_name,player_id").eq("id", currentUser.id).maybeSingle()
+    : Promise.resolve({ data:null, error:null });
+
+  const [profileRes, playersRes, attendanceRes, pairRes, historyRes, settingsRes, gameRes] = await Promise.all([
+    profilePromise,
+    db.from("players").select("id,first_name,last_name,full_name,handling,cutting,defense,win_loss,active,injury_pct,temporary,games_played,wins,losses").order("first_name"),
+    db.from("attendance").select("player_id,present"),
+    db.from("pair_rules").select("id,player1_id,player2_id,rule_type,strength,created_by,created_by_role,created_at").order("created_at"),
+    db.from("teammate_history").select("player_a,player_b,count"),
+    db.from("settings").select("id,weight_handling,weight_cutting,weight_defense,k_factor,repeat_weight,prioritize_handler_separation,handler_separation_boost,prioritize_elite_balance,elite_balance_boost").eq("id","main").maybeSingle(),
+    db.from("current_game").select("teams,generated_at,selected_winner_index,results_saved").eq("id","main").maybeSingle()
+  ]);
+
+  if(playersRes.error) throw playersRes.error;
+
+  return {
+    profile: profileRes.data || null,
+    players: playersRes.data || [],
+    attendance: attendanceRes.data || [],
+    pair_rules: pairRes.data || [],
+    teammate_history: historyRes.data || [],
+    settings: settingsRes.data || null,
+    current_game: gameRes.data || null
+  };
+}
+
+async function fetchBootstrap41121(includeProfile = true){
+  const { data, error } = await db.rpc("get_app_bootstrap_41121");
+  if(!error && data) return { payload:data, usedRpc:true };
+
+  const msg = String(error?.message || "");
+  const missing = !error
+    || error?.code === "PGRST202"
+    || msg.includes("get_app_bootstrap_41121")
+    || msg.includes("Could not find the function")
+    || msg.includes("schema cache");
+
+  if(!missing) console.warn("Bootstrap RPC failed; using fallback:", error);
+
+  return { payload:await fallbackBootstrap41121(includeProfile), usedRpc:false };
+}
+
+async function loadCloudData41121(options = {}){
+  if(!db) return null;
+
+  const includeProfile = options.includeProfile !== false;
+  const applyLocal = options.applyLocal !== false;
+  const force = options.force === true;
+
+  if(cloudLoadPromise41121 && !force) return cloudLoadPromise41121;
+
+  const task = (async () => {
+    const started = performance.now();
+    const { payload, usedRpc } = await fetchBootstrap41121(includeProfile);
+
+    applyBootstrapPayload41121(payload, includeProfile);
+
+    if(currentUser && includeProfile && !payload.profile){
+      await loadProfile();
+    }
+
+    if(applyLocal && typeof applyLocalTeammateGame41117 === "function"){
+      applyLocalTeammateGame41117();
+    }
+
+    saveSafeStartupSnapshot41121();
+    console.log(`App data loaded in ${Math.round(performance.now() - started)} ms (${usedRpc ? "bootstrap RPC" : "fallback"})`);
+    return payload;
+  })();
+
+  cloudLoadPromise41121 = task;
+  try{
+    return await task;
+  }finally{
+    if(cloudLoadPromise41121 === task) cloudLoadPromise41121 = null;
+  }
+}
+
+loadCloudData = loadCloudData41121;
+window.loadCloudData = loadCloudData41121;
+
+function scheduleLiveRefresh41121(){
+  if(liveRefreshTimer) clearTimeout(liveRefreshTimer);
+  liveRefreshTimer = setTimeout(async () => {
+    try{
+      await loadCloudData41121({ includeProfile:true, applyLocal:true });
+      renderAll();
+    }catch(e){
+      console.warn("Live refresh failed", e);
+    }
+  }, 175);
+}
+scheduleLiveRefresh = scheduleLiveRefresh41121;
+window.scheduleLiveRefresh = scheduleLiveRefresh41121;
+
+function subscribeToProfileUpdates41121(){
+  if(!db) return;
+  unsubscribeFromProfileUpdates();
+  if(!currentUser) return;
+
+  profileChannel = db
+    .channel(`profile-live-${currentUser.id}`)
+    .on("postgres_changes",
+      { event:"*", schema:"public", table:"profiles", filter:`id=eq.${currentUser.id}` },
+      async () => {
+        try{
+          await loadCloudData41121({ includeProfile:true, applyLocal:true, force:true });
+          updateAuthButtons();
+          renderAll();
+          idle41121(() => handleRoleMilestones(), 1800);
+        }catch(e){
+          console.warn("Profile refresh failed", e);
+        }
+      }
+    )
+    .subscribe(status => console.log("Profile live updates:", status));
+}
+subscribeToProfileUpdates = subscribeToProfileUpdates41121;
+window.subscribeToProfileUpdates = subscribeToProfileUpdates41121;
+
+function installLightweightProfileRefresh41121(){
+  if(window.__profileRefresh41121Installed) return;
+  window.__profileRefresh41121Installed = true;
+
+  let running = false;
+  const refresh = async () => {
+    if(!currentUser || running) return;
+    running = true;
+    try{
+      await loadCloudData41121({ includeProfile:true, applyLocal:true });
+      renderAll();
+    }catch(e){
+      console.warn("Foreground refresh failed", e);
+    }finally{
+      running = false;
+    }
+  };
+
+  window.addEventListener("focus", refresh, { passive:true });
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState === "visible") refresh();
+  });
+}
+
+const updateNotificationUiImmediate41121 = updateNotificationUi;
+updateNotificationUi = function(forceSubscribed = null){
+  const accountOpen = document.getElementById("accountModal")?.classList.contains("modal-open");
+  if(forceSubscribed !== null || accountOpen){
+    return updateNotificationUiImmediate41121(forceSubscribed);
+  }
+
+  if(notificationUiQueued41121) return;
+  notificationUiQueued41121 = true;
+  idle41121(async () => {
+    notificationUiQueued41121 = false;
+    try{ await updateNotificationUiImmediate41121(null); }catch(e){}
+  }, 2200);
+};
+window.updateNotificationUi = updateNotificationUi;
+
+function installMyProfileClickLight41121(){
+  if(window.__myProfileClickLight41121) return;
+  window.__myProfileClickLight41121 = true;
+
+  document.addEventListener("click", e => {
+    const target = e.target instanceof Element
+      ? e.target.closest("#myProfileBtn, [data-open-my-profile='true']")
+      : null;
+    if(!target) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    if(typeof openMyProfileModal41118 === "function") openMyProfileModal41118();
+    else if(typeof openMyProfileModal === "function") openMyProfileModal();
+  }, true);
+
+  if(typeof normalizeMyProfileButton41118 === "function") normalizeMyProfileButton41118();
+}
+
+function removeHistoricalStartupWatchers41121(){
+  try{ document.removeEventListener("DOMContentLoaded", startAttendanceSearchVisibilityWatcher41110); }catch(e){}
+  try{ document.removeEventListener("DOMContentLoaded", startAttendanceSearchVisibilityWatcher41111); }catch(e){}
+  try{ document.removeEventListener("DOMContentLoaded", cleanAccountProfileSection); }catch(e){}
+  try{ document.removeEventListener("DOMContentLoaded", startAccountPopupCleaner41115); }catch(e){}
+  try{ document.removeEventListener("DOMContentLoaded", startAccountPopupCleaner41116); }catch(e){}
+  try{ document.removeEventListener("DOMContentLoaded", startProfileRefreshSafeguards41117); }catch(e){}
+  try{ document.removeEventListener("DOMContentLoaded", start41118UiFixes); }catch(e){}
+  try{ document.removeEventListener("DOMContentLoaded", installInactivePlayersDefault41120); }catch(e){}
+}
+
+async function afterAuthChange41121(){
+  state.showInactive = false;
+
+  const restored = restoreSafeStartupSnapshot41121();
+  updateAuthButtons();
+  if(restored){
+    renderAll();
+    showPage("main");
+  }
+
+  try{
+    await loadCloudData41121({ includeProfile:true, applyLocal:true, force:true });
+  }catch(e){
+    console.error("Initial data load failed", e);
+    if(!restored) setAuthMessage("Could not load app data. Check your connection and try again.");
+  }
+
+  updateAuthButtons();
+  renderAll();
+  showPage("main");
+
+  idle41121(() => {
+    subscribeToLiveDataUpdates();
+    if(currentUser) subscribeToProfileUpdates41121();
+    else unsubscribeFromProfileUpdates();
+    installLightweightProfileRefresh41121();
+    handleRoleMilestones();
+  }, 1200);
+}
+afterAuthChange = afterAuthChange41121;
+window.afterAuthChange = afterAuthChange41121;
+
+async function init41121(){
+  const started = performance.now();
+
+  hideSignInBox();
+  hideAllModals();
+  state.showInactive = false;
+
+  if(!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_KEY.includes("PASTE_")){
+    setAuthMessage("Config missing. Open config.js and paste your Supabase publishable/anon key.");
+    renderAll();
+    showPage("main");
+    return;
+  }
+
+  db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  listenForAuthConfirmedFromOtherTab();
+
+  const hasAuthRedirect =
+    new URLSearchParams(location.search).has("code")
+    || /(?:^|[&#])(access_token|refresh_token|type)=/.test(location.hash || "");
+
+  if(hasAuthRedirect) await completeAuthRedirectIfNeeded();
+
+  const { data } = await db.auth.getSession();
+  currentUser = data?.session?.user || null;
+
+  db.auth.onAuthStateChange(async (event, session) => {
+    if(event === "INITIAL_SESSION") return;
+    currentUser = session?.user || null;
+    await afterAuthChange41121();
+  });
+
+  await afterAuthChange41121();
+  console.log(`Startup completed in ${Math.round(performance.now() - started)} ms`);
+}
+
+async function generateGame41121(sendPushNotification = false){
+  if(!canGenerateTeams()){
+    alert("Only Teammates, Captains, and Admins can generate teams.");
+    return;
+  }
+
+  await loadCloudData41121({ includeProfile:true, applyLocal:false, force:true });
+
+  const players = presentPlayers();
+  const numTeams = Math.max(2, Number(document.getElementById("numTeams")?.value || 2));
+
+  if(players.length < numTeams){
+    alert("Not enough attending players for that many teams.");
+    return;
+  }
+
+  let best = null;
+  for(let i = 0; i < 120; i++){
+    const candidate = optimizeTeams(makeInitialTeams(players, numTeams), Number(state.settings.repeatWeight || 4));
+    if(!best || candidate.score < best.score) best = candidate;
+  }
+
+  state.currentGameGeneratedAt = new Date().toISOString();
+  state.currentGame = { teams:best.teams };
+  state.selectedWinnerIndex = null;
+  state.resultsSavedForCurrentGame = false;
+
+  if(isTeammate()){
+    state.currentGameIsLocalTeammate41117 = true;
+    saveLocalTeammateGame41117();
+  }else{
+    state.currentGameIsLocalTeammate41117 = false;
+    clearLocalTeammateGame41117();
+    if(typeof clearLocalTeammatePairHistory41119 === "function") clearLocalTeammatePairHistory41119();
+    await saveCurrentGameToDb(false);
+    if(sendPushNotification) await sendTeamGeneratedNotification();
+  }
+
+  saveSafeStartupSnapshot41121();
+  renderAll();
+  updateTeamsDetailsOpenState();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+generateGame = generateGame41121;
+window.generateGame = generateGame41121;
+
+removeHistoricalStartupWatchers41121();
+try{ document.removeEventListener("DOMContentLoaded", init); }catch(e){}
+init = init41121;
+document.addEventListener("DOMContentLoaded", init41121);
+installMyProfileClickLight41121();
+
+Object.assign(window, {
+  idle41121,
+  applyBootstrapPayload41121,
+  saveSafeStartupSnapshot41121,
+  restoreSafeStartupSnapshot41121,
+  fallbackBootstrap41121,
+  fetchBootstrap41121,
+  loadCloudData41121,
+  scheduleLiveRefresh41121,
+  subscribeToProfileUpdates41121,
+  installLightweightProfileRefresh41121,
+  removeHistoricalStartupWatchers41121,
+  afterAuthChange41121,
+  init41121,
+  generateGame41121
 });
 

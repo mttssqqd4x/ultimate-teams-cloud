@@ -1285,3 +1285,32 @@ Changes:
 - the original scoring remains active, including elite balance, handler separation, pair rules, global history, ratings, and injury modifiers
 - Captain/Admin generation remains official and clears the local Teammate game/history on that device
 - no Supabase SQL changes
+
+
+## 4.11.20 Inactive Players default-off fix
+
+Change:
+- Inactive Players is automatically unselected every time the app loads or reloads
+- previously saved local checkbox state no longer causes inactive players to appear on startup
+- also resets after browser back/forward cache restoration
+- no Supabase SQL changes
+
+
+## 4.11.21 Fast startup + audit cleanup
+
+Performance:
+- single bootstrap RPC for startup
+- critical-script preloading
+- safe instant snapshot on repeat opens
+- faster service-worker static caching
+- removes duplicate startup observers/timers
+- avoids duplicate INITIAL_SESSION startup
+- defers push subscription inspection
+
+Correctness:
+- Teammates can now read official Captain/Admin Pair Rules.
+- Pair Rule write permissions remain Captain/Admin only.
+
+SQL:
+- Run `update_4_11_21.sql` once.
+- The app has a fallback if the RPC is missing, but maximum startup speed and Teammate Pair Rule access require the SQL update.

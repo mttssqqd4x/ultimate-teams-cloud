@@ -237,6 +237,16 @@
     #accountProfileToolbar #myProfileBtn{width:100%!important;display:block!important}
 
 </style>
+
+  <!-- 4.11.21 startup performance -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://fsdqkozqjshqooqwvmhq.supabase.co" crossorigin>
+  <link rel="dns-prefetch" href="//fsdqkozqjshqooqwvmhq.supabase.co">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script" crossorigin="anonymous">
+  <link rel="preload" href="config.js" as="script">
+  <link rel="preload" href="app.js" as="script">
+
 </head>
 <body>
 <div class="app">
@@ -610,6 +620,6 @@
 </div>
 
 <div class="stickybar" id="stickybar"><div class="inner"><button type="button" class="btn-success" onclick="generateTeamsButton()">Generate Teams</button></div></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="app.js"></script>
+<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="app.js"></script>
 <div id="loadingOverlay" class="loading-backdrop"><div class="loading-card"><div class="spinner"></div><div id="loadingMessage">Working...</div></div></div>
 </body></html>
