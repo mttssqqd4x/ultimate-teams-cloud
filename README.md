@@ -1,11 +1,11 @@
-# Ultimate Teams Cloud — 4.12.9
+# Ultimate Teams Cloud — 4.13.0
 
-- 4.12.9: makes Sandbox mode unmistakable with a blue Sandbox control header and blue Ultimate Teams header inside the isolated sandbox. The live app header remains unchanged.
+- 4.13.0: makes Sandbox mode unmistakable with a blue Sandbox control header and blue Ultimate Teams header inside the isolated sandbox. The live app header remains unchanged.
 
 
-- 4.12.9: keeps Balance Rating only in the Game Night Dashboard, colors the Balance card by score, and makes it open a details popup.
-- 4.12.9: makes Last Winner open the saved winning-team roster.
-- 4.12.9: moves Number of Teams to the top of Attendance and adds a bottom click shield so controls behind Generate Teams cannot be pressed.
+- 4.13.0: keeps Balance Rating only in the Game Night Dashboard, colors the Balance card by score, and makes it open a details popup.
+- 4.13.0: makes Last Winner open the saved winning-team roster.
+- 4.13.0: moves Number of Teams to the top of Attendance and adds a bottom click shield so controls behind Generate Teams cannot be pressed.
 
 - 4.12.7: removes the residual translucent sticky-header strip above Team Notifications in the Account popup.
 
@@ -1439,3 +1439,10 @@ Upload the complete ZIP contents to the existing GitHub Pages repository, replac
 Deployment: upload the complete ZIP contents to the existing GitHub Pages repository, replacing matching files. No SQL changes are needed for this release.
 
 Validation: DOM integration checks with synthetic data covered all four roles, self-only attendance, teammate-local generation, adding a player, Pair Rules, generation, result saving, duplicate-save prevention, smart late add, manual move, sandbox exit, unchanged parent state, disabled sandbox fetch, footer version, and compact dashboard/header declarations. No live database was used in testing. Pixel-level browser validation was unavailable in this environment.
+
+
+## 4.13.0
+- Sandbox control bar remains blue, while the normal Ultimate Teams header inside sandbox keeps the regular app styling.
+- One-time players can be converted to permanent players in place, preserving the same player record, ratings, and history.
+- Removed the Current Game start-time label.
+- Run `update_4_13_0.sql` once to enable Make Permanent in the live database.

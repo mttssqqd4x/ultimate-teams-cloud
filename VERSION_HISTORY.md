@@ -26,3 +26,9 @@ The project changed versioning schemes over time. The earliest local app used si
 - 4.12.6–4.12.7: header/translucency cleanup, removed stray Current Game/Account visual artifacts, and tightened Roster & App Settings.
 - 4.12.8: Dashboard-only interactive Balance Rating, interactive Last Winner roster, Generate Teams click shield, and Number of Teams moved to the top of Attendance.
 - 4.12.9: blue Sandbox headers so test mode is immediately obvious.
+
+
+### 4.13.0
+- Sandbox blue styling is limited to the outer sandbox controls.
+- Added Make Permanent for one-time players without recreating their player record.
+- Removed the Current Game start-time display.
