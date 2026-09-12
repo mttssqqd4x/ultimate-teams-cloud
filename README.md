@@ -1390,3 +1390,14 @@ Design:
 
 SQL:
 - no Supabase SQL changes are required for 4.12.2
+
+
+## 4.12.3 — Subtle black styling
+
+- Pure #000000 page background, including Sandbox; removed ambient color gradients and glows.
+- Neutral charcoal panels, quieter highlights and shadows, and slightly smaller corner radii.
+- Removed the decorative header icon and its spacing on desktop and mobile.
+- Kept the fixed translucent header, translucent Generate Teams dock, and status/action colors.
+- Updated versioned assets and the offline cache to 4.12.3.
+
+Upload the complete ZIP contents to the existing GitHub Pages repository, replacing matching files. No additional Supabase SQL changes are required for this styling release.
