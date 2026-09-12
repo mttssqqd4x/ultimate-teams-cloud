@@ -1,5 +1,9 @@
 # Ultimate Teams — Version History Overview
 
+
+### 4.13.1
+- Combined the one-time player **Make Permanent** and **Remove** controls into a single **One-Time ▾** action button with a compact two-choice popup.
+
 The project changed versioning schemes over time. The earliest local app used simple integer releases (v1, v2, …); the cloud rebuild used v2/v3/v4.x; semantic-style numbering was adopted at 4.7.12. Treat the original v1 as the 1.0.0-era starting point.
 
 ## Local app era

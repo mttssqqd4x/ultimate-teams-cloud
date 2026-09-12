@@ -1,11 +1,8 @@
-# Ultimate Teams Cloud — 4.13.0
+# Ultimate Teams Cloud — 4.13.1
 
-- 4.13.0: makes Sandbox mode unmistakable with a blue Sandbox control header and blue Ultimate Teams header inside the isolated sandbox. The live app header remains unchanged.
-
-
-- 4.13.0: keeps Balance Rating only in the Game Night Dashboard, colors the Balance card by score, and makes it open a details popup.
-- 4.13.0: makes Last Winner open the saved winning-team roster.
-- 4.13.0: moves Number of Teams to the top of Attendance and adds a bottom click shield so controls behind Generate Teams cannot be pressed.
+- 4.13.1: combines one-time player **Make Permanent** and **Remove** controls into one compact **One-Time ▾** action button.
+- 4.13.0: keeps only the outer Sandbox controls blue, adds in-place Make Permanent for one-time players, and removes Current Game start time.
+- 4.12.8: keeps Balance Rating only in the Game Night Dashboard, adds Balance details and Last Winner roster popups, moves Number of Teams to the top of Attendance, and blocks clicks behind Generate Teams.
 
 - 4.12.7: removes the residual translucent sticky-header strip above Team Notifications in the Account popup.
 
@@ -1442,7 +1439,15 @@ Validation: DOM integration checks with synthetic data covered all four roles, s
 
 
 ## 4.13.0
+
 - Sandbox control bar remains blue, while the normal Ultimate Teams header inside sandbox keeps the regular app styling.
 - One-time players can be converted to permanent players in place, preserving the same player record, ratings, and history.
 - Removed the Current Game start-time label.
 - Run `update_4_13_0.sql` once to enable Make Permanent in the live database.
+
+
+## 4.13.1
+
+- Combined the separate one-time player **Make Permanent** and **Remove** buttons into a single compact **One-Time ▾** action button.
+- The action popup offers **Make Permanent** and **Remove** while preserving the existing confirmation safeguards.
+- No new SQL changes are required for 4.13.1. The existing `update_4_13_0.sql` is still required if Make Permanent has not already been enabled.
