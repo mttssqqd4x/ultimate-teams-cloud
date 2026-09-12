@@ -1336,3 +1336,23 @@ Correctness:
 SQL:
 - Run `update_4_11_21.sql` once.
 - The app has a fallback if the RPC is missing, but maximum startup speed and Teammate Pair Rule access require the SQL update.
+
+
+## 4.12.1 full visual makeover + Sandbox launcher fix
+
+Visual:
+- all Main, Data, Sandbox, and auth cards now use the same dashboard-style translucent glass treatment
+- details headers, sub-sections, players, team cards, notices, inputs, buttons, and modals were refreshed
+- Ultimate Teams header is sticky/locked at the top and more translucent
+- Generate Teams bottom bar and button are now translucent glass surfaces
+- controls are more rounded and consistent with the 4.12 dashboard/sandbox design
+- removed the explanatory paragraph under Add Player
+
+Fix:
+- Open Sandbox now uses a dedicated bound click handler
+- Sandbox opening no longer depends on a potentially stale role helper after the button has already been shown
+- old `openTestSandbox4120()` callers are redirected to the fixed implementation
+- Sandbox still performs zero database writes
+
+SQL:
+- no Supabase SQL changes are required for 4.12.1

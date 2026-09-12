@@ -2,7 +2,7 @@
    Historical compatibility lives in legacy-core.js.
    New active behavior belongs here. */
 
-const REFACTOR_VERSION_4120 = "4.12.0";
+const REFACTOR_VERSION_4120 = "4.12.1";
 const OFFLINE_ATTENDANCE_KEY_4120 = "ultimateTeamsOfflineAttendance4120";
 function offlineAttendanceKey4120(){ return `${OFFLINE_ATTENDANCE_KEY_4120}:${currentUser?.id || "guest"}`; }
 const SANDBOX_STORAGE_KEY_4120 = "ultimateTeamsSandbox4120";
@@ -897,3 +897,58 @@ Object.assign(window,{
   refreshGameNightStats4120,renderGameNightDashboard4120,generateGame4120,generateTeamsButton4120,
   openMyProfileModal4120,smartLateAddPlayer4120,afterAuthChange4120,init4120
 });
+
+
+/* ============================================================
+   4.12.1 — reliable Sandbox launcher
+   ============================================================ */
+
+function openTestSandbox4121(){
+  try{
+    const main = document.getElementById("mainPage");
+    const data = document.getElementById("dataPage");
+    const sandbox = document.getElementById("sandboxPage");
+    const sticky = document.getElementById("stickybar");
+
+    if(!sandbox) throw new Error("Sandbox page is missing from the document.");
+
+    // Sandbox is local-only; do not block opening because of a stale role helper.
+    // Visibility of the launcher remains controlled by the Captain/Admin UI classes.
+    sandboxState4120 = makeSandboxFromLive4120();
+    resetSandboxControls4120();
+
+    if(main) main.style.display = "none";
+    if(data) data.style.display = "none";
+    sandbox.style.display = "block";
+    if(sticky) sticky.style.display = "none";
+
+    renderSandbox4120();
+    window.scrollTo({top:0,behavior:"smooth"});
+  }catch(e){
+    console.error("Could not open Test Sandbox", e);
+    alert("Could not open Test Sandbox: " + (e?.message || e));
+  }
+}
+
+function installSandboxLauncher4121(){
+  const button = document.getElementById("openSandboxBtn");
+  if(!button || button.dataset.bound4121 === "1") return;
+
+  button.dataset.bound4121 = "1";
+  button.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openTestSandbox4121();
+  });
+}
+
+// Keep old callers working too.
+openTestSandbox4120 = openTestSandbox4121;
+window.openTestSandbox4120 = openTestSandbox4121;
+window.openTestSandbox4121 = openTestSandbox4121;
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", installSandboxLauncher4121);
+}else{
+  installSandboxLauncher4121();
+}
