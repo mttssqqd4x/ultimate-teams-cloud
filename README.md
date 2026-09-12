@@ -1,8 +1,11 @@
-# Ultimate Teams Cloud — 4.12.8
+# Ultimate Teams Cloud — 4.12.9
 
-- 4.12.8: keeps Balance Rating only in the Game Night Dashboard, colors the Balance card by score, and makes it open a details popup.
-- 4.12.8: makes Last Winner open the saved winning-team roster.
-- 4.12.8: moves Number of Teams to the top of Attendance and adds a bottom click shield so controls behind Generate Teams cannot be pressed.
+- 4.12.9: makes Sandbox mode unmistakable with a blue Sandbox control header and blue Ultimate Teams header inside the isolated sandbox. The live app header remains unchanged.
+
+
+- 4.12.9: keeps Balance Rating only in the Game Night Dashboard, colors the Balance card by score, and makes it open a details popup.
+- 4.12.9: makes Last Winner open the saved winning-team roster.
+- 4.12.9: moves Number of Teams to the top of Attendance and adds a bottom click shield so controls behind Generate Teams cannot be pressed.
 
 - 4.12.7: removes the residual translucent sticky-header strip above Team Notifications in the Account popup.
 
