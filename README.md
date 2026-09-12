@@ -1,4 +1,6 @@
-# Ultimate Teams Cloud — 4.12.6
+# Ultimate Teams Cloud — 4.12.7
+
+- 4.12.7: removes the residual translucent sticky-header strip above Team Notifications in the Account popup.
 
 ## UI cleanup from 4.12.5
 

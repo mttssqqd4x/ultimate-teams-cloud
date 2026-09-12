@@ -1,15 +1,15 @@
-const CACHE='ultimate-teams-cloud-4-12-6';
+const CACHE='ultimate-teams-cloud-4-12-7';
 const STATIC_ASSETS=[
   './',
   './index.html',
-  './theme-4.12.6.css',
+  './theme-4.12.7.css',
   './styles-4120.css',
-  './legacy-core-4.12.6.js',
-  './app-4.12.6.js',
+  './legacy-core-4.12.7.js',
+  './app-4.12.7.js',
   './config.js',
-  './version-4.12.6.js',
-  './sandbox-host-4.12.6.js',
-  './sandbox-runtime-4.12.6.js',
+  './version-4.12.7.js',
+  './sandbox-host-4.12.7.js',
+  './sandbox-runtime-4.12.7.js',
   './manifest.json'
 ];
 
