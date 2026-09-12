@@ -1392,12 +1392,12 @@ SQL:
 - no Supabase SQL changes are required for 4.12.2
 
 
-## 4.12.3 — Subtle black styling
+## 4.12.4 — Compact attendance and consistent rounding
 
-- Pure #000000 page background, including Sandbox; removed ambient color gradients and glows.
-- Neutral charcoal panels, quieter highlights and shadows, and slightly smaller corner radii.
-- Removed the decorative header icon and its spacing on desktop and mobile.
-- Kept the fixed translucent header, translucent Generate Teams dock, and status/action colors.
-- Updated versioned assets and the offline cache to 4.12.3.
+- Removed the Reshuffle and Offline queue tiles from the Game Night dashboard; the six remaining tiles use three columns on desktop and two on mobile.
+- Reduced padding and spacing in Add Player, Pair Rules, and attendance rows, including the signed-in player row.
+- Made the fixed header and Generate Teams dock more translucent.
+- Standardized rectangular panels, controls, and dialogs on one 24px radius; pills and circular switches retain their shapes.
+- Preserved the pure black page background. Updated release asset names and offline cache.
 
-Upload the complete ZIP contents to the existing GitHub Pages repository, replacing matching files. No additional Supabase SQL changes are required for this styling release.
+Upload the complete ZIP contents to the existing GitHub Pages repository, replacing matching files. No SQL changes are required for this release.
