@@ -239,7 +239,7 @@
 
 </style>
 
-  <link rel="stylesheet" href="theme-4.12.4.css">
+  <link rel="stylesheet" href="theme-4.12.5.css">
 
   <!-- 4.11.21 startup performance -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -248,8 +248,8 @@
   <link rel="dns-prefetch" href="//fsdqkozqjshqooqwvmhq.supabase.co">
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script" crossorigin="anonymous">
   <link rel="preload" href="config.js" as="script">
-  <link rel="preload" href="legacy-core-4.12.4.js" as="script">
-  <link rel="preload" href="app-4.12.4.js" as="script">
+  <link rel="preload" href="legacy-core-4.12.5.js" as="script">
+  <link rel="preload" href="app-4.12.5.js" as="script">
 
 </head>
 <body>
@@ -335,14 +335,14 @@
 
   <div class="card captain-admin-only" id="dataSandboxLauncher">
     <div class="row" style="justify-content:space-between;align-items:center">
-      <div><div class="eyebrow">SAFE TESTING</div><h2 style="margin:2px 0 4px">Test Sandbox</h2><div class="small">Open a full local copy of game night. Attendance, Pair Rules, generation, results, and rebalancing stay on this device and never write to Supabase.</div></div>
+      <h2 style="margin:0">Test Sandbox</h2>
       <button id="openSandboxBtn" class="btn" style="width:auto" type="button" onclick="return openTestSandbox4122(event)">Open Sandbox</button>
     </div>
   </div>
 
   <div class="card admin-only" id="dataAdminLoadEdit">
     <details open>
-      <summary><span class="summary-title">Load Or Edit Players</span><span></span></summary>
+      <summary><span class="summary-title">Roster & App Settings</span><span></span></summary>
       <div class="notice" style="margin-top:10px">Paste CSV with columns: First Name, Last Name, Handling, Cutting, Defense, Win/Loss. Optional extra column allowed: Combined.</div>
 
       <div class="grid grid-2" style="margin-top:10px">
@@ -435,7 +435,6 @@
         <button class="btn-secondary" type="button" onclick="downloadBackupJson()">Export Backup JSON</button>
         <button class="btn-secondary" type="button" onclick="document.getElementById('importBackupJsonInput').click()">Import Backup JSON</button>
         <input id="importBackupJsonInput" type="file" accept="application/json,.json" style="display:none" onchange="importBackupJsonFile(event)">
-        <button class="btn-secondary" type="button" onclick="downloadRatingsCsv()">Download Ratings CSV</button>
       </div>
 
       <div class="toolbar" style="margin-top:10px">
@@ -448,27 +447,17 @@
 
 
 
-<div id="sandboxPage" style="display:none">
-  <div class="sandbox-banner"><strong>TEST SANDBOX</strong><span>Nothing on this page saves to the real database.</span><button class="btn-secondary" type="button" onclick="return closeTestSandbox4122(event)">Back to Data</button></div>
-  <div class="card glass-dashboard">
-    <div class="dashboard-heading"><div><div class="eyebrow">LOCAL COPY</div><h2>Game Night Dashboard</h2></div><button class="btn-secondary" style="width:auto" type="button" onclick="resetSandboxFromLive4120()">Reset From Live</button></div>
-    <div id="sandboxDashboard" class="dashboard-grid"></div>
+<div id="sandboxPage" style="display:none" aria-label="Test Sandbox">
+  <div class="sandbox-controls" id="sandboxControls">
+    <strong>Sandbox</strong>
+    <label for="sandboxRole">View as</label>
+    <select id="sandboxRole"><option value="player">Player</option><option value="teammate">Teammate</option><option value="captain">Captain</option><option value="admin" selected>Admin</option></select>
+    <label for="sandboxIdentity">Player</label><select id="sandboxIdentity" aria-label="Simulated player"></select>
+    <button class="btn-secondary" id="sandboxReset" type="button">Reset</button>
+    <button class="btn-secondary" id="sandboxExit" type="button">Exit</button>
   </div>
-  <div class="card">
-    <details open><summary><span class="summary-title">Current Test Game</span><span id="sandboxGameTime" class="muted-inline"></span></summary>
-      <div id="sandboxTeamsOutput" style="margin-top:10px"></div>
-      <div class="toolbar" style="margin-top:12px"><button class="btn-success" type="button" onclick="sandboxGenerate4120()">Generate Test Teams</button><button class="btn-secondary" type="button" onclick="sandboxSimulateSaveResult4120()">Simulate Save Result</button></div>
-    </details>
-  </div>
-  <div class="card">
-    <details open><summary><span class="summary-title">Test Attendance & Rules</span><span id="sandboxPresentCount" class="muted-inline"></span></summary>
-      <div class="grid grid-2" style="margin-top:10px"><div><label>Number Of Teams</label><input id="sandboxNumTeams" type="number" min="2" value="3"></div><div><label>Reshuffle Mode</label><select id="sandboxReshuffleMode"><option value="normal">Normal</option><option value="maximum">Maximum Reshuffle</option><option value="balance">Balance Only</option></select></div></div>
-      <div class="subbox"><div class="player-name">Local Pair Rule</div><div class="grid grid-4" style="margin-top:10px"><select id="sandboxPairP1"></select><select id="sandboxPairP2"></select><select id="sandboxPairType"><option value="apart">Apart</option><option value="together">Together</option></select><input id="sandboxPairStrength" type="number" min="0.1" max="5" step="0.1" value="1"></div><div class="toolbar" style="margin-top:8px"><button class="btn" type="button" onclick="sandboxAddPairRule4120()">Add Rule</button><button class="btn-secondary" type="button" onclick="sandboxClearPairRules4120()">Clear Test Rules</button></div><div id="sandboxPairRuleList" class="list" style="margin-top:8px"></div></div>
-      <div class="subbox"><div class="player-name">Late Player Smart Rebalance</div><div class="grid grid-2" style="margin-top:8px"><select id="sandboxLatePlayer"></select><button class="btn-secondary" type="button" onclick="sandboxLateSmartRebalance4120()">Add & Smart Rebalance</button></div></div>
-      <div class="modal-search-row"><div class="modal-search-input-wrap"><input id="sandboxPlayerSearch" placeholder="Search test players..." oninput="renderSandbox4120()"></div><button class="btn-secondary modal-search-clear" type="button" onclick="document.getElementById('sandboxPlayerSearch').value='';renderSandbox4120()">Clear</button></div>
-      <div id="sandboxPlayerList" class="list" style="margin-top:10px"></div>
-    </details>
-  </div>
+  <div id="sandboxLoadStatus" role="status"></div>
+  <iframe id="sandboxFrame" title="Main page sandbox" sandbox="allow-scripts allow-modals allow-downloads" referrerpolicy="no-referrer"></iframe>
 </div>
 
 <div id="editPlayerModal" class="modal-backdrop" onclick="closeModal(event, 'editPlayerModal')">
@@ -649,7 +638,6 @@
       <h2 style="margin:0">Win/Loss Records</h2>
       <button class="btn-secondary" style="width:auto" onclick="hideModal('winLossModal')">Close</button>
     </div>
-    <div class="small" style="margin-top:10px">Default sort is Win/Loss rating high-low. Winning records are green, losing records are red, and tied records are neutral.</div>
     <div class="modal-sort-row">
       <label for="winLossSort">Sort by</label>
       <select id="winLossSort" onchange="openWinLossModal(false)">
@@ -674,6 +662,6 @@
 </div>
 
 <div class="stickybar" id="stickybar"><div class="inner"><button type="button" class="btn-success" onclick="generateTeamsButton()">Generate Teams</button></div></div>
-<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="legacy-core-4.12.4.js"></script><script src="app-4.12.4.js"></script>
+<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="version-4.12.5.js"></script><script src="legacy-core-4.12.5.js"></script><script src="app-4.12.5.js"></script><script src="sandbox-host-4.12.5.js"></script>
 <div id="loadingOverlay" class="loading-backdrop"><div class="loading-card"><div class="spinner"></div><div id="loadingMessage">Working...</div></div></div>
 </body></html>

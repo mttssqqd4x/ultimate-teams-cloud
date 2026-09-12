@@ -1401,3 +1401,19 @@ SQL:
 - Preserved the pure black page background. Updated release asset names and offline cache.
 
 Upload the complete ZIP contents to the existing GitHub Pages repository, replacing matching files. No SQL changes are required for this release.
+
+
+## 4.12.5 — Shared Main sandbox and compact dashboard
+
+- Reduced the Game Night dashboard's tile height, text sizes, padding, and gaps.
+- Increased header transparency and removed its backdrop blur and shadow. The page remains pure black.
+- Replaced the separate sandbox interface with the actual index.html, styles, app scripts, rendering functions, and role checks inside an isolated iframe.
+- Added Player, Teammate, Captain, and Admin preview roles plus a roster-player identity selector. The selectors affect only the sandbox. Main interactions include attendance, Add Player, Pair Rules, team generation, result saving, smart late add, and manual moves.
+- The sandbox has an in-memory database adapter and independent ephemeral storage. Its iframe has an opaque origin (no allow-same-origin), and a Content Security Policy blocks connections, workers, forms, and nested frames. No actual notifications are sent. Reset takes a fresh snapshot from the live app; Exit discards the test session.
+- The snapshot includes up to 5,000 rows from each history table. Historical/account administration RPCs outside the Main workflow report that they are unavailable in the sandbox; they never fall through to the live database.
+- Removed the Test Sandbox description and compacted its launch card. Removed the description in Win/Loss Records and the duplicate Download Ratings CSV button from the former Load Or Edit Players section. Renamed that section Roster & App Settings.
+- Added version-4.12.5.js as the shared version source for the footer, exports, and app code. The Data version line is always placed at the bottom. Updated all versioned assets and service-worker precache entries.
+
+Deployment: upload the complete ZIP contents to the existing GitHub Pages repository, replacing matching files. No SQL changes are needed for this release.
+
+Validation: DOM integration checks with synthetic data covered all four roles, self-only attendance, teammate-local generation, adding a player, Pair Rules, generation, result saving, duplicate-save prevention, smart late add, manual move, sandbox exit, unchanged parent state, disabled sandbox fetch, footer version, and compact dashboard/header declarations. No live database was used in testing. Pixel-level browser validation was unavailable in this environment.
