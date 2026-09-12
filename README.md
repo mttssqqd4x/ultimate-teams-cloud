@@ -1,5 +1,6 @@
-# Ultimate Teams Cloud — 4.13.1
+# Ultimate Teams Cloud — 4.14.0
 
+- 4.14.0: adds press-and-hold player actions to Attendance, including injury/availability and active/inactive controls, plus Make Permanent/Remove for one-time players. One-time players now carry a visible **ONE-TIME** badge in Attendance and Edit Player.
 - 4.13.1: combines one-time player **Make Permanent** and **Remove** controls into one compact **One-Time ▾** action button.
 - 4.13.0: keeps only the outer Sandbox controls blue, adds in-place Make Permanent for one-time players, and removes Current Game start time.
 - 4.12.8: keeps Balance Rating only in the Game Night Dashboard, adds Balance details and Last Winner roster popups, moves Number of Teams to the top of Attendance, and blocks clicks behind Generate Teams.

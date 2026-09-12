@@ -1,3 +1,11 @@
+### 4.14.0
+- Added press-and-hold actions to every Attendance player row for Captains/Admins.
+- Hold actions include Injury / Availability and Active / Inactive for every player.
+- One-time players additionally get Make Permanent and Remove One-Time Player actions.
+- Added a visible ONE-TIME badge in Attendance and Edit Player.
+- Edit Player retains direct Injury and Status controls and now also exposes Make Permanent / Remove One-Time for temporary players.
+- Hold gestures cancel when the pointer/finger moves so normal scrolling does not trigger the action sheet.
+
 # Ultimate Teams — Version History Overview
 
 
