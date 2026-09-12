@@ -1,3 +1,25 @@
+# Ultimate Teams Cloud — 4.12.0
+
+## Major refactor release
+
+4.12.0 moves new/active behavior into a clean canonical `app.js`. The pre-4.12 implementation is preserved as `legacy-core.js` only for compatibility with unchanged admin/history/import tools. Do not add new version patches to `legacy-core.js`.
+
+### New in 4.12.0
+- Balance Quality score on Current Game and Game Night Dashboard.
+- Reshuffle Mode setting: Normal, Maximum Reshuffle, or Balance Only.
+- Late Player **Smart Add & Rebalance** with minimal movement preference.
+- Offline attendance queue that survives reload and syncs automatically when connection returns.
+- Game Night Dashboard with attendance, game number, balance, team sizes, start time, last winner, reshuffle mode, and offline queue count.
+- My Profile → Most Common Teammates now counts **saved-result games only**; pairings-only games are excluded.
+- Captain/Captain/Admin Test Sandbox: a local-only copy of game night with attendance, Pair Rules, generation, winner selection, simulated results/ratings, late-player rebalance, and dashboard. It performs zero database writes.
+- Dark translucent/liquid-glass visual refresh with more rounded controls and cards.
+- Existing official Pair Rules, Handler Separation, Elite Balance, injury modifiers, repeat history, and limited unequal team sizes remain part of the generator.
+
+### Required SQL
+Run `update_4_12_0.sql` once in Supabase after deploying the files. It adds the reshuffle setting, the 4.12 bootstrap RPC, Teammate Pair Rule read access, and the saved-result-only teammate-profile RPC.
+
+---
+
 # Ultimate Teams Cloud v2
 
 This package updates the Supabase cloud app with the access rules you requested.
