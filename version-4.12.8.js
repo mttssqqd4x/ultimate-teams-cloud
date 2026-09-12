@@ -1,0 +1,1 @@
+window.ULTIMATE_TEAMS_VERSION = "4.12.8";
