@@ -239,6 +239,8 @@
 
 </style>
 
+  <link rel="stylesheet" href="theme-4.12.2.css">
+
   <!-- 4.11.21 startup performance -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
@@ -246,8 +248,8 @@
   <link rel="dns-prefetch" href="//fsdqkozqjshqooqwvmhq.supabase.co">
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script" crossorigin="anonymous">
   <link rel="preload" href="config.js" as="script">
-  <link rel="preload" href="legacy-core.js" as="script">
-  <link rel="preload" href="app.js" as="script">
+  <link rel="preload" href="legacy-core-4.12.2.js" as="script">
+  <link rel="preload" href="app-4.12.2.js" as="script">
 
 </head>
 <body>
@@ -334,7 +336,7 @@
   <div class="card captain-admin-only" id="dataSandboxLauncher">
     <div class="row" style="justify-content:space-between;align-items:center">
       <div><div class="eyebrow">SAFE TESTING</div><h2 style="margin:2px 0 4px">Test Sandbox</h2><div class="small">Open a full local copy of game night. Attendance, Pair Rules, generation, results, and rebalancing stay on this device and never write to Supabase.</div></div>
-      <button id="openSandboxBtn" class="btn" style="width:auto" type="button">Open Sandbox</button>
+      <button id="openSandboxBtn" class="btn" style="width:auto" type="button" onclick="return openTestSandbox4122(event)">Open Sandbox</button>
     </div>
   </div>
 
@@ -447,7 +449,7 @@
 
 
 <div id="sandboxPage" style="display:none">
-  <div class="sandbox-banner"><strong>TEST SANDBOX</strong><span>Nothing on this page saves to the real database.</span><button class="btn-secondary" type="button" onclick="closeTestSandbox4120()">Back to Data</button></div>
+  <div class="sandbox-banner"><strong>TEST SANDBOX</strong><span>Nothing on this page saves to the real database.</span><button class="btn-secondary" type="button" onclick="return closeTestSandbox4122(event)">Back to Data</button></div>
   <div class="card glass-dashboard">
     <div class="dashboard-heading"><div><div class="eyebrow">LOCAL COPY</div><h2>Game Night Dashboard</h2></div><button class="btn-secondary" style="width:auto" type="button" onclick="resetSandboxFromLive4120()">Reset From Live</button></div>
     <div id="sandboxDashboard" class="dashboard-grid"></div>
@@ -672,6 +674,6 @@
 </div>
 
 <div class="stickybar" id="stickybar"><div class="inner"><button type="button" class="btn-success" onclick="generateTeamsButton()">Generate Teams</button></div></div>
-<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="legacy-core.js"></script><script src="app.js"></script>
+<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="legacy-core-4.12.2.js"></script><script src="app-4.12.2.js"></script>
 <div id="loadingOverlay" class="loading-backdrop"><div class="loading-card"><div class="spinner"></div><div id="loadingMessage">Working...</div></div></div>
 </body></html>

@@ -1,60 +1,59 @@
-const CACHE='ultimate-teams-cloud-4-12-1';
-const STATIC_ASSETS=['./','./index.html','./legacy-core.js','./app.js','./styles-4120.css','./config.js','./manifest.json'];
+const CACHE='ultimate-teams-cloud-4-12-2';
+const STATIC_ASSETS=[
+  './',
+  './index.html',
+  './theme-4.12.2.css',
+  './styles-4120.css',
+  './legacy-core-4.12.2.js',
+  './app-4.12.2.js',
+  './config.js',
+  './manifest.json'
+];
 
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(STATIC_ASSETS)).catch(()=>null));
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache=>cache.addAll(STATIC_ASSETS))
+      .catch(()=>null)
+  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate',event=>{
   event.waitUntil((async()=>{
     const keys=await caches.keys();
-    await Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)));
-    if(self.registration.navigationPreload){
-      try{ await self.registration.navigationPreload.enable(); }catch(e){}
-    }
+    await Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)));
     await self.clients.claim();
   })());
 });
 
-async function staleWhileRevalidate(request){
+async function networkFirst(request,fallbackPath){
+  const cache=await caches.open(CACHE);
+  try{
+    const response=await fetch(request,{cache:'no-store'});
+    if(response && response.ok){
+      const cacheKey=fallbackPath || request;
+      cache.put(cacheKey,response.clone()).catch(()=>null);
+    }
+    return response;
+  }catch(e){
+    return (await cache.match(fallbackPath || request)) || Response.error();
+  }
+}
+
+async function cacheFirst(request){
   const cache=await caches.open(CACHE);
   const cached=await cache.match(request);
-  const network=fetch(request).then(response=>{
+  if(cached) return cached;
+  try{
+    const response=await fetch(request);
     if(response && (response.ok || response.type==='opaque')){
       cache.put(request,response.clone()).catch(()=>null);
     }
     return response;
-  }).catch(()=>null);
-  return cached || network || Response.error();
-}
-
-async function navigationResponse(event){
-  const cache=await caches.open(CACHE);
-  const cached=await cache.match('./index.html');
-  const preload=await event.preloadResponse.catch(()=>null);
-
-  if(preload && preload.ok){
-    cache.put('./index.html',preload.clone()).catch(()=>null);
-    return preload;
+  }catch(e){
+    return Response.error();
   }
-
-  const network=fetch(event.request).then(response=>{
-    if(response && response.ok) cache.put('./index.html',response.clone()).catch(()=>null);
-    return response;
-  }).catch(()=>null);
-
-  const fastNetwork=await Promise.race([
-    network,
-    new Promise(resolve=>setTimeout(()=>resolve(null),700))
-  ]);
-
-  if(fastNetwork) return fastNetwork;
-  if(cached){
-    network.catch(()=>null);
-    return cached;
-  }
-  return (await network) || Response.error();
 }
 
 self.addEventListener('fetch',event=>{
@@ -62,29 +61,37 @@ self.addEventListener('fetch',event=>{
 
   const url=new URL(event.request.url);
 
-  // Never cache database/auth/realtime/function traffic.
+  // Database/auth/realtime/function traffic is always live.
   if(url.hostname.endsWith('.supabase.co')) return;
 
+  // Always fetch the HTML shell from the network when online.
   if(event.request.mode==='navigate'){
-    event.respondWith(navigationResponse(event));
+    event.respondWith(networkFirst(event.request,'./index.html'));
     return;
   }
 
-  const localStatic=url.origin===self.location.origin
-    && /\.(?:js|css|json|png|svg|ico|webp)$/.test(url.pathname);
+  // config.js is intentionally network-first because it is unversioned.
+  if(url.origin===self.location.origin && url.pathname.endsWith('/config.js')){
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
 
-  const supabaseLibrary=url.hostname==='cdn.jsdelivr.net'
-    && url.pathname.includes('@supabase/supabase-js');
+  // Versioned local files are immutable for this release and safe to cache-first.
+  if(url.origin===self.location.origin){
+    event.respondWith(cacheFirst(event.request));
+    return;
+  }
 
-  if(localStatic || supabaseLibrary){
-    event.respondWith(staleWhileRevalidate(event.request));
+  // CDN library: cache-first after initial download.
+  if(url.hostname==='cdn.jsdelivr.net'){
+    event.respondWith(cacheFirst(event.request));
   }
 });
 
 self.addEventListener('push',event=>{
   let data={};
-  try{ data=event.data?event.data.json():{}; }
-  catch(e){ data={body:event.data?event.data.text():''}; }
+  try{data=event.data?event.data.json():{};}
+  catch(e){data={body:event.data?event.data.text():''};}
 
   event.waitUntil(self.registration.showNotification(
     data.title || 'New teams are ready',
@@ -104,11 +111,11 @@ self.addEventListener('notificationclick',event=>{
   const targetUrl=event.notification?.data?.url || './';
 
   event.waitUntil((async()=>{
-    const allClients=await clients.matchAll({type:'window',includeUncontrolled:true});
-    for(const client of allClients){
+    const windows=await clients.matchAll({type:'window',includeUncontrolled:true});
+    for(const client of windows){
       if('focus' in client){
-        client.focus();
-        if('navigate' in client) client.navigate(targetUrl);
+        await client.focus();
+        if('navigate' in client) await client.navigate(targetUrl);
         return;
       }
     }

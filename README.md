@@ -1356,3 +1356,37 @@ Fix:
 
 SQL:
 - no Supabase SQL changes are required for 4.12.1
+
+
+## 4.12.2 definitive cache fix + full redesign
+
+Why 4.12.1 could appear unchanged:
+- app.js, legacy-core.js, and styles were still loaded using the same URLs as older releases
+- the service worker used stale-while-revalidate for those files
+- a browser could therefore run old JavaScript and old CSS on the first load after deployment
+
+4.12.2 fixes that permanently:
+- app JS is loaded as `app-4.12.2.js`
+- legacy JS is loaded as `legacy-core-4.12.2.js`
+- the final theme is `theme-4.12.2.css`
+- the service worker always requests the HTML shell fresh when online
+- versioned static files can then be cached safely
+
+Sandbox:
+- Open Sandbox has a direct HTML click handler and a delegated JS fallback
+- the Sandbox page is made visible before any local test data is rendered
+- a render failure now shows an error inside the Sandbox instead of making the button appear dead
+- close/open aliases preserve compatibility with older Sandbox callers
+- Sandbox still performs no database writes
+
+Design:
+- Ultimate Teams header is now truly fixed to the viewport
+- page content is padded underneath it
+- Generate Teams is a floating translucent glass dock
+- Main, Data, Sandbox, auth, team cards, players, inputs, tools, modals, and section headers received a much more substantial glass-dashboard redesign
+- Data tools are styled as launch tiles
+- Current Game, Attendance, Player Tools, Sandbox, and Admin sections receive their own visual accent
+- mobile layout has dedicated spacing/radius/header rules
+
+SQL:
+- no Supabase SQL changes are required for 4.12.2
