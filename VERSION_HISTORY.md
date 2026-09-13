@@ -1,3 +1,10 @@
+## v4.14.5
+- Combined Number of Teams label and input.
+- Register attendance on release with no reliance on compatibility clicks; retain keyboard activation and hold actions.
+- Keep latest local attendance authoritative, ignore older bootstrap responses, and share one writer between offline replay and live taps.
+- Move Sandbox outside the main scroll container and preserve its viewport through entry/exit; strip host status metadata from the frame.
+- Keep player hit areas stationary and limit the Generate bar click shield to its actual area.
+
 ## v4.14.4
 - One document-level gesture lifecycle clears holds on release, cancellation, scrolling, app interruption, and a new contact, even after a row is detached.
 - Attendance refreshes preserve the row until the active gesture and its click complete.

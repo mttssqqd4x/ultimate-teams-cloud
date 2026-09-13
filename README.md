@@ -1,4 +1,21 @@
-# Ultimate Teams Cloud — 4.14.4
+# Ultimate Teams Cloud — 4.14.5
+
+## v4.14.5 update
+- Number of Teams and its numeric input share one compact, rounded control.
+- Attendance registers on pointer release, without waiting for Safari's synthetic click. Delayed clicks cannot double-toggle a player. Keyboard activation and intentional 900 ms holds remain supported.
+- Small finger movement remains a valid tap; scrolling cancels selection. Player rows no longer shrink on contact.
+- Out-of-order cloud snapshots cannot restore older attendance. New taps use the latest local intent. Offline replay and online taps share the per-player save sequence.
+- Sandbox is outside the main app's scroll container. Opening it leaves the main viewport and header in place, with interaction temporarily disabled; exiting restores interaction and launcher focus. The sandbox frame no longer copies the host's Home Screen metadata.
+- The Generate bar's transparent click shield starts at the bar instead of extending above it.
+- Upload all ZIP contents to the existing website, close/reopen online, and check the Data footer shows 4.14.5. No SQL changes or new Home Screen installation are required for this update from 4.14.4.
+- Validation: 18 gesture regressions, 7 asynchronous attendance-sync regressions, 20 Sandbox lifecycle cycles, DOM/style structure checks, JavaScript syntax, local asset references, and archive integrity. Tests simulate browser events and network timing; a real iPhone Home Screen visual check remains necessary. Browser binaries could not be downloaded in this environment.
+
+### Local regression checks
+- `node tests/attendance-gestures.cjs`
+- `node tests/attendance-sync.cjs`
+- `node tests/sandbox-lifecycle.cjs`
+- `python3 tests/layout-check.py` (requires lxml)
+
 
 ## v4.14.4 update
 - Fixed interrupted hold timers and deferred attendance row rebuilds until touch release.
