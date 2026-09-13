@@ -1,6 +1,10 @@
-# Ultimate Teams Cloud — 4.14.1
+# Ultimate Teams Cloud — 4.14.2
 
-- 4.14.1: removes direct One-Time controls from Attendance and hides the 100% injury control; injured players keep a visible read-only injury indicator while all editing/actions are accessed by press-and-hold.
+- 4.14.2: makes attendance taps paint instantly and keeps pending local attendance authoritative across realtime/cloud refreshes until Supabase confirms the same state.
+- 4.14.2: serializes rapid attendance writes per player so older requests cannot overwrite a newer tap.
+- 4.14.2: fixes the iOS Home Screen/standalone top blur by using a solid safe-area cap and disabling header backdrop blur only in installed-app mode.
+
+- 4.14.2: removes direct One-Time controls from Attendance and hides the 100% injury control; injured players keep a visible read-only injury indicator while all editing/actions are accessed by press-and-hold.
 - 4.14.0: adds press-and-hold player actions to Attendance, including injury/availability and active/inactive controls, plus Make Permanent/Remove for one-time players. One-time players now carry a visible **ONE-TIME** badge in Attendance and Edit Player.
 - 4.13.1: combines one-time player **Make Permanent** and **Remove** controls into one compact **One-Time ▾** action button.
 - 4.13.0: keeps only the outer Sandbox controls blue, adds in-place Make Permanent for one-time players, and removes Current Game start time.

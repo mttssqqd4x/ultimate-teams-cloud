@@ -1,4 +1,4 @@
-### 4.14.1
+### 4.14.2
 - Removed the One-Time action button from Attendance player cards.
 - Removed the 100% injury button from Attendance player cards.
 - Players below 100% availability keep a compact read-only injury indicator so reduced availability stays visible.

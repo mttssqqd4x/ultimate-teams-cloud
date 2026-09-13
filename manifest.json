@@ -3,8 +3,8 @@
   "short_name": "Ultimate Teams",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#05070a",
-  "theme_color": "#0a0d13",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "icons": [],
-  "version": "4.12.2"
+  "version": "4.14.2"
 }
