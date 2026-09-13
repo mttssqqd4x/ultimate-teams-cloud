@@ -1,3 +1,10 @@
+## v4.14.4
+- One document-level gesture lifecycle clears holds on release, cancellation, scrolling, app interruption, and a new contact, even after a row is detached.
+- Attendance refreshes preserve the row until the active gesture and its click complete.
+- Removed timed click suppression that could swallow the next fast tap.
+- Removed Home Screen cap overlays and switched to an inset app scroll container with a transparent system status area.
+- Generation scroll-to-top supports both browser and installed-app layouts.
+
 
 ## v4.14.3
 - Makes Attendance long-press actions more deliberate: 900 ms hold, tighter movement tolerance, and immediate cancellation on touch movement/scrolling.

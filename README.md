@@ -1,4 +1,13 @@
-# Ultimate Teams Cloud — 4.14.3
+# Ultimate Teams Cloud — 4.14.4
+
+## v4.14.4 update
+- Fixed interrupted hold timers and deferred attendance row rebuilds until touch release.
+- Quick attendance taps keep their native click; only an uninterrupted 900 ms hold opens player actions.
+- Removed the previous Home Screen black cap; the installed app now scrolls below the status area.
+- Updated all active assets and the offline cache to v4.14.4. No SQL changes.
+- Upload this ZIP's contents to the existing website. Close and reopen the app online, then check Data shows 4.14.4. If the existing Home Screen shortcut retains its old status-bar appearance, remove that shortcut and add it again from Safari after updating the site.
+- Real iPhone Home Screen appearance still requires device verification.
+
 
 - 4.14.3: reduces accidental Attendance long-presses and hardens the iOS Home Screen top safe-area blur fix.
 - 4.14.3: makes attendance taps paint instantly and keeps pending local attendance authoritative across realtime/cloud refreshes until Supabase confirms the same state.
