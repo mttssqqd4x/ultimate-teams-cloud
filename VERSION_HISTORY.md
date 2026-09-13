@@ -1,4 +1,9 @@
-### 4.14.2
+
+## v4.14.3
+- Makes Attendance long-press actions more deliberate: 900 ms hold, tighter movement tolerance, and immediate cancellation on touch movement/scrolling.
+- Adds reliable iOS Home Screen detection using `navigator.standalone` before first paint.
+- Forces the installed app safe-area/status-bar cap and top header to fully opaque backgrounds with no backdrop-filter compositing.
+### 4.14.3
 - Removed the One-Time action button from Attendance player cards.
 - Removed the 100% injury button from Attendance player cards.
 - Players below 100% availability keep a compact read-only injury indicator so reduced availability stays visible.

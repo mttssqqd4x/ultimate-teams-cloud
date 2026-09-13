@@ -1,0 +1,1084 @@
+
+/* Ultimate Teams 4.13.0 — Sandbox identity + permanent one-time players */
+
+:root{
+  --ut-radius:24px;
+  --ut-bg:#000000;
+  --bg:#000000;
+  --card:rgba(16,16,16,.82);
+  --card2:rgba(26,26,26,.70);
+  --text:#f5f5f5;
+  --muted:#aaa;
+  --ut-surface:rgba(22,22,22,.58);
+  --ut-surface-strong:rgba(30,30,30,.76);
+  --ut-surface-soft:rgba(255,255,255,.055);
+  --ut-line:rgba(255,255,255,.105);
+  --ut-line-bright:rgba(255,255,255,.17);
+  --ut-text:#f5f5f5;
+  --ut-muted:#aaa;
+  --ut-blue:#75a0ff;
+  --ut-blue2:#526cff;
+  --ut-green:#63e69a;
+  --ut-purple:#ba8cff;
+  --ut-amber:#ffc36a;
+  --ut-red:#ff747e;
+  --ut-shadow:0 8px 24px rgba(0,0,0,.20);
+  --ut-inner:inset 0 1px 0 rgba(255,255,255,.09);
+  --ut-radius-xl:var(--ut-radius);
+  --ut-radius-lg:var(--ut-radius);
+  --ut-radius-md:var(--ut-radius);
+}
+
+html{
+  min-height:100%;
+  background:#000000!important;
+}
+
+body{
+  min-height:100vh!important;
+  margin:0!important;
+  color:var(--ut-text)!important;
+  background:#000000!important;
+  background-attachment:fixed!important;
+  overflow-x:hidden;
+}
+
+body::before{
+  content:none;
+  display:none;
+}
+
+body::after{
+  content:none;
+  display:none;
+}
+
+.app{
+  width:min(1080px,100%)!important;
+  max-width:1080px!important;
+  margin:0 auto!important;
+  padding:
+    calc(92px + env(safe-area-inset-top))
+    16px
+    calc(126px + env(safe-area-inset-bottom))
+    !important;
+}
+
+/* ===== Fixed glass header ===== */
+.topbar{
+  position:fixed!important;
+  top:calc(8px + env(safe-area-inset-top))!important;
+  left:50%!important;
+  right:auto!important;
+  transform:translateX(-50%)!important;
+  z-index:7000!important;
+  width:min(calc(100% - 20px),1048px)!important;
+  min-height:64px;
+  margin:0!important;
+  padding:8px 9px 8px 14px!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:7px!important;
+  border-radius:var(--ut-radius)!important;
+  border:1px solid rgba(255,255,255,.135)!important;
+  background:rgba(18,18,18,.42)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(100%)!important;
+  backdrop-filter:blur(20px) saturate(100%)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+
+.topbar::before{
+  content:none;
+}
+
+.topbar h1{
+  min-width:0;
+  margin:0!important;
+  padding:0 8px 0 0!important;
+  font-size:1.25rem!important;
+  font-weight:750!important;
+  letter-spacing:-.045em!important;
+  white-space:nowrap;
+  position:relative;
+}
+
+.topbar h1::before{
+  content:none;
+  display:none;
+}
+
+.topbar button{
+  width:auto!important;
+  min-width:64px;
+  min-height:44px!important;
+  padding:9px 13px!important;
+  border-radius:var(--ut-radius)!important;
+  border:1px solid rgba(255,255,255,.085)!important;
+  background:rgba(255,255,255,.055)!important;
+  color:#e5e5e5!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045)!important;
+}
+
+.topbar button.tab-active{
+  color:#fff!important;
+  background:rgba(255,255,255,.12)!important;
+  border-color:rgba(255,255,255,.18)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+
+/* ===== Universal glass sections ===== */
+#mainPage>.card,
+#dataPage>.card,
+#sandboxPage>.card,
+#authPage.card{
+  position:relative;
+  overflow:hidden;
+  margin:14px 0!important;
+  padding:17px!important;
+  border-radius:var(--ut-radius-xl)!important;
+  border:1px solid var(--ut-line)!important;
+  background:rgba(18,18,18,.78)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(100%)!important;
+  backdrop-filter:blur(20px) saturate(100%)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+
+#mainPage>.card::before,
+#dataPage>.card::before,
+#sandboxPage>.card::before,
+#authPage.card::before{
+  content:none;
+}
+
+/* Section identity accents */
+#gameNightDashboardCard{
+  background:rgba(18,18,18,.78)!important;
+}
+#teamsDetails{
+  --section-accent:var(--ut-blue);
+}
+#attendanceCard{
+  --section-accent:var(--ut-green);
+}
+#dataCaptainTools{
+  --section-accent:var(--ut-purple);
+}
+#dataSandboxLauncher{
+  --section-accent:var(--ut-amber);
+  background:rgba(18,18,18,.78)!important;
+}
+#dataAdminLoadEdit{
+  --section-accent:#6ca8ff;
+}
+
+/* ===== Details section headers ===== */
+.card>details>summary{
+  min-height:58px!important;
+  margin:-3px -3px 12px!important;
+  padding:10px 12px 10px 14px!important;
+  gap:10px;
+  border-radius:var(--ut-radius)!important;
+  border:1px solid rgba(255,255,255,.075)!important;
+  background:rgba(255,255,255,.025)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045)!important;
+}
+
+.card>details>summary::before{
+  content:"";
+  width:3px;
+  align-self:stretch;
+  min-height:24px;
+  flex:0 0 3px;
+  border-radius:999px;
+  background:var(--section-accent,var(--ut-blue));
+  box-shadow:none;
+  opacity:.65;
+}
+
+.card>details:not([open])>summary{
+  margin-bottom:-3px!important;
+}
+
+.summary-title{
+  flex:1;
+  font-size:1.08rem!important;
+  font-weight:700!important;
+  letter-spacing:-.025em!important;
+}
+
+/* ===== Dashboard ===== */
+.dashboard-heading{
+  margin-bottom:14px!important;
+}
+.eyebrow{
+  color:#aaa!important;
+  letter-spacing:.18em!important;
+}
+.dashboard-heading h2{
+  font-size:1.42rem!important;
+  letter-spacing:-.04em!important;
+}
+.dashboard-grid{
+  gap:10px!important;
+}
+.dashboard-tile{
+  position:relative;
+  overflow:hidden;
+  min-height:92px;
+  padding:14px!important;
+  border-radius:var(--ut-radius)!important;
+  border:1px solid rgba(255,255,255,.085)!important;
+  background:rgba(255,255,255,.035)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+.dashboard-tile::after{
+  content:none;
+  display:none;
+}
+.dashboard-label{
+  font-size:.70rem!important;
+  letter-spacing:.11em!important;
+}
+.dashboard-value{
+  margin-top:6px!important;
+  font-size:1.28rem!important;
+  letter-spacing:-.035em!important;
+}
+
+/* ===== Inner surfaces ===== */
+.subbox,
+.history-card,
+.player,
+.present-row,
+.teambox,
+.notice,
+.balance-panel{
+  border:1px solid rgba(255,255,255,.085)!important;
+  background:rgba(255,255,255,.03)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+
+.subbox{
+  padding:13px!important;
+  border-radius:var(--ut-radius)!important;
+  margin-top:11px!important;
+}
+
+.player,
+.present-row,
+.history-card{
+  border-radius:var(--ut-radius)!important;
+}
+
+.player{
+  min-height:58px;
+  padding:10px 12px!important;
+  transition:transform .14s ease,border-color .14s ease,background .14s ease;
+}
+
+.player.clickable:active{
+  transform:scale(.988);
+}
+
+.attend-on{
+  outline:none!important;
+  border-color:rgba(99,230,154,.34)!important;
+  background:rgba(49,112,70,.20)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+
+.teambox{
+  border-radius:var(--ut-radius)!important;
+  padding:14px!important;
+  min-height:150px;
+}
+.grid.grid-3>.teambox:nth-child(1){
+  background:rgba(255,255,255,.03)!important;
+}
+.grid.grid-3>.teambox:nth-child(2){
+  background:rgba(255,255,255,.03)!important;
+}
+.grid.grid-3>.teambox:nth-child(3){
+  background:rgba(255,255,255,.03)!important;
+}
+
+.team-win{
+  outline:none!important;
+  border-color:rgba(99,230,154,.50)!important;
+  box-shadow:0 0 0 1px rgba(99,230,154,.14),0 12px 34px rgba(24,129,66,.15)!important;
+}
+.team-loss{
+  outline:none!important;
+  opacity:.72;
+  border-color:rgba(255,116,126,.28)!important;
+}
+
+/* ===== Controls ===== */
+input,
+select,
+textarea{
+  min-height:48px;
+  border-radius:var(--ut-radius)!important;
+  border:1px solid rgba(255,255,255,.10)!important;
+  background:rgba(30,30,30,.70)!important;
+  color:var(--ut-text)!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.042),
+    0 5px 16px rgba(0,0,0,.10)!important;
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+  outline:none!important;
+  border-color:rgba(117,160,255,.48)!important;
+  box-shadow:
+    0 0 0 3px rgba(117,160,255,.11),
+    inset 0 1px 0 rgba(255,255,255,.055)!important;
+}
+
+button{
+  min-height:47px!important;
+  border-radius:var(--ut-radius)!important;
+  font-weight:700!important;
+  letter-spacing:-.01em;
+  transition:transform .12s ease,filter .12s ease,border-color .12s ease!important;
+}
+button:active{
+  transform:scale(.982)!important;
+}
+.btn-secondary{
+  background:rgba(255,255,255,.065)!important;
+  border:1px solid rgba(255,255,255,.095)!important;
+  color:#ededed!important;
+}
+.btn{
+  background:rgba(67,99,173,.85)!important;
+  border:1px solid rgba(160,180,255,.23)!important;
+  color:white!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+.btn-success{
+  background:rgba(63,164,101,.85)!important;
+  color:#07180e!important;
+  border:1px solid rgba(179,255,207,.20)!important;
+}
+.btn-warn{
+  background:rgba(215,158,65,.9)!important;
+  color:#241606!important;
+}
+.btn-danger{
+  background:rgba(191,66,76,.9)!important;
+  color:#fff!important;
+}
+
+.chip,
+.status-pill{
+  border-radius:999px!important;
+  background:rgba(255,255,255,.06)!important;
+  border:1px solid rgba(255,255,255,.095)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045)!important;
+}
+
+/* Data page identity strip */
+#dataPage>.card:first-child{
+  padding:11px 13px!important;
+  background:rgba(18,18,18,.78)!important;
+}
+
+/* Tool buttons become dashboard launch tiles */
+.player-tools-grid{
+  gap:10px!important;
+}
+.player-tools-grid button,
+#dataSandboxLauncher button{
+  position:relative;
+  min-height:68px!important;
+  text-align:left;
+  padding:13px 15px!important;
+  border-radius:var(--ut-radius)!important;
+}
+.player-tools-grid button::after{
+  content:"›";
+  position:absolute;
+  right:15px;
+  top:50%;
+  transform:translateY(-52%);
+  font-size:1.5rem;
+  font-weight:400;
+  opacity:.48;
+}
+
+/* ===== Floating Generate Teams dock ===== */
+.stickybar{
+  position:fixed!important;
+  left:50%!important;
+  right:auto!important;
+  bottom:calc(9px + env(safe-area-inset-bottom))!important;
+  transform:translateX(-50%)!important;
+  z-index:6500!important;
+  width:min(calc(100% - 20px),760px)!important;
+  padding:9px!important;
+  border-radius:var(--ut-radius)!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  background:rgba(18,18,18,.34)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(100%)!important;
+  backdrop-filter:blur(20px) saturate(100%)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+
+.stickybar::before{
+  content:none;
+}
+
+.stickybar .inner{
+  max-width:none!important;
+  width:100%!important;
+}
+
+.stickybar .btn-success{
+  min-height:58px!important;
+  border-radius:var(--ut-radius)!important;
+  background:rgba(52,130,78,.18)!important;
+  color:#e8fff0!important;
+  border:1px solid rgba(105,235,155,.28)!important;
+  -webkit-backdrop-filter:blur(18px)!important;
+  backdrop-filter:blur(18px)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+
+/* ===== Sandbox ===== */
+body.sandbox-open{
+  background:#000000!important;
+}
+
+.sandbox-banner{
+  position:sticky!important;
+  top:calc(82px + env(safe-area-inset-top))!important;
+  z-index:5000!important;
+  margin:2px 0 14px!important;
+  padding:11px 13px!important;
+  border-radius:var(--ut-radius)!important;
+  border:1px solid rgba(255,195,106,.28)!important;
+  background:rgba(24,24,24,.90)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(100%)!important;
+  backdrop-filter:blur(20px) saturate(100%)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+
+/* ===== Modal makeover ===== */
+.modal-backdrop{
+  background:rgba(0,0,0,.66)!important;
+  -webkit-backdrop-filter:blur(17px) saturate(125%)!important;
+  backdrop-filter:blur(17px) saturate(125%)!important;
+}
+.modal-card{
+  border-radius:var(--ut-radius)!important;
+  border:1px solid rgba(255,255,255,.13)!important;
+  background:rgba(20,20,20,.96)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(100%)!important;
+  backdrop-filter:blur(20px) saturate(100%)!important;
+  box-shadow:var(--ut-shadow)!important;
+}
+.modal-header-sticky{
+  border-radius:var(--ut-radius)!important;
+  border:1px solid rgba(255,255,255,.075)!important;
+  background:rgba(26,26,26,.94)!important;
+}
+
+/* Divider refinement */
+.hr{
+  height:1px!important;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent)!important;
+  margin:13px 0!important;
+}
+
+.small,
+.notice,
+.muted,
+.muted-inline,
+label{
+  color:var(--ut-muted)!important;
+}
+
+/* ===== Mobile ===== */
+@media(max-width:760px){
+  .app{
+    padding:
+      calc(85px + env(safe-area-inset-top))
+      9px
+      calc(124px + env(safe-area-inset-bottom))
+      !important;
+  }
+
+  .topbar{
+    top:calc(5px + env(safe-area-inset-top))!important;
+    width:calc(100% - 10px)!important;
+    min-height:60px;
+    padding:7px 7px 7px 10px!important;
+    border-radius:var(--ut-radius)!important;
+    gap:5px!important;
+  }
+
+  .topbar h1{
+    font-size:1.02rem!important;
+    padding-left:0!important;
+    padding-right:3px!important;
+  }
+
+
+  .topbar button{
+    min-width:0;
+    min-height:42px!important;
+    padding:8px 10px!important;
+    font-size:.83rem!important;
+  }
+
+  #mainPage>.card,
+  #dataPage>.card,
+  #sandboxPage>.card,
+  #authPage.card{
+    padding:13px!important;
+    border-radius:var(--ut-radius)!important;
+    margin:10px 0!important;
+  }
+
+  .dashboard-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+  }
+
+  .dashboard-tile{
+    min-height:83px;
+    padding:11px!important;
+    border-radius:var(--ut-radius)!important;
+  }
+
+  .stickybar{
+    bottom:calc(6px + env(safe-area-inset-bottom))!important;
+    width:calc(100% - 12px)!important;
+    padding:7px!important;
+    border-radius:var(--ut-radius)!important;
+  }
+
+  .stickybar .btn-success{
+    min-height:55px!important;
+    border-radius:var(--ut-radius)!important;
+  }
+
+  .sandbox-banner{
+    top:calc(73px + env(safe-area-inset-top))!important;
+  }
+
+  .teambox{
+    min-height:0;
+  }
+}
+
+@media(max-width:430px){
+  .topbar h1{
+    max-width:150px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .topbar button{
+    padding:8px 8px!important;
+  }
+
+  .card>details>summary{
+    min-height:54px!important;
+    padding:8px 9px!important;
+    border-radius:var(--ut-radius)!important;
+  }
+
+  .summary-title{
+    font-size:1.0rem!important;
+  }
+}
+
+@media(prefers-reduced-motion:reduce){
+  *{
+    scroll-behavior:auto!important;
+    transition:none!important;
+  }
+}
+
+/* Shared radius for rectangular panels and controls, including legacy dialogs.
+   Status pills and circular switch knobs keep their natural shapes. */
+.card, .modal-card, .loading-card, .push-prompt-card,
+.subbox, .history-card, .teambox, .player, .present-row,
+.notice, .balance-panel, .dashboard-tile, .sandbox-banner,
+.present-count-card, .profile-stat, .edit-player-details,
+.late-add-player-list, .compact-info-box,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select, textarea, button, .modal-header-sticky,
+.card > details > summary{
+  border-radius:var(--ut-radius)!important;
+}
+
+/* Six official dashboard tiles make two complete rows on desktop. */
+#gameNightDashboard{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+
+/* Compact Add Player and Pair Rules, including their expanded forms. */
+#tempPlayerBox, #pairRulesBox{
+  padding:6px 12px!important;
+  margin-top:6px!important;
+}
+#tempPlayerBox > details > summary, #pairRulesBox > details > summary{
+  min-height:32px;
+  padding:3px 0;
+}
+#tempPlayerBox .grid, #pairRulesBox .grid,
+#tempPlayerBox .toolbar, #pairRulesBox .section-actions{gap:6px!important}
+#tempPlayerBox label, #pairRulesBox label{margin-bottom:4px;font-size:.82rem}
+#tempPlayerBox input, #tempPlayerBox select,
+#pairRulesBox input, #pairRulesBox select{
+  min-height:44px;
+  padding:8px 12px;
+}
+#tempPlayerBox button, #pairRulesBox button{
+  min-height:44px!important;
+  padding:8px 12px;
+  font-size:.9rem;
+}
+#pairRuleList:empty{display:none}
+
+/* Tighter attendance rows, including the signed-in player's own row. */
+#playerList, #sandboxPlayerList{gap:4px!important}
+#playerList .player, #sandboxPlayerList .player{
+  min-height:48px;
+  padding:4px 12px!important;
+  gap:6px;
+}
+#playerList .player > div:first-child,
+#sandboxPlayerList .player > div:first-child{min-width:0}
+#playerList .player-name, #sandboxPlayerList .player-name{
+  font-size:1rem!important;
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+#playerList .toggle-wrap{gap:4px}
+#playerList .toggle-wrap button{
+  min-height:40px!important;
+  padding:6px 10px!important;
+  font-size:.82rem;
+}
+#playerList .player-name .chip{padding:2px 7px;font-size:.72rem}
+#playerList .self-attendance-hint{margin-top:2px;font-size:.75rem;line-height:1.3}
+
+@media(max-width:760px){
+  #gameNightDashboard{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #tempPlayerBox .grid-2, #pairRulesBox .grid-4{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  #tempPlayerBox .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+/* Compact Game Night dashboard. */
+#mainPage > #gameNightDashboardCard{padding:11px 13px!important}
+#gameNightDashboardCard .dashboard-heading{margin-bottom:7px!important;align-items:center}
+#gameNightDashboardCard .dashboard-heading h2{font-size:1.1rem!important;margin:0}
+#gameNightDashboardCard .eyebrow{font-size:.6rem;letter-spacing:.12em!important}
+#gameNightDashboard{gap:6px!important}
+#gameNightDashboard .dashboard-tile{min-height:60px;padding:8px 11px!important}
+#gameNightDashboard .dashboard-label{font-size:.62rem!important;letter-spacing:.06em!important}
+#gameNightDashboard .dashboard-value{font-size:1.05rem!important;margin-top:3px!important}
+#gameNightDashboard .small{font-size:.68rem}
+/* Clear top edge, without a frosted band or cast shadow. */
+.topbar{background:rgba(12,12,12,.22)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
+.topbar::before,.topbar::after{content:none!important;display:none!important}
+#dataPage > #dataSandboxLauncher{padding:10px 13px!important}
+#dataSandboxLauncher h2{font-size:1.08rem}
+#dataSandboxLauncher button{min-height:42px!important;padding:8px 14px!important;text-align:center}
+/* Sandbox chrome stays outside the unchanged app viewport. */
+body.sandbox-open{overflow:hidden!important}
+body.sandbox-open > .app > .topbar,body.sandbox-open #stickybar{display:none!important}
+#sandboxPage{position:fixed;inset:0;z-index:11000;background:#000!important}
+.sandbox-controls{position:absolute;top:0;left:0;right:0;display:flex;gap:7px;align-items:center;padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top));background:#000;border-bottom:1px solid var(--ut-line);flex-wrap:wrap}
+.sandbox-controls label{margin:0;font-size:.78rem}
+.sandbox-controls select,.sandbox-controls button{width:auto;min-height:40px!important;padding:7px 11px;font-size:.85rem}
+#sandboxIdentity{flex:1;min-width:100px;max-width:230px}
+#sandboxRole{max-width:115px}
+#sandboxFrame{position:absolute;top:var(--sandbox-controls-height,64px);left:0;width:100%;height:calc(100% - var(--sandbox-controls-height,64px));border:0;background:#000}
+#sandboxLoadStatus{position:absolute;top:calc(var(--sandbox-controls-height,64px) + 16px);left:16px;right:16px;color:var(--ut-muted)}
+@media(max-width:520px){
+ .sandbox-controls{gap:5px}
+ .sandbox-controls strong{font-size:.85rem}
+ .sandbox-controls label{font-size:.7rem}
+ #sandboxIdentity{max-width:150px}
+}
+
+
+/* ===== v4.12.7 targeted cleanup ===== */
+
+/* Header: still translucent, but substantially darker than v4.12.5.
+   No backdrop blur, haze, cast shadow, or pseudo-layer at the top edge. */
+html::before,
+html::after,
+body::before,
+body::after,
+.app::before,
+.app::after{
+  content:none!important;
+  display:none!important;
+  filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+}
+
+.topbar{
+  background:rgba(12,12,12,.84)!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  filter:none!important;
+  box-shadow:none!important;
+}
+.topbar::before,
+.topbar::after{
+  content:none!important;
+  display:none!important;
+  filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+}
+
+/* Current Game: the empty result notice was rendering as a rounded bubble. */
+#resultNotice:empty{
+  display:none!important;
+  margin:0!important;
+  padding:0!important;
+  min-height:0!important;
+  border:0!important;
+}
+
+/* Account: Team Notifications is a normal row, not a second black modal header. */
+#pushNotificationsBox > .modal-header-sticky{
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+}
+
+/* Roster & App Settings: compact controls with less explanatory chrome. */
+#dataAdminLoadEdit .grid{
+  gap:8px!important;
+}
+#dataAdminLoadEdit .hr{
+  margin:10px 0!important;
+}
+#dataAdminLoadEdit textarea{
+  min-height:92px!important;
+}
+#dataAdminLoadEdit .toolbar{
+  gap:7px!important;
+}
+#dataAdminLoadEdit label{
+  margin-bottom:4px!important;
+}
+#dataAdminLoadEdit .compact-info-box{
+  display:none!important;
+}
+
+
+/* ===== v4.12.7 account notification header fix =====
+   Team Notifications is not a modal header. Prevent the sticky-header cap/pseudo layer
+   from creating the translucent black strip above it. */
+#pushNotificationsBox > .modal-header-sticky,
+#pushNotificationsBox > .row{
+  position:relative!important;
+  top:auto!important;
+  z-index:auto!important;
+  padding:0!important;
+  margin:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+}
+#pushNotificationsBox > .modal-header-sticky::before,
+#pushNotificationsBox > .modal-header-sticky::after,
+#pushNotificationsBox > .row::before,
+#pushNotificationsBox > .row::after{
+  content:none!important;
+  display:none!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
+
+/* ===== v4.12.9 dashboard actions + bottom click protection ===== */
+.dashboard-tile.dashboard-action{
+  width:100%!important;
+  min-width:0!important;
+  text-align:left!important;
+  color:var(--ut-text)!important;
+  font:inherit!important;
+  cursor:pointer!important;
+  appearance:none!important;
+  -webkit-appearance:none!important;
+}
+.dashboard-tile.dashboard-action::before{
+  content:"›";
+  position:absolute;
+  top:9px;
+  right:12px;
+  font-size:1.35rem;
+  line-height:1;
+  opacity:.42;
+}
+.dashboard-tile.dashboard-action:active{
+  transform:scale(.985)!important;
+}
+.dashboard-balance.balance-excellent{
+  background:rgba(52,164,95,.16)!important;
+  border-color:rgba(99,230,154,.38)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.20),inset 0 1px 0 rgba(142,255,183,.08)!important;
+}
+.dashboard-balance.balance-good{
+  background:rgba(75,112,220,.17)!important;
+  border-color:rgba(117,160,255,.38)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.20),inset 0 1px 0 rgba(162,183,255,.08)!important;
+}
+.dashboard-balance.balance-fair{
+  background:rgba(205,137,39,.17)!important;
+  border-color:rgba(255,195,106,.40)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,219,159,.08)!important;
+}
+.dashboard-balance.balance-poor{
+  background:rgba(182,55,66,.18)!important;
+  border-color:rgba(255,116,126,.40)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,169,176,.08)!important;
+}
+.dashboard-balance.balance-empty{
+  background:rgba(255,255,255,.035)!important;
+}
+.dashboard-balance .dashboard-label,
+.dashboard-balance .dashboard-value{color:inherit!important}
+.balance-detail-hero{
+  border:1px solid currentColor;
+  border-radius:var(--ut-radius)!important;
+  padding:15px!important;
+  text-align:center;
+  margin-bottom:10px;
+}
+.balance-detail-hero .dashboard-label{color:inherit!important;opacity:.78}
+.balance-detail-score{font-size:2.2rem;font-weight:850;line-height:1;margin:7px 0 4px;letter-spacing:-.055em}
+.balance-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.balance-detail-grid .history-card{margin:0!important}
+.balance-explainer{margin-top:10px;line-height:1.45}
+.winner-detail-heading{display:flex;justify-content:space-between;gap:12px;align-items:flex-end}
+
+.stickybar > .generate-click-shield{
+  position:absolute;
+  left:50%;
+  bottom:calc(-14px - env(safe-area-inset-bottom));
+  width:100vw;
+  height:calc(108px + env(safe-area-inset-bottom));
+  transform:translateX(-50%);
+  z-index:0;
+  pointer-events:auto;
+  background:transparent;
+}
+.stickybar .inner{position:relative!important;z-index:1!important}
+
+#numTeamsSection{margin-top:0!important;margin-bottom:5px!important}
+#numTeamsSection .grid{margin-top:0!important}
+
+@media(max-width:560px){
+  .balance-detail-grid{grid-template-columns:1fr!important}
+  .winner-detail-heading{align-items:flex-start;flex-direction:column}
+}
+
+
+/* ===== 4.13.0 sandbox identity =====
+   Keep only the outer sandbox control bar blue; the app header inside stays normal. */
+.sandbox-controls{
+  background:rgba(18,72,178,.96)!important;
+  border-bottom-color:rgba(135,178,255,.55)!important;
+  box-shadow:0 6px 22px rgba(0,42,120,.30)!important;
+}
+
+/* ===== 4.14.0 attendance press-and-hold + one-time player marker ===== */
+.one-time-badge4132{
+  display:inline-flex;
+  align-items:center;
+  vertical-align:middle;
+  margin-left:5px;
+  padding:2px 6px;
+  border-radius:999px!important;
+  border:1px solid rgba(112,164,255,.48)!important;
+  background:rgba(52,104,210,.20)!important;
+  color:#aecdff!important;
+  font-size:.62rem!important;
+  font-weight:850!important;
+  line-height:1.15!important;
+  letter-spacing:.045em!important;
+  white-space:nowrap!important;
+}
+
+.player-hold-enabled4132{
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+  touch-action:pan-y;
+  transition:transform .12s ease,box-shadow .16s ease,background-color .16s ease!important;
+}
+.player-hold-enabled4132.player-hold-arming4132{
+  transform:scale(.988);
+  box-shadow:inset 0 0 0 1px rgba(120,167,255,.38)!important;
+}
+.player-hold-enabled4132.player-hold-fired4132{
+  box-shadow:inset 0 0 0 2px rgba(120,167,255,.72)!important;
+}
+
+.player-actions-card4132{
+  width:min(430px,100%)!important;
+  max-height:none!important;
+}
+.player-actions-header4132{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:12px;
+}
+.player-actions-title4132{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  flex-wrap:wrap;
+  font-size:1.05rem;
+}
+.player-actions-title4132 strong{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.player-actions-close4132{width:auto!important;flex:0 0 auto!important}
+.player-actions-grid4132{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:8px;
+}
+.player-actions-grid4132 button{
+  width:100%!important;
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  text-align:left;
+}
+.player-actions-grid4132 button span{opacity:.75;font-weight:800}
+
+.edit-player-actions4132{
+  margin-top:10px!important;
+  gap:7px!important;
+}
+.edit-player-details summary .one-time-badge4132{
+  flex:0 0 auto;
+}
+
+@media(max-width:560px){
+  .edit-player-actions4132{display:grid!important;grid-template-columns:1fr!important}
+  .edit-player-actions4132 button{width:100%!important}
+}
+
+
+/* ===== 4.14.2 compact Attendance controls ===== */
+.injury-indicator4141{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-height:34px!important;
+  padding:6px 10px!important;
+  border-radius:999px!important;
+  pointer-events:none!important;
+  cursor:default!important;
+  user-select:none!important;
+}
+
+/* ===== 4.14.2 iOS installed-web-app top safe-area fix =====
+   Standalone WebKit composites backdrop-filter through the status-bar safe area
+   differently than Safari. Keep the installed app's top inset solid and stop
+   the sticky header from blurring content into that inset. */
+@media (display-mode: standalone) {
+  html,
+  body{
+    background:#000!important;
+    background-attachment:scroll!important;
+  }
+  body::after{
+    content:"";
+    position:fixed;
+    z-index:499;
+    top:0;
+    left:0;
+    right:0;
+    height:calc(env(safe-area-inset-top) + 8px);
+    background:#000;
+    pointer-events:none;
+  }
+  .topbar{
+    z-index:500!important;
+    background:rgba(18,20,24,.97)!important;
+    -webkit-backdrop-filter:none!important;
+    backdrop-filter:none!important;
+    box-shadow:0 10px 28px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.055)!important;
+  }
+}
+
+/* ===== 4.14.3 iOS Home Screen hard top-cap fix =====
+   navigator.standalone is more reliable than display-mode during iOS launch.
+   Keep the status-bar/safe-area fully opaque and remove every compositing layer
+   from the header while running from a Home Screen icon. */
+html.ios-home-screen,
+html.ios-home-screen body{
+  background:#000!important;
+  background-image:none!important;
+  background-attachment:scroll!important;
+}
+html.ios-home-screen body::before,
+html.ios-home-screen body::after{
+  content:""!important;
+  display:block!important;
+  position:fixed!important;
+  left:0!important;
+  right:0!important;
+  top:0!important;
+  height:calc(env(safe-area-inset-top) + 10px)!important;
+  background:#000!important;
+  background-image:none!important;
+  opacity:1!important;
+  filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  box-shadow:none!important;
+  pointer-events:none!important;
+  z-index:6998!important;
+}
+html.ios-home-screen body::after{display:none!important}
+html.ios-home-screen .topbar{
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  filter:none!important;
+  background:#111!important;
+  background-image:none!important;
+  box-shadow:none!important;
+  isolation:isolate!important;
+}
+html.ios-home-screen .topbar::before,
+html.ios-home-screen .topbar::after{
+  content:none!important;
+  display:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  filter:none!important;
+  box-shadow:none!important;
+}
