@@ -832,7 +832,7 @@ function ensureV490FeatureUi(){
         card = document.createElement("div");
         card.id = "dataCaptainTools";
         card.className = "card captain-admin-only";
-        card.innerHTML = '<details><summary><span class="summary-title">Player Tools</span><span></span></summary><div class="player-tools-grid"></div></details>';
+        card.innerHTML = '<details><summary><span class="summary-title">Tools</span><span></span></summary><div class="player-tools-grid"></div></details>';
         const firstAdminCard = dataPage.querySelector(".admin-only");
         if(firstAdminCard) dataPage.insertBefore(card, firstAdminCard);
         else dataPage.appendChild(card);
@@ -8912,7 +8912,8 @@ function saveSafeStartupSnapshot41121(){
         gamesPlayed:Number(p.gamesPlayed || 0),
         wins:Number(p.wins || 0),
         losses:Number(p.losses || 0),
-        attending:!!p.attending
+        attending:!!p.attending,
+        attendanceUpdatedAt:p.attendanceUpdatedAt || null
       })),
       currentGameTeams: (state.currentGame?.teams || []).map(team => team.map(p => p.id)),
       currentGameGeneratedAt: state.currentGameGeneratedAt || null,
@@ -8938,6 +8939,7 @@ function restoreSafeStartupSnapshot41121(){
 
     state.players = raw.players.map(p => ({
       ...p,
+      attending:!!p.attending && attendanceIsToday4148(p.attendanceUpdatedAt),
       handling:0,
       cutting:0,
       defense:0,

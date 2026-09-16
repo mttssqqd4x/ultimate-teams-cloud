@@ -9,7 +9,7 @@
   const s=seed.state;
   const tables={...clone(seed.tables||{}),
     players:s.players.map(p=>({id:p.id,first_name:p.firstName,last_name:p.lastName,full_name:p.fullName,handling:p.handling,cutting:p.cutting,defense:p.defense,win_loss:p.winLossRating,active:p.active,injury_pct:p.injuryPct,temporary:p.temporary,games_played:p.gamesPlayed,wins:p.wins,losses:p.losses})),
-    attendance:s.players.map(p=>({player_id:p.id,present:p.attending})),
+    attendance:s.players.map(p=>({player_id:p.id,present:p.attending,updated_at:p.attendanceUpdatedAt||now()})),
     pair_rules:s.pairRules.map(r=>({id:r.id,player1_id:r.player1Id,player2_id:r.player2Id,rule_type:r.type,strength:r.strength,created_by:r.createdBy,created_by_role:r.createdByRole})),
     teammate_history:Object.entries(s.history||{}).map(([key,count])=>{const [player_a,player_b]=key.split('|');return {player_a,player_b,count}}),
     settings:[{...clone(seed.settings),id:'main'}],
@@ -112,7 +112,7 @@
       const p=tables.players.find(p=>String(p.id)===String(args.p_player_id));
       if(!p)return fail('Player not found.');
       if(!canMarkAttendanceForPlayer(p.id))return fail('Players can only mark their own attendance.');
-      await new Query('attendance').upsert({player_id:p.id,present:!!args.p_present},{onConflict:'player_id'});
+      await new Query('attendance').upsert({player_id:p.id,present:!!args.p_present,updated_at:now()},{onConflict:'player_id'});
       if(args.p_present)p.active=true;
       return ok(true);
     }
@@ -120,7 +120,7 @@
       if(!canManageGames())return fail('Captain/admin only.');
       const playerId=id(),first=args.p_first_name||'',last=args.p_last_name||'';
       tables.players.push({id:playerId,first_name:first,last_name:last,full_name:`${first} ${last}`.trim(),handling:Number(args.p_handling??3),cutting:Number(args.p_cutting??3),defense:Number(args.p_defense??3),win_loss:0,active:true,injury_pct:1,temporary:!!args.p_temporary,games_played:0,wins:0,losses:0});
-      tables.attendance.push({player_id:playerId,present:!!args.p_mark_present});
+      tables.attendance.push({player_id:playerId,present:!!args.p_mark_present,updated_at:now()});
       syncPlayerChoices();
       return ok({player_id:playerId});
     }

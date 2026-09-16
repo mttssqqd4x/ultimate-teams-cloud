@@ -1174,3 +1174,35 @@ label,#tempPlayerBox label,#pairRulesBox label{
   .topbar h1{font-size:1rem!important}
   .topbar button{font-size:var(--ut-font-meta)!important}
 }
+
+/* 4.14.8: one attendance surface and consistent 48px touch targets. */
+#attendanceCard{--attendance-surface:#181818;--attendance-height:48px}
+#attendanceCard .team-count-control4145,
+#attendanceCard #tempPlayerBox,#attendanceCard #pairRulesBox,
+#attendanceFilters4148>button,
+#attendanceCard #playerSearch,
+#attendanceCard #playerList .player{
+  box-sizing:border-box;min-height:var(--attendance-height)!important;
+  background:var(--attendance-surface)!important;
+  border:1px solid var(--ut-line)!important;
+  border-radius:var(--ut-radius)!important;
+  color:var(--ut-text)!important;
+  box-shadow:none!important;
+}
+#attendanceCard .team-count-control4145{padding:6px 12px!important}
+#attendanceCard #tempPlayerBox,#attendanceCard #pairRulesBox{padding:0 12px!important;margin-top:8px!important}
+#attendanceCard #tempPlayerBox>details>summary,
+#attendanceCard #pairRulesBox>details>summary{min-height:46px!important;padding:0!important}
+#attendanceCard #tempPlayerBox>details[open],
+#attendanceCard #pairRulesBox>details[open]{padding-bottom:12px}
+#attendanceFilters4148{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;margin-top:8px}
+#attendanceFilters4148>button{padding:6px 10px!important;gap:6px;min-width:0;font-size:var(--ut-font-label)!important;line-height:1.2}
+#attendanceFilters4148 .toggle-knob{width:34px;height:20px}
+#attendanceFilters4148 .toggle-knob::after{width:14px;height:14px}
+#attendanceFilters4148 .toggle-on .toggle-knob::after{left:17px}
+#attendanceCard #playerList{gap:8px!important}
+#attendanceCard #playerList .player{padding:6px 12px!important;opacity:1}
+#attendanceCard #playerList .player.attend-on{outline:2px solid var(--ut-green)!important;outline-offset:-2px}
+#attendanceCard #playerList .player.inactive .player-name{color:var(--ut-muted)}
+#dataSandboxLauncher{padding:0!important;border:0!important;background:transparent!important}
+#dataSandboxLauncher button{min-height:48px!important}

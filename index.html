@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Ultimate Teams Cloud</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=4.14.7">
+  <link rel="stylesheet" href="styles.css?v=4.14.8">
   <meta name="theme-color" content="#000000">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -242,7 +242,7 @@
 
 </style>
 
-  <link rel="stylesheet" href="theme.css?v=4.14.7">
+  <link rel="stylesheet" href="theme.css?v=4.14.8">
 
   <!-- 4.11.21 startup performance -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -251,8 +251,8 @@
   <link rel="dns-prefetch" href="//fsdqkozqjshqooqwvmhq.supabase.co">
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script" crossorigin="anonymous">
   <link rel="preload" href="config.js" as="script">
-  <link rel="preload" href="legacy-core.js?v=4.14.7" as="script">
-  <link rel="preload" href="app.js?v=4.14.7" as="script">
+  <link rel="preload" href="legacy-core.js?v=4.14.8" as="script">
+  <link rel="preload" href="app.js?v=4.14.8" as="script">
 
 </head>
 <body>
@@ -294,7 +294,7 @@
   
   <div id="mainPage">
     <div class="card signed-in-only glass-dashboard" id="gameNightDashboardCard">
-      <div class="dashboard-heading"><div><h2>Game Night</h2></div><div id="dashboardConnectionBadge" class="status-pill">Online</div></div>
+      <div class="dashboard-heading"><div><h2>Dashboard</h2></div><div id="dashboardConnectionBadge" class="status-pill">Online</div></div>
       <div id="gameNightDashboard" class="dashboard-grid"></div>
     </div>
 
@@ -305,22 +305,18 @@
         <button id="clearTeamsBtn" class="btn-danger admin-only" type="button" onclick="clearCurrentTeams()">Clear Teams</button>
 </div><div id="resultMessage" class="small" style="margin-top:8px"></div></details></div>
     <div class="card signed-in-only" id="attendanceCard"><details open><summary><span class="summary-title">Attendance</span><span id="attendanceHeaderCount" class="muted-inline">0 present</span></summary>
-<div id="numTeamsSection" class="captain-admin-only"><label class="team-count-control4145" for="numTeams"><span>Number of Teams</span><input id="numTeams" data-captain-admin-only="true" type="number" inputmode="numeric" min="2" step="1" value="3"></label></div><div class="subbox" id="tempPlayerBox"><details><summary><span class="muted-inline">Add Player</span><span></span></summary><div class="grid grid-2" style="margin-top:10px"><div><label>New Player Full Name</label><input id="tempName" placeholder="Mike Jones"></div><div><label>Rate Like</label><select id="tempLike" onchange="loadTempRatingsFromLike()"></select></div></div><div class="grid grid-3" style="margin-top:10px"><div><label>Handling</label><input id="tempHandling" type="number" step="0.1" value="3"></div><div><label>Cutting</label><input id="tempCutting" type="number" step="0.1" value="3"></div><div><label>Defense</label><input id="tempDefense" type="number" step="0.1" value="3"></div></div><div style="margin-top:10px" class="toolbar"><button class="btn-secondary" onclick="addTempPlayer()">Add One-Time Player</button><button class="btn" onclick="addPermanentPlayer()">Add Player</button></div><div id="addPlayerStatus" class="small" style="margin-top:8px"></div></details></div><div class="subbox" id="pairRulesBox"><details><summary><span class="muted-inline">Pair Rules</span><span></span></summary><div class="grid grid-4" style="margin-top:10px"><div><label>Player 1</label><select id="pairP1"></select></div><div><label>Player 2</label><select id="pairP2"></select></div><div><label>Rule</label><select id="pairType"><option value="apart">Apart</option><option value="together">Together</option></select></div><div><label>Strength</label><input id="pairStrength" type="number" min="0.1" max="5" step="0.1" value="1.0"></div></div><div style="margin-top:10px" class="section-actions"><button class="btn" onclick="addPairRule()">Add Pair Rule</button><button class="btn-secondary" onclick="lockPair()">Lock Pair</button><button class="btn-danger" onclick="clearPairRules()">Clear All Pair Rules</button></div><div id="pairRuleList" class="list" style="margin-top:10px"></div></details></div><div style="margin-top:10px" class="grid grid-2"><button id="toggleInactiveBtn" class="btn-secondary captain-admin-only" onclick="toggleShowInactive()">Show Inactive Players</button><button id="showOnlyAttendingBtn" class="btn-secondary" type="button" onclick="toggleShowOnlyAttending()">Show Only Attending: Off</button><button class="btn-warn captain-admin-only" onclick="clearAttendance()">Clear Attendance</button></div><div id="attendanceSearchMount"></div><div id="playerList" class="list" style="margin-top:10px"></div></details></div>
+<div id="numTeamsSection" class="captain-admin-only"><label class="team-count-control4145" for="numTeams"><span>Number of Teams</span><input id="numTeams" data-captain-admin-only="true" type="number" inputmode="numeric" min="2" step="1" value="3"></label></div><div class="subbox" id="tempPlayerBox"><details><summary><span class="muted-inline">Add Player</span><span></span></summary><div class="grid grid-2" style="margin-top:10px"><div><label>New Player Full Name</label><input id="tempName" placeholder="Mike Jones"></div><div><label>Rate Like</label><select id="tempLike" onchange="loadTempRatingsFromLike()"></select></div></div><div class="grid grid-3" style="margin-top:10px"><div><label>Handling</label><input id="tempHandling" type="number" step="0.1" value="3"></div><div><label>Cutting</label><input id="tempCutting" type="number" step="0.1" value="3"></div><div><label>Defense</label><input id="tempDefense" type="number" step="0.1" value="3"></div></div><div style="margin-top:10px" class="toolbar"><button class="btn-secondary" onclick="addTempPlayer()">Add One-Time Player</button><button class="btn" onclick="addPermanentPlayer()">Add Player</button></div><div id="addPlayerStatus" class="small" style="margin-top:8px"></div></details></div><div class="subbox" id="pairRulesBox"><details><summary><span class="muted-inline">Pair Rules</span><span></span></summary><div class="grid grid-4" style="margin-top:10px"><div><label>Player 1</label><select id="pairP1"></select></div><div><label>Player 2</label><select id="pairP2"></select></div><div><label>Rule</label><select id="pairType"><option value="apart">Apart</option><option value="together">Together</option></select></div><div><label>Strength</label><input id="pairStrength" type="number" min="0.1" max="5" step="0.1" value="1.0"></div></div><div style="margin-top:10px" class="section-actions"><button class="btn" onclick="addPairRule()">Add Pair Rule</button><button class="btn-secondary" onclick="lockPair()">Lock Pair</button><button class="btn-danger" onclick="clearPairRules()">Clear All Pair Rules</button></div><div id="pairRuleList" class="list" style="margin-top:10px"></div></details></div><div id="attendanceFilters4148" class="grid grid-2"><button id="toggleInactiveBtn" class="btn-secondary captain-admin-only" onclick="toggleShowInactive()">Show Inactive Players</button><button id="showOnlyAttendingBtn" class="btn-secondary" type="button" onclick="toggleShowOnlyAttending()">Show Only Attending: Off</button></div><div id="attendanceSearchMount"></div><div id="playerList" class="list" style="margin-top:10px"></div></details></div>
   </div>
   
 <div id="dataPage" style="display:none">
   <div class="card captain-admin-only" id="dataSandboxLauncher">
-    <details>
-      <summary><span class="summary-title">Test Sandbox</span><span></span></summary>
-      <div class="section-content4147">
-        <button id="openSandboxBtn" class="btn" type="button" onclick="return openTestSandbox4122(event)">Open Sandbox</button>
-      </div>
-    </details>
+    <button id="openSandboxBtn" class="btn" type="button" onclick="return openTestSandbox4122(event)">Test Sandbox</button>
   </div>
   <div class="card captain-admin-only" id="dataCaptainTools">
     <details>
-      <summary><span class="summary-title">Player Tools</span><span></span></summary>
+      <summary><span class="summary-title">Tools</span><span></span></summary>
       <div class="player-tools-grid">
+        <button class="btn-warn captain-admin-only" onclick="clearAttendance()">Clear Attendance</button>
         <button class="btn-secondary" type="button" onclick="openEditPlayerModal()">Edit Player</button>
         <button class="btn-secondary" type="button" onclick="openRatingsModal()">View Player Ratings</button>
         <button class="btn-secondary" type="button" onclick="openWinLossModal()">View Win/Loss Records</button>
@@ -653,6 +649,6 @@
   <iframe id="sandboxFrame" title="Main page sandbox" sandbox="allow-scripts allow-modals allow-downloads" referrerpolicy="no-referrer"></iframe>
 </div>
 
-<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="version.js?v=4.14.7"></script><script src="legacy-core.js?v=4.14.7"></script><script src="app.js?v=4.14.7"></script><script src="sandbox-host.js?v=4.14.7"></script>
+<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="version.js?v=4.14.8"></script><script src="legacy-core.js?v=4.14.8"></script><script src="app.js?v=4.14.8"></script><script src="sandbox-host.js?v=4.14.8"></script>
 <div id="loadingOverlay" class="loading-backdrop"><div class="loading-card"><div class="spinner"></div><div id="loadingMessage">Working...</div></div></div>
 </body></html>

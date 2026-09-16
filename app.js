@@ -14,6 +14,7 @@ let gameNightStats4120 = { completed:0, lastWinner:null, lastPlayedAt:null, last
 let previousOfficialGameForReshuffle4120 = null;
 let offlineFlushRunning4120 = false;
 let sandboxState4120 = null;
+let attendanceDay4148 = localDayStartIso4120();
 
 function deepClone4120(value){
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -381,15 +382,26 @@ window.saveSettings = saveSettings4120;
 
 /* ---------- Bootstrap / fast startup ---------- */
 async function fetchBootstrap4120(includeProfile = true){
-  const { data, error } = await db.rpc("get_app_bootstrap_4120");
-  if(!error && data) return { payload:data, usedRpc:true };
-  const fallback = await fallbackBootstrap41121(includeProfile);
-  fallback.settings = fallback.settings || {};
-  fallback.settings.reshuffle_mode = state.settings.reshuffleMode || "normal";
-  return { payload:fallback, usedRpc:false };
+  // Older bootstrap RPCs omit timestamps; read attendance with its day explicitly.
+  const [bootstrap, attendance] = await Promise.all([
+    db.rpc("get_app_bootstrap_4120"),
+    db.from("attendance").select("player_id,present,updated_at")
+  ]);
+  if(attendance.error) throw attendance.error;
+  const usedRpc = !bootstrap.error && !!bootstrap.data;
+  const payload = usedRpc ? bootstrap.data : await fallbackBootstrap41121(includeProfile);
+  payload.attendance = attendance.data || [];
+  payload.settings = payload.settings || {};
+  return {payload, usedRpc};
 }
 function applyBootstrapPayload4120(payload, includeProfile = true){
-  applyBootstrapPayload41121(payload, includeProfile);
+  rolloverAttendanceDay4148();
+  const attendance = (payload?.attendance || []).map(row => ({
+    ...row, present:!!row.present && attendanceIsToday4148(row.updated_at)
+  }));
+  applyBootstrapPayload41121({...payload, attendance}, includeProfile);
+  const timestamps = new Map(attendance.map(row => [String(row.player_id), row.updated_at]));
+  state.players.forEach(p => { p.attendanceUpdatedAt = timestamps.get(String(p.id)) || null; });
   balanceDataReady4147 = true;
   state.settings.reshuffleMode = payload?.settings?.reshuffle_mode || state.settings.reshuffleMode || "normal";
   state.showInactive = false;
@@ -437,7 +449,7 @@ window.scheduleLiveRefresh = scheduleLiveRefresh4120;
 function readOfflineAttendanceQueue4120(){
   try{
     const value = JSON.parse(localStorage.getItem(offlineAttendanceKey4120()) || "[]");
-    return Array.isArray(value) ? value : [];
+    return Array.isArray(value) ? value.filter(item => attendanceIsToday4148(item.queuedAt)) : [];
   }catch(e){ return []; }
 }
 function writeOfflineAttendanceQueue4120(queue){
@@ -452,7 +464,7 @@ function queueAttendance4120(playerId, present){
 function applyOfflineAttendanceQueueToState4120(){
   readOfflineAttendanceQueue4120().forEach(item => {
     const p = playerById(item.playerId);
-    if(p) p.attending = !!item.present;
+    if(p){ p.attending = !!item.present; p.attendanceUpdatedAt = item.queuedAt; }
   });
 }
 function isNetworkError4120(error){
@@ -469,7 +481,7 @@ async function flushOfflineAttendanceQueue4120(){
     for(const item of queue){
       const key = String(item.playerId);
       if(!attendancePending4142.has(key)){
-        attendancePending4142.set(key, {desired:!!item.present,seq:++attendanceSeq4142,confirmed:false});
+        attendancePending4142.set(key, {desired:!!item.present,seq:++attendanceSeq4142,confirmed:false,day:attendanceDay4148});
       }
       // Reconnect and live taps use the same per-player writer. Never replay
       // an old offline value through a second request after a newer tap.
@@ -494,6 +506,7 @@ async function toggleAttendance4120(id){
   const next = !p.attending;
   const wasActive = p.active;
   p.attending = next;
+  p.attendanceUpdatedAt = new Date().toISOString();
   if(next && !p.active && canManageGames()) p.active = true;
   renderAll();
 
@@ -523,14 +536,16 @@ function localDayStartIso4120(){
 }
 async function refreshGameNightStats4120(render = true){
   if(!db) return;
+  const day = localDayStartIso4120();
   try{
     const { data, error } = await db.from("games")
       .select("id,played_at,winner_team_index,teams")
-      .gte("played_at", localDayStartIso4120())
+      .gte("played_at", day)
       .not("winner_team_index","is",null)
       .order("played_at", { ascending:false })
       .limit(100);
     if(error) throw error;
+    if(day !== localDayStartIso4120()) return;
     const rows = data || [];
     const latest = rows[0] || null;
     const winnerIndex = latest?.winner_team_index ?? null;
@@ -559,6 +574,7 @@ function connectionLabel4120(){
   return { text:"Online", cls:"online" };
 }
 function renderGameNightDashboard4120(){
+  rolloverAttendanceDay4148();
   const out = document.getElementById("gameNightDashboard");
   if(!out) return;
   const present = state.players.filter(p => p.attending).length;
@@ -1249,6 +1265,7 @@ function attendancePlayer4142(id){
 }
 
 function applyPendingAttendance4142(requestId = 0){
+  rolloverAttendanceDay4148();
   for(const [id, pending] of attendancePending4142){
     const p = attendancePlayer4142(id);
     if(!p) continue;
@@ -1257,6 +1274,7 @@ function applyPendingAttendance4142(requestId = 0){
       attendancePending4142.delete(id);
     }else{
       p.attending = pending.desired;
+      p.attendanceUpdatedAt = pending.day || attendanceDay4148;
     }
   }
 }
@@ -1294,12 +1312,14 @@ async function syncAttendancePlayer4142(playerId){
   let retryLater = false;
   try{
     while(true){
+      rolloverAttendanceDay4148();
       const pending = attendancePending4142.get(key);
       if(!pending || pending.confirmed) break;
       const seq = pending.seq;
       const desired = !!pending.desired;
       try{
         const { error } = await saveAttendanceFromApp(playerId, desired);
+        rolloverAttendanceDay4148();
         if(error){
           if(isNetworkError4120?.(error)){
             queueAttendance4120(playerId, attendancePending4142.get(key)?.desired ?? desired);
@@ -1321,6 +1341,7 @@ async function syncAttendancePlayer4142(playerId){
         // The user tapped again while this request was in flight. Loop and send
         // only the newest desired state next.
       }catch(e){
+        rolloverAttendanceDay4148();
         const latest = attendancePending4142.get(key);
         if(isNetworkError4120?.(e)){
           if(latest) queueAttendance4120(playerId, !!latest.desired);
@@ -1350,6 +1371,7 @@ async function syncAttendancePlayer4142(playerId){
 }
 
 async function toggleAttendance4142(id){
+  rolloverAttendanceDay4148();
   if(!canMarkAttendance()){
     alert("Create an account or sign in to mark attendance.");
     toggleSignInBox();
@@ -1369,6 +1391,7 @@ async function toggleAttendance4142(id){
 
   attendancePending4142.set(String(p.id), {
     desired: next,
+    day:attendanceDay4148,
     seq: ++attendanceSeq4142,
     confirmed: false
   });
@@ -1423,3 +1446,42 @@ function scrollAppTo4144(options){
     window.scrollTo(options);
   }
 }
+
+/* Attendance is a daily check-in, using the dashboard's local-midnight cutoff.
+   Expiration is applied on reads, so a closed app needs no scheduled DB job. */
+function attendanceIsToday4148(timestamp){
+  const value = Date.parse(timestamp);
+  return Number.isFinite(value) && value >= Date.parse(localDayStartIso4120());
+}
+function rolloverAttendanceDay4148(){
+  const day = localDayStartIso4120();
+  if(day === attendanceDay4148) return false;
+  attendanceDay4148 = day;
+  state.players.forEach(p => {p.attending = false; p.attendanceUpdatedAt = null;});
+  attendancePending4142.clear();
+  // Complete an old in-flight write with a clear, unless a new tap supersedes it.
+  for(const id of attendanceSyncing4142){
+    attendancePending4142.set(id, {desired:false,seq:++attendanceSeq4142,confirmed:false,day});
+  }
+  gameNightStats4120 = {completed:0,lastWinner:null,lastPlayedAt:null,lastWinnerPlayers:[]};
+  saveSafeStartupSnapshot41121?.();
+  return true;
+}
+let attendanceMidnightTimer4148;
+function checkAttendanceDay4148(){
+  const changed = rolloverAttendanceDay4148();
+  if(changed){
+    renderAll();
+    if(db && navigator.onLine !== false){
+      loadCloudData4120({force:true}).then(()=>renderAll()).catch(e=>console.warn('Daily attendance refresh failed',e));
+      refreshGameNightStats4120();
+    }
+  }
+  clearTimeout(attendanceMidnightTimer4148);
+  const next = new Date(); next.setHours(24,0,0,0);
+  attendanceMidnightTimer4148 = setTimeout(checkAttendanceDay4148, Math.max(50, next.getTime()-Date.now()));
+}
+window.addEventListener('focus', checkAttendanceDay4148);
+window.addEventListener('pageshow', checkAttendanceDay4148);
+document.addEventListener('visibilitychange', ()=>{if(!document.hidden) checkAttendanceDay4148();});
+checkAttendanceDay4148();

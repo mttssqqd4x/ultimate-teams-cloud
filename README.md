@@ -1,4 +1,4 @@
-# Ultimate Teams — 4.14.7
+# Ultimate Teams — 4.14.8
 
 This is the complete cleaned project. It preserves the uploaded app behavior,
 Supabase configuration, custom domain, database scripts, and backend functions.
@@ -7,29 +7,23 @@ No SQL changes or backend redeployment are needed for this cleanup.
 
 ## This update
 
-- Shared text sizes and neutral text colors for headings, names, labels, controls,
-  and supporting text; inputs stay at least 16px to avoid iPhone focus zoom.
-- Half-second player hold opens actions, including Edit Player. It opens the
-  selected player's form and includes inactive/non-attending players as needed.
-- App dialogs, menus, loading panels, and notification prompts share a slightly
-  translucent dark surface. Browser-owned alert/confirm/prompt boxes keep their
-  system appearance.
-- More compact Game Night dashboard: three columns on phones, six on wider
-  screens, and two on very narrow screens.
-- Balance and its details preserve a pre-results snapshot for the current teams.
-  New/rebalanced teams get a fresh snapshot. It is retained inside the existing
-  teams JSON and locally, so saving results and reloading do not replace the
-  score with a calculation based on updated ratings. Older saved games without
-  a pre-results snapshot show an em dash instead of an inaccurate new score.
-- Sandbox is first on Data. Sandbox, Player Tools, and Roster & App Settings
-  start collapsed. The old account/count strip is removed; Players appears in
-  the Roster & App Settings heading.
-- Same filenames and project layout as the previous update. No SQL changes.
+- Sandbox is a direct button at the top of Data. Tools and Roster & App Settings
+  remain collapsed by default. Clear Attendance is first in Tools.
+- Game Night is now Dashboard.
+- Inactive Players and Present Only stay side by side, including on phones.
+- Attendance boxes share a dark surface and a 48px standard height. Expanded
+  forms and longer player descriptions can grow so text is never clipped.
+  Present players retain their green outline; switches retain their status knob.
+- Attendance expires at local midnight, using the same device-local cutoff as
+  the dashboard. Open apps update at midnight or on resume; reopened apps filter
+  check-ins by their recorded timestamp, including offline startup snapshots.
+  Yesterday's queued taps are not replayed. There is no server scheduler or SQL
+  change: old database records remain history and are excluded by the app.
+  As with the dashboard, devices in different time zones use their own midnight.
+- Previous hold/tap, translucent dialog, and pre-results balance fixes remain.
 
-Behavior and file checks cover pre-results balance persistence, timestamp
-normalization, team changes, loading placeholders, direct player editing, hold
-timing, Data structure, JavaScript syntax, and asset references. Actual iPhone
-visual verification was unavailable in this environment.
+No SQL changes or backend redeployment are needed. Replace the same files.
+Actual iPhone visual verification was unavailable in this environment.
 
 ## Keep these website files
 
@@ -80,9 +74,9 @@ files are macOS ZIP metadata and are also omitted.
 Replace the existing files with the files in each update ZIP. Filenames stay
 stable, and each ZIP contains one current copy of each file. Cache versions
 are changed inside URLs and the service worker, rather than in filenames.
-For example, `app.js?v=4.14.7` still refers to the single file `app.js`.
+For example, `app.js?v=4.14.8` still refers to the single file `app.js`.
 No tests, audit reports, dated release notes, backup copies, or obsolete asset
 versions will be added to ordinary update packages.
 
-After upload, reopen the app online and check the Data footer shows 4.14.7.
+After upload, reopen the app online and check the Data footer shows 4.14.8.
 The first successful online load prepares the new version for offline use.
