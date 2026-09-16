@@ -430,9 +430,9 @@ button:active{
   will-change:transform;
 }
 
-/* 4.15.2: the dock follows scroll distance and the Attendance-list position.
-   It stays hidden while Search Players + the player list occupy the area below
-   the header, then gradually reappears as upper Attendance controls return. */
+/* 4.15.3: Search Players is the dock threshold. The dock stays fully hidden
+   in list-only mode and returns fully whenever any controls above Search Players
+   are visible below the header. */
 .stickybar.generate-scroll-tracking{
   transition:transform .10s linear, opacity .20s ease!important;
 }

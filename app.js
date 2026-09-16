@@ -884,10 +884,21 @@ renderAll = renderAll4120;
 window.renderAll = renderAll4120;
 
 const showPageLegacy4120 = showPage;
+function scrollActivePageToTop4153(){
+  const app=document.querySelector(".app");
+  // iOS Home Screen mode scrolls .app; normal Safari/desktop scrolls the page.
+  if(app) app.scrollTop=0;
+  window.scrollTo(0,0);
+  document.documentElement.scrollTop=0;
+  document.body.scrollTop=0;
+  resetGenerateDockScroll4152?.();
+  requestAnimationFrame(()=>settleGenerateDock4152?.(false));
+}
 function showPage4120(page){
   if(document.body.classList.contains("sandbox-open")) return;
   const sandbox=document.getElementById("sandboxPage"); if(sandbox) sandbox.style.display="none";
   showPageLegacy4120(page);
+  scrollActivePageToTop4153();
   if(page !== "main") document.getElementById("stickybar")?.style.removeProperty("display");
 }
 showPage = showPage4120;
@@ -1487,7 +1498,7 @@ document.addEventListener('visibilitychange', ()=>{if(!document.hidden) checkAtt
 checkAttendanceDay4148();
 
 
-/* ===== 4.15.2 Generate Teams dock scroll behavior ===== */
+/* ===== 4.15.3 Generate Teams dock Attendance threshold ===== */
 let generateDockReturnTimer4152 = 0;
 let generateDockOffset4152 = 0;
 let generateDockFrame4152 = 0;
@@ -1517,36 +1528,32 @@ function generateDockAttendanceConstraint4152(dock){
   const header = document.querySelector('.topbar');
 
   if(!attendance || attendance.hidden || !anchor || !header){
-    return {offset:0, progress:0, inRevealBand:false, lockedHidden:false, maxOffset};
+    return {offset:0, forceVisible:true, lockedHidden:false, maxOffset};
   }
 
   const attendanceRect = attendance.getBoundingClientRect();
   const anchorRect = anchor.getBoundingClientRect();
   const headerRect = header.getBoundingClientRect();
   if(anchorRect.height <= 0){
-    return {offset:0, progress:0, inRevealBand:false, lockedHidden:false, maxOffset};
+    return {offset:0, forceVisible:true, lockedHidden:false, maxOffset};
   }
+
+  // If Attendance itself has been scrolled completely above the header, keep
+  // the dock hidden rather than letting it float over unrelated content.
   if(attendanceRect.bottom <= headerRect.bottom){
-    return {offset:maxOffset, progress:1, inRevealBand:false, lockedHidden:true, maxOffset};
+    return {offset:maxOffset, forceVisible:false, lockedHidden:true, maxOffset};
   }
 
-  // Once Search Players reaches the bottom of the sticky header, only the
-  // searchable attendance list is effectively left under the header. Keep
-  // Generate Teams completely hidden there. As the user scrolls back upward,
-  // reveal it across a generous vertical band so it rises with the content.
-  const hiddenLine = headerRect.bottom + 12;
-  const revealRange = Math.max(200, Math.min(300, window.innerHeight * 0.28));
-  const distanceBelowHeader = anchorRect.top - hiddenLine;
-  const visibleProgress = Math.max(0, Math.min(1, distanceBelowHeader / revealRange));
-  const hiddenProgress = 1 - visibleProgress;
-
-  return {
-    offset:maxOffset * hiddenProgress,
-    progress:hiddenProgress,
-    inRevealBand:hiddenProgress > 0 && hiddenProgress < 1,
-    lockedHidden:hiddenProgress >= 0.999,
-    maxOffset
-  };
+  // 4.15.3: Search Players is the exact threshold. If even one pixel of the
+  // controls ABOVE Search Players is visible below the sticky header, Generate
+  // Teams comes all the way back. Once Search Players reaches the header, the
+  // page is effectively in list-only mode and the dock stays fully hidden.
+  const threshold = headerRect.bottom + 2;
+  const anythingAboveSearchVisible = anchorRect.top > threshold;
+  if(anythingAboveSearchVisible){
+    return {offset:0, forceVisible:true, lockedHidden:false, maxOffset};
+  }
+  return {offset:maxOffset, forceVisible:false, lockedHidden:true, maxOffset};
 }
 
 function renderGenerateDockOffset4152(){
@@ -1565,8 +1572,7 @@ function settleGenerateDock4152(animate=true){
   const dock = document.getElementById('stickybar');
   if(!dock || dock.hidden) return;
   const constraint = generateDockAttendanceConstraint4152(dock);
-  if(!animate) dock.classList.add('generate-scroll-tracking');
-  else dock.classList.remove('generate-scroll-tracking');
+  dock.classList.toggle('generate-scroll-tracking', !animate);
   generateDockOffset4152 = constraint.offset;
   dock.style.setProperty('--generate-scroll-offset', `${generateDockOffset4152.toFixed(2)}px`);
   if(!animate){
@@ -1578,48 +1584,15 @@ function handleGenerateDockScroll4152(source){
   const dock = document.getElementById('stickybar');
   if(!dock || dock.hidden) return;
 
-  const current = generateDockScrollPos4152(source);
-  const previous = generateDockLastPos4152.get(source);
-  generateDockLastPos4152.set(source, current);
+  generateDockLastPos4152.set(source, generateDockScrollPos4152(source));
   const constraint = generateDockAttendanceConstraint4152(dock);
 
-  // The first event only establishes a baseline for this scroller, but still
-  // honors the Attendance-list lock in case iOS restored the page mid-scroll.
-  if(!Number.isFinite(previous)){
-    generateDockOffset4152 = Math.max(generateDockOffset4152, constraint.offset);
-    queueGenerateDockRender4152();
-    return;
-  }
-
-  const delta = current - previous;
-  const distance = Math.abs(delta);
-  if(distance > 0.25){
-    if(delta > 0){
-      // Scrolling down: let the dock drift down slowly, but never allow it to
-      // sit above the minimum position dictated by the Attendance list.
-      generateDockOffset4152 = Math.min(
-        constraint.maxOffset,
-        Math.max(constraint.offset, generateDockOffset4152 + distance * 0.28)
-      );
-    }else if(constraint.lockedHidden){
-      // Still inside the list-only zone. Keep it fully hidden even while the
-      // user starts scrolling upward.
-      generateDockOffset4152 = constraint.maxOffset;
-    }else if(constraint.inRevealBand){
-      // Once the user scrolls back above Search Players, tie the dock directly
-      // to that section's position. This makes it slowly rise back onto screen
-      // in proportion to how far the upper Attendance controls reappear.
-      generateDockOffset4152 = constraint.offset;
-    }else{
-      // Outside the Attendance reveal band, upward scrolling gently pulls the
-      // dock back toward its resting position.
-      generateDockOffset4152 = Math.max(
-        constraint.offset,
-        generateDockOffset4152 - distance * 0.34
-      );
-    }
-
-    dock.classList.add('generate-scroll-tracking');
+  // Position, not scroll velocity, is authoritative. This prevents a stopped
+  // list from bringing the dock back and guarantees a full return whenever
+  // any controls above Search Players are visible below the header.
+  dock.classList.remove('generate-scroll-tracking');
+  if(generateDockOffset4152 !== constraint.offset){
+    generateDockOffset4152 = constraint.offset;
     queueGenerateDockRender4152();
   }
 
@@ -1629,12 +1602,9 @@ function handleGenerateDockScroll4152(source){
     if(!currentDock || currentDock.hidden) return;
     const resting = generateDockAttendanceConstraint4152(currentDock);
     currentDock.classList.remove('generate-scroll-tracking');
-    void currentDock.offsetHeight;
-    // Crucially, do NOT return to zero while only Search Players + the list is
-    // visible below the header. The Attendance position is the resting target.
     generateDockOffset4152 = resting.offset;
     currentDock.style.setProperty('--generate-scroll-offset', `${generateDockOffset4152.toFixed(2)}px`);
-  }, 190);
+  }, 120);
 }
 
 function resetGenerateDockScroll4152(){
@@ -1662,7 +1632,6 @@ function setupGenerateDockScroll4152(){
   window.addEventListener('resize', ()=>settleGenerateDock4152(true), {passive:true});
   window.addEventListener('pageshow', ()=>setTimeout(()=>settleGenerateDock4152(false), 60));
   window.addEventListener('pagehide', resetGenerateDockScroll4152);
-  // iOS may restore a Home Screen web app at its previous scroll position.
   requestAnimationFrame(()=>settleGenerateDock4152(false));
   setTimeout(()=>settleGenerateDock4152(false), 250);
 }

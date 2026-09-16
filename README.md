@@ -1,4 +1,4 @@
-# Ultimate Teams — 4.15.2
+# Ultimate Teams — 4.15.3
 
 This is the complete cleaned project. It preserves the uploaded app behavior,
 Supabase configuration, custom domain, database scripts, and backend functions.
@@ -7,11 +7,12 @@ No SQL changes or backend redeployment are needed for this cleanup.
 
 ## This update
 
-- Generate Teams still moves gradually with scroll distance instead of jumping off-screen.
-- Once **Search Players** reaches the sticky header and the attendance player list is the content left below it, the Generate Teams dock stays hidden even after scrolling stops.
-- Scrolling back upward keeps the dock hidden until the top of the attendance list is crossed, then the dock rises back onto the screen gradually as the upper Attendance controls reappear.
-- Outside that Attendance-list zone, downward scrolling pushes the dock away and upward scrolling gently pulls it back.
-- The behavior works with both the normal browser scroller and the iOS Home Screen app scroller.
+- **Search Players** is now the exact Generate Teams visibility threshold.
+- If anything above Search Players is visible below the sticky header, the Generate Teams dock returns all the way.
+- When Search Players reaches/scrolls behind the header and the page is effectively in attendance-list-only mode, the dock stays fully hidden even after scrolling stops.
+- Tapping **Main** always returns the Main page to the top, even if Main is already selected.
+- Tapping **Data** always returns the Data page to the top, even if Data is already selected.
+- The scroll-to-top behavior works with both normal Safari/desktop scrolling and the iOS Home Screen app's internal scroller.
 - The more opaque/vibrant Generate Teams styling from v4.15.0 remains unchanged.
 
 No SQL changes or backend redeployment are needed. Replace the same files.
@@ -65,9 +66,9 @@ files are macOS ZIP metadata and are also omitted.
 Replace the existing files with the files in each update ZIP. Filenames stay
 stable, and each ZIP contains one current copy of each file. Cache versions
 are changed inside URLs and the service worker, rather than in filenames.
-For example, `app.js?v=4.15.2` still refers to the single file `app.js`.
+For example, `app.js?v=4.15.3` still refers to the single file `app.js`.
 No tests, audit reports, dated release notes, backup copies, or obsolete asset
 versions will be added to ordinary update packages.
 
-After upload, reopen the app online and check the Data footer shows 4.15.2.
+After upload, reopen the app online and check the Data footer shows 4.15.3.
 The first successful online load prepares the new version for offline use.
