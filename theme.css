@@ -1175,7 +1175,7 @@ label,#tempPlayerBox label,#pairRulesBox label{
   .topbar button{font-size:var(--ut-font-meta)!important}
 }
 
-/* 4.14.8: one attendance surface and consistent 48px touch targets. */
+/* 4.14.9: one attendance surface and consistent 48px touch targets. */
 #attendanceCard{--attendance-surface:#181818;--attendance-height:48px}
 #attendanceCard .team-count-control4145,
 #attendanceCard #tempPlayerBox,#attendanceCard #pairRulesBox,

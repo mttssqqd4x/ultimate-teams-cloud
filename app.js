@@ -989,7 +989,6 @@ function openPlayerActions4132(playerId){
         <button class="btn-secondary player-actions-close4132" type="button" aria-label="Close player actions">Close</button>
       </div>
       <div class="player-actions-grid4132">
-        <button class="btn-secondary" type="button" data-player-action4132="edit">Edit Player</button>
         <button class="btn-secondary" type="button" data-player-action4132="injury">
           Injury / Availability <span>${injury}%</span>
         </button>
@@ -1000,6 +999,7 @@ function openPlayerActions4132(playerId){
           <button class="btn" type="button" data-player-action4132="permanent">Make Permanent</button>
           <button class="btn-danger" type="button" data-player-action4132="remove">Remove One-Time Player</button>
         ` : ""}
+        <button class="btn-secondary" type="button" data-player-action4132="edit">Edit Player</button>
       </div>
     </div>
   `;

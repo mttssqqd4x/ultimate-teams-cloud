@@ -856,7 +856,6 @@ function ensureV490FeatureUi(){
     ensureToolButton("viewGameHistoryBtn", "View Game History", "btn-secondary", "openGameHistoryModal");
     ensureToolButton("viewTeammateHistoryBtn", "View Teammate History", "btn-secondary", "openTeammateHistoryModal");
     ensureToolButton("viewAuditLogsBtn", "View Admin Audit Logs", "btn-secondary admin-only", "openAuditLogsModal");
-    ensureToolButton("voidLastSavedGameBtn", "Undo/Void Last Saved Game", "btn-danger admin-only", "voidLastSavedGame");
   }
 
   const saveWrap = document.getElementById("saveResultsWrap");
@@ -5956,6 +5955,9 @@ async function openAuditLogsModal(){
         <div><label>Search</label><input id="auditSearch" placeholder="Search details..." oninput="renderAuditLogRows()"></div>
         <div><label>&nbsp;</label><button class="btn-secondary" type="button" onclick="downloadAuditLogsCsv()">Export CSV</button></div>
         <div><label>&nbsp;</label><button class="btn-secondary" type="button" onclick="openAuditLogsModal()">Reload</button></div>
+      </div>
+      <div class="subbox" style="margin-top:12px">
+        <button class="btn-danger" type="button" onclick="voidLastSavedGame()">Undo/Void Last Saved Game</button>
       </div>
       <div id="auditLogsList"></div>
     `;

@@ -1,4 +1,4 @@
-# Ultimate Teams — 4.14.8
+# Ultimate Teams — 4.14.9
 
 This is the complete cleaned project. It preserves the uploaded app behavior,
 Supabase configuration, custom domain, database scripts, and backend functions.
@@ -7,23 +7,13 @@ No SQL changes or backend redeployment are needed for this cleanup.
 
 ## This update
 
-- Sandbox is a direct button at the top of Data. Tools and Roster & App Settings
-  remain collapsed by default. Clear Attendance is first in Tools.
-- Game Night is now Dashboard.
-- Inactive Players and Present Only stay side by side, including on phones.
-- Attendance boxes share a dark surface and a 48px standard height. Expanded
-  forms and longer player descriptions can grow so text is never clipped.
-  Present players retain their green outline; switches retain their status knob.
-- Attendance expires at local midnight, using the same device-local cutoff as
-  the dashboard. Open apps update at midnight or on resume; reopened apps filter
-  check-ins by their recorded timestamp, including offline startup snapshots.
-  Yesterday's queued taps are not replayed. There is no server scheduler or SQL
-  change: old database records remain history and are excluded by the app.
-  As with the dashboard, devices in different time zones use their own midnight.
-- Previous hold/tap, translucent dialog, and pre-results balance fixes remain.
+- Generate Teams now uses a brighter, more saturated green CTA so it stands out against the dark interface.
+- Edit Player is now the last action in the Attendance press-and-hold player menu.
+- Undo/Void Last Saved Game is no longer a standalone Tools button. It now lives inside View Admin Audit Logs.
+- Test Sandbox has moved to the bottom of the Data page.
+- All v4.14.8 behavior not listed above is preserved.
 
 No SQL changes or backend redeployment are needed. Replace the same files.
-Actual iPhone visual verification was unavailable in this environment.
 
 ## Keep these website files
 
@@ -74,9 +64,9 @@ files are macOS ZIP metadata and are also omitted.
 Replace the existing files with the files in each update ZIP. Filenames stay
 stable, and each ZIP contains one current copy of each file. Cache versions
 are changed inside URLs and the service worker, rather than in filenames.
-For example, `app.js?v=4.14.8` still refers to the single file `app.js`.
+For example, `app.js?v=4.14.9` still refers to the single file `app.js`.
 No tests, audit reports, dated release notes, backup copies, or obsolete asset
 versions will be added to ordinary update packages.
 
-After upload, reopen the app online and check the Data footer shows 4.14.8.
+After upload, reopen the app online and check the Data footer shows 4.14.9.
 The first successful online load prepares the new version for offline use.

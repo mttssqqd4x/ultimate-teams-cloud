@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Ultimate Teams Cloud</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=4.14.8">
+  <link rel="stylesheet" href="styles.css?v=4.14.9">
   <meta name="theme-color" content="#000000">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -242,7 +242,7 @@
 
 </style>
 
-  <link rel="stylesheet" href="theme.css?v=4.14.8">
+  <link rel="stylesheet" href="theme.css?v=4.14.9">
 
   <!-- 4.11.21 startup performance -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -251,8 +251,8 @@
   <link rel="dns-prefetch" href="//fsdqkozqjshqooqwvmhq.supabase.co">
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script" crossorigin="anonymous">
   <link rel="preload" href="config.js" as="script">
-  <link rel="preload" href="legacy-core.js?v=4.14.8" as="script">
-  <link rel="preload" href="app.js?v=4.14.8" as="script">
+  <link rel="preload" href="legacy-core.js?v=4.14.9" as="script">
+  <link rel="preload" href="app.js?v=4.14.9" as="script">
 
 </head>
 <body>
@@ -309,9 +309,6 @@
   </div>
   
 <div id="dataPage" style="display:none">
-  <div class="card captain-admin-only" id="dataSandboxLauncher">
-    <button id="openSandboxBtn" class="btn" type="button" onclick="return openTestSandbox4122(event)">Test Sandbox</button>
-  </div>
   <div class="card captain-admin-only" id="dataCaptainTools">
     <details>
       <summary><span class="summary-title">Tools</span><span></span></summary>
@@ -324,7 +321,6 @@
         <button id="viewTeammateHistoryBtn" class="btn-secondary" type="button" onclick="openTeammateHistoryModal()">View Teammate History</button>
         <button class="btn-secondary" type="button" onclick="downloadRatingsCsv()">Download Ratings CSV</button>
         <button id="viewAuditLogsBtn" class="btn-secondary admin-only" type="button" onclick="openAuditLogsModal()">View Admin Audit Logs</button>
-        <button id="voidLastSavedGameBtn" class="btn-danger admin-only" type="button" onclick="voidLastSavedGame()">Undo/Void Last Saved Game</button>
         <button id="archiveSeasonBtn" class="btn-secondary admin-only" type="button" onclick="openArchiveSeasonModal()">Archive Season</button>
         <button id="manageAccountsBtn" class="btn-secondary admin-only" type="button" onclick="openManageAccountsModal()">Manage Accounts</button>
       </div>
@@ -427,6 +423,10 @@
         <button class="btn-danger" type="button" onclick="resetHistory()">Reset Teammate History</button>
       </div>
     </details>
+  </div>
+
+  <div class="card captain-admin-only" id="dataSandboxLauncher">
+    <button id="openSandboxBtn" class="btn" type="button" onclick="return openTestSandbox4122(event)">Test Sandbox</button>
   </div>
 </div>
 
@@ -649,6 +649,6 @@
   <iframe id="sandboxFrame" title="Main page sandbox" sandbox="allow-scripts allow-modals allow-downloads" referrerpolicy="no-referrer"></iframe>
 </div>
 
-<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="version.js?v=4.14.8"></script><script src="legacy-core.js?v=4.14.8"></script><script src="app.js?v=4.14.8"></script><script src="sandbox-host.js?v=4.14.8"></script>
+<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="version.js?v=4.14.9"></script><script src="legacy-core.js?v=4.14.9"></script><script src="app.js?v=4.14.9"></script><script src="sandbox-host.js?v=4.14.9"></script>
 <div id="loadingOverlay" class="loading-backdrop"><div class="loading-card"><div class="spinner"></div><div id="loadingMessage">Working...</div></div></div>
 </body></html>
