@@ -430,10 +430,9 @@ button:active{
   will-change:transform;
 }
 
-/* 4.15.1: the dock follows scroll distance instead of jumping fully off-screen.
-   While a scroll is active we use a very short linear interpolation so iOS
-   scroll events remain visually smooth. When scrolling stops the normal
-   transition above eases the dock back to its resting position. */
+/* 4.15.2: the dock follows scroll distance and the Attendance-list position.
+   It stays hidden while Search Players + the player list occupy the area below
+   the header, then gradually reappears as upper Attendance controls return. */
 .stickybar.generate-scroll-tracking{
   transition:transform .10s linear, opacity .20s ease!important;
 }

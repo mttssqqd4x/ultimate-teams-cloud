@@ -1487,86 +1487,183 @@ document.addEventListener('visibilitychange', ()=>{if(!document.hidden) checkAtt
 checkAttendanceDay4148();
 
 
-/* ===== 4.15.1 Generate Teams dock scroll behavior ===== */
-let generateDockReturnTimer4151 = 0;
-let generateDockOffset4151 = 0;
-let generateDockFrame4151 = 0;
-const generateDockLastPos4151 = new WeakMap();
+/* ===== 4.15.2 Generate Teams dock scroll behavior ===== */
+let generateDockReturnTimer4152 = 0;
+let generateDockOffset4152 = 0;
+let generateDockFrame4152 = 0;
+const generateDockLastPos4152 = new WeakMap();
 
-function generateDockScrollPos4151(source){
+function generateDockScrollPos4152(source){
   if(source === window){
     return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
   }
   return Number(source?.scrollTop || 0);
 }
 
-function renderGenerateDockOffset4151(){
-  generateDockFrame4151 = 0;
-  const dock = document.getElementById("stickybar");
-  if(!dock) return;
-  dock.style.setProperty("--generate-scroll-offset", `${generateDockOffset4151.toFixed(2)}px`);
+function generateDockMaxOffset4152(dock){
+  return Math.max(120, Number(dock?.offsetHeight || 0) + 70);
 }
 
-function queueGenerateDockRender4151(){
-  if(generateDockFrame4151) return;
-  generateDockFrame4151 = requestAnimationFrame(renderGenerateDockOffset4151);
+function generateDockAttendanceAnchor4152(){
+  // Captains/Admins have Search Players. Fall back to the player list for
+  // roles where the search row is intentionally hidden.
+  return document.getElementById('attendanceSearchRow') || document.getElementById('playerList');
 }
 
-function handleGenerateDockScroll4151(source){
-  const dock = document.getElementById("stickybar");
-  if(!dock || dock.hidden) return;
+function generateDockAttendanceConstraint4152(dock){
+  const maxOffset = generateDockMaxOffset4152(dock);
+  const attendance = document.getElementById('attendanceCard');
+  const anchor = generateDockAttendanceAnchor4152();
+  const header = document.querySelector('.topbar');
 
-  const current = generateDockScrollPos4151(source);
-  const previous = generateDockLastPos4151.get(source);
-  generateDockLastPos4151.set(source, current);
-
-  // The first event only establishes a baseline for this scroller.
-  if(Number.isFinite(previous)) {
-    const distance = Math.abs(current - previous);
-    if(distance > 0.25){
-      // Move only ~28% as far as the page scrolls, so the dock drifts away
-      // gradually instead of disappearing on the first touch/flick.
-      const maxOffset = Math.max(120, dock.offsetHeight + 70);
-      generateDockOffset4151 = Math.min(maxOffset, generateDockOffset4151 + distance * 0.28);
-      dock.classList.add("generate-scroll-tracking");
-      queueGenerateDockRender4151();
-    }
+  if(!attendance || attendance.hidden || !anchor || !header){
+    return {offset:0, progress:0, inRevealBand:false, lockedHidden:false, maxOffset};
   }
 
-  clearTimeout(generateDockReturnTimer4151);
-  generateDockReturnTimer4151 = setTimeout(()=>{
-    const currentDock = document.getElementById("stickybar");
-    if(!currentDock) return;
-    currentDock.classList.remove("generate-scroll-tracking");
-    // Commit the tracking position before asking CSS to ease back to zero.
+  const attendanceRect = attendance.getBoundingClientRect();
+  const anchorRect = anchor.getBoundingClientRect();
+  const headerRect = header.getBoundingClientRect();
+  if(anchorRect.height <= 0){
+    return {offset:0, progress:0, inRevealBand:false, lockedHidden:false, maxOffset};
+  }
+  if(attendanceRect.bottom <= headerRect.bottom){
+    return {offset:maxOffset, progress:1, inRevealBand:false, lockedHidden:true, maxOffset};
+  }
+
+  // Once Search Players reaches the bottom of the sticky header, only the
+  // searchable attendance list is effectively left under the header. Keep
+  // Generate Teams completely hidden there. As the user scrolls back upward,
+  // reveal it across a generous vertical band so it rises with the content.
+  const hiddenLine = headerRect.bottom + 12;
+  const revealRange = Math.max(200, Math.min(300, window.innerHeight * 0.28));
+  const distanceBelowHeader = anchorRect.top - hiddenLine;
+  const visibleProgress = Math.max(0, Math.min(1, distanceBelowHeader / revealRange));
+  const hiddenProgress = 1 - visibleProgress;
+
+  return {
+    offset:maxOffset * hiddenProgress,
+    progress:hiddenProgress,
+    inRevealBand:hiddenProgress > 0 && hiddenProgress < 1,
+    lockedHidden:hiddenProgress >= 0.999,
+    maxOffset
+  };
+}
+
+function renderGenerateDockOffset4152(){
+  generateDockFrame4152 = 0;
+  const dock = document.getElementById('stickybar');
+  if(!dock) return;
+  dock.style.setProperty('--generate-scroll-offset', `${generateDockOffset4152.toFixed(2)}px`);
+}
+
+function queueGenerateDockRender4152(){
+  if(generateDockFrame4152) return;
+  generateDockFrame4152 = requestAnimationFrame(renderGenerateDockOffset4152);
+}
+
+function settleGenerateDock4152(animate=true){
+  const dock = document.getElementById('stickybar');
+  if(!dock || dock.hidden) return;
+  const constraint = generateDockAttendanceConstraint4152(dock);
+  if(!animate) dock.classList.add('generate-scroll-tracking');
+  else dock.classList.remove('generate-scroll-tracking');
+  generateDockOffset4152 = constraint.offset;
+  dock.style.setProperty('--generate-scroll-offset', `${generateDockOffset4152.toFixed(2)}px`);
+  if(!animate){
+    requestAnimationFrame(()=>dock.classList.remove('generate-scroll-tracking'));
+  }
+}
+
+function handleGenerateDockScroll4152(source){
+  const dock = document.getElementById('stickybar');
+  if(!dock || dock.hidden) return;
+
+  const current = generateDockScrollPos4152(source);
+  const previous = generateDockLastPos4152.get(source);
+  generateDockLastPos4152.set(source, current);
+  const constraint = generateDockAttendanceConstraint4152(dock);
+
+  // The first event only establishes a baseline for this scroller, but still
+  // honors the Attendance-list lock in case iOS restored the page mid-scroll.
+  if(!Number.isFinite(previous)){
+    generateDockOffset4152 = Math.max(generateDockOffset4152, constraint.offset);
+    queueGenerateDockRender4152();
+    return;
+  }
+
+  const delta = current - previous;
+  const distance = Math.abs(delta);
+  if(distance > 0.25){
+    if(delta > 0){
+      // Scrolling down: let the dock drift down slowly, but never allow it to
+      // sit above the minimum position dictated by the Attendance list.
+      generateDockOffset4152 = Math.min(
+        constraint.maxOffset,
+        Math.max(constraint.offset, generateDockOffset4152 + distance * 0.28)
+      );
+    }else if(constraint.lockedHidden){
+      // Still inside the list-only zone. Keep it fully hidden even while the
+      // user starts scrolling upward.
+      generateDockOffset4152 = constraint.maxOffset;
+    }else if(constraint.inRevealBand){
+      // Once the user scrolls back above Search Players, tie the dock directly
+      // to that section's position. This makes it slowly rise back onto screen
+      // in proportion to how far the upper Attendance controls reappear.
+      generateDockOffset4152 = constraint.offset;
+    }else{
+      // Outside the Attendance reveal band, upward scrolling gently pulls the
+      // dock back toward its resting position.
+      generateDockOffset4152 = Math.max(
+        constraint.offset,
+        generateDockOffset4152 - distance * 0.34
+      );
+    }
+
+    dock.classList.add('generate-scroll-tracking');
+    queueGenerateDockRender4152();
+  }
+
+  clearTimeout(generateDockReturnTimer4152);
+  generateDockReturnTimer4152 = setTimeout(()=>{
+    const currentDock = document.getElementById('stickybar');
+    if(!currentDock || currentDock.hidden) return;
+    const resting = generateDockAttendanceConstraint4152(currentDock);
+    currentDock.classList.remove('generate-scroll-tracking');
     void currentDock.offsetHeight;
-    generateDockOffset4151 = 0;
-    currentDock.style.setProperty("--generate-scroll-offset", "0px");
+    // Crucially, do NOT return to zero while only Search Players + the list is
+    // visible below the header. The Attendance position is the resting target.
+    generateDockOffset4152 = resting.offset;
+    currentDock.style.setProperty('--generate-scroll-offset', `${generateDockOffset4152.toFixed(2)}px`);
   }, 190);
 }
 
-function resetGenerateDockScroll4151(){
-  clearTimeout(generateDockReturnTimer4151);
-  if(generateDockFrame4151){
-    cancelAnimationFrame(generateDockFrame4151);
-    generateDockFrame4151 = 0;
+function resetGenerateDockScroll4152(){
+  clearTimeout(generateDockReturnTimer4152);
+  if(generateDockFrame4152){
+    cancelAnimationFrame(generateDockFrame4152);
+    generateDockFrame4152 = 0;
   }
-  generateDockOffset4151 = 0;
-  const dock = document.getElementById("stickybar");
+  generateDockOffset4152 = 0;
+  const dock = document.getElementById('stickybar');
   if(dock){
-    dock.classList.remove("generate-scroll-tracking");
-    dock.style.setProperty("--generate-scroll-offset", "0px");
+    dock.classList.remove('generate-scroll-tracking');
+    dock.style.setProperty('--generate-scroll-offset', '0px');
   }
 }
 
-function setupGenerateDockScroll4151(){
-  const app = document.querySelector(".app");
-  generateDockLastPos4151.set(window, generateDockScrollPos4151(window));
-  window.addEventListener("scroll", ()=>handleGenerateDockScroll4151(window), {passive:true});
+function setupGenerateDockScroll4152(){
+  const app = document.querySelector('.app');
+  generateDockLastPos4152.set(window, generateDockScrollPos4152(window));
+  window.addEventListener('scroll', ()=>handleGenerateDockScroll4152(window), {passive:true});
   if(app){
-    generateDockLastPos4151.set(app, generateDockScrollPos4151(app));
-    app.addEventListener("scroll", ()=>handleGenerateDockScroll4151(app), {passive:true});
+    generateDockLastPos4152.set(app, generateDockScrollPos4152(app));
+    app.addEventListener('scroll', ()=>handleGenerateDockScroll4152(app), {passive:true});
   }
-  window.addEventListener("pagehide", resetGenerateDockScroll4151);
+  window.addEventListener('resize', ()=>settleGenerateDock4152(true), {passive:true});
+  window.addEventListener('pageshow', ()=>setTimeout(()=>settleGenerateDock4152(false), 60));
+  window.addEventListener('pagehide', resetGenerateDockScroll4152);
+  // iOS may restore a Home Screen web app at its previous scroll position.
+  requestAnimationFrame(()=>settleGenerateDock4152(false));
+  setTimeout(()=>settleGenerateDock4152(false), 250);
 }
-setupGenerateDockScroll4151();
+setupGenerateDockScroll4152();
