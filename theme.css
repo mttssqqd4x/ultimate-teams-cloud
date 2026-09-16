@@ -425,6 +425,18 @@ button:active{
   -webkit-backdrop-filter:blur(20px) saturate(100%)!important;
   backdrop-filter:blur(20px) saturate(100%)!important;
   box-shadow:var(--ut-shadow)!important;
+  transition:transform .28s cubic-bezier(.22,1,.36,1), opacity .20s ease!important;
+  will-change:transform;
+}
+
+/* 4.15.0: slide the Generate Teams dock below the viewport while scrolling. */
+.stickybar.generate-scroll-away{
+  transform:translate3d(-50%,calc(100% + 90px),0)!important;
+  opacity:.96!important;
+}
+
+@media (prefers-reduced-motion:reduce){
+  .stickybar{transition:none!important}
 }
 
 .stickybar::before{
@@ -439,7 +451,7 @@ button:active{
 .stickybar .btn-success{
   min-height:58px!important;
   border-radius:var(--ut-radius)!important;
-  background:rgba(52,130,78,.18)!important;
+  background:rgba(52,130,78,.30)!important;
   color:#e8fff0!important;
   border:1px solid rgba(105,235,155,.28)!important;
   -webkit-backdrop-filter:blur(18px)!important;

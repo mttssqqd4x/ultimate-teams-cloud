@@ -1485,3 +1485,26 @@ window.addEventListener('focus', checkAttendanceDay4148);
 window.addEventListener('pageshow', checkAttendanceDay4148);
 document.addEventListener('visibilitychange', ()=>{if(!document.hidden) checkAttendanceDay4148();});
 checkAttendanceDay4148();
+
+
+/* ===== 4.15.0 Generate Teams dock scroll behavior ===== */
+let generateDockReturnTimer4150 = 0;
+function setGenerateDockScrolling4150(){
+  const dock = document.getElementById("stickybar");
+  if(!dock) return;
+  dock.classList.add("generate-scroll-away");
+  clearTimeout(generateDockReturnTimer4150);
+  generateDockReturnTimer4150 = setTimeout(()=>{
+    dock.classList.remove("generate-scroll-away");
+  }, 170);
+}
+function setupGenerateDockScroll4150(){
+  const app = document.querySelector(".app");
+  window.addEventListener("scroll", setGenerateDockScrolling4150, {passive:true});
+  if(app) app.addEventListener("scroll", setGenerateDockScrolling4150, {passive:true});
+  window.addEventListener("pagehide", ()=>{
+    clearTimeout(generateDockReturnTimer4150);
+    document.getElementById("stickybar")?.classList.remove("generate-scroll-away");
+  });
+}
+setupGenerateDockScroll4150();

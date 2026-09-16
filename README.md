@@ -1,4 +1,4 @@
-# Ultimate Teams — 4.14.9
+# Ultimate Teams — 4.15.0
 
 This is the complete cleaned project. It preserves the uploaded app behavior,
 Supabase configuration, custom domain, database scripts, and backend functions.
@@ -7,11 +7,11 @@ No SQL changes or backend redeployment are needed for this cleanup.
 
 ## This update
 
-- Generate Teams now uses a brighter, more saturated green CTA so it stands out against the dark interface.
-- Edit Player is now the last action in the Attendance press-and-hold player menu.
-- Undo/Void Last Saved Game is no longer a standalone Tools button. It now lives inside View Admin Audit Logs.
-- Test Sandbox has moved to the bottom of the Data page.
-- All v4.14.8 behavior not listed above is preserved.
+- The green Generate Teams button is slightly less transparent for stronger contrast against the dark interface.
+- While actively scrolling, the entire Generate Teams dock smoothly slides below the bottom edge of the screen.
+- The dock automatically returns about 170 ms after scrolling stops.
+- The same behavior works with the normal page scroller and the iOS Home Screen app scroller.
+- All v4.14.9 behavior not listed above is preserved.
 
 No SQL changes or backend redeployment are needed. Replace the same files.
 
@@ -64,9 +64,9 @@ files are macOS ZIP metadata and are also omitted.
 Replace the existing files with the files in each update ZIP. Filenames stay
 stable, and each ZIP contains one current copy of each file. Cache versions
 are changed inside URLs and the service worker, rather than in filenames.
-For example, `app.js?v=4.14.9` still refers to the single file `app.js`.
+For example, `app.js?v=4.15.0` still refers to the single file `app.js`.
 No tests, audit reports, dated release notes, backup copies, or obsolete asset
 versions will be added to ordinary update packages.
 
-After upload, reopen the app online and check the Data footer shows 4.14.9.
+After upload, reopen the app online and check the Data footer shows 4.15.0.
 The first successful online load prepares the new version for offline use.
