@@ -1,1 +1,0 @@
-window.ULTIMATE_TEAMS_VERSION = "4.14.1";
