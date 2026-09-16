@@ -430,11 +430,10 @@ button:active{
   will-change:transform;
 }
 
-/* 4.15.3: Search Players is the dock threshold. The dock stays fully hidden
-   in list-only mode and returns fully whenever any controls above Search Players
-   are visible below the header. */
+/* 4.15.4: while Search Players moves behind the header, the dock follows
+   that scroll distance instead of switching between visible/hidden states. */
 .stickybar.generate-scroll-tracking{
-  transition:transform .10s linear, opacity .20s ease!important;
+  transition:transform .07s linear, opacity .20s ease!important;
 }
 
 @media (prefers-reduced-motion:reduce){

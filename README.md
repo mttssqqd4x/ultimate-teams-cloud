@@ -1,4 +1,9 @@
-# Ultimate Teams — 4.15.3
+# Ultimate Teams — 4.15.4
+
+## 4.15.4
+
+- Generate Teams now stays fully visible until Search Players reaches the sticky header, then slowly slides off-screen in direct proportion to how far Search Players has moved behind the header. Scrolling back up reverses the same motion.
+- Main and Data tab presses now smoothly animate back to the top instead of snapping there.
 
 This is the complete cleaned project. It preserves the uploaded app behavior,
 Supabase configuration, custom domain, database scripts, and backend functions.
@@ -66,9 +71,9 @@ files are macOS ZIP metadata and are also omitted.
 Replace the existing files with the files in each update ZIP. Filenames stay
 stable, and each ZIP contains one current copy of each file. Cache versions
 are changed inside URLs and the service worker, rather than in filenames.
-For example, `app.js?v=4.15.3` still refers to the single file `app.js`.
+For example, `app.js?v=4.15.4` still refers to the single file `app.js`.
 No tests, audit reports, dated release notes, backup copies, or obsolete asset
 versions will be added to ordinary update packages.
 
-After upload, reopen the app online and check the Data footer shows 4.15.3.
+After upload, reopen the app online and check the Data footer shows 4.15.4.
 The first successful online load prepares the new version for offline use.
