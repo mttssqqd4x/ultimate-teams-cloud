@@ -1487,24 +1487,86 @@ document.addEventListener('visibilitychange', ()=>{if(!document.hidden) checkAtt
 checkAttendanceDay4148();
 
 
-/* ===== 4.15.0 Generate Teams dock scroll behavior ===== */
-let generateDockReturnTimer4150 = 0;
-function setGenerateDockScrolling4150(){
+/* ===== 4.15.1 Generate Teams dock scroll behavior ===== */
+let generateDockReturnTimer4151 = 0;
+let generateDockOffset4151 = 0;
+let generateDockFrame4151 = 0;
+const generateDockLastPos4151 = new WeakMap();
+
+function generateDockScrollPos4151(source){
+  if(source === window){
+    return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+  }
+  return Number(source?.scrollTop || 0);
+}
+
+function renderGenerateDockOffset4151(){
+  generateDockFrame4151 = 0;
   const dock = document.getElementById("stickybar");
   if(!dock) return;
-  dock.classList.add("generate-scroll-away");
-  clearTimeout(generateDockReturnTimer4150);
-  generateDockReturnTimer4150 = setTimeout(()=>{
-    dock.classList.remove("generate-scroll-away");
-  }, 170);
+  dock.style.setProperty("--generate-scroll-offset", `${generateDockOffset4151.toFixed(2)}px`);
 }
-function setupGenerateDockScroll4150(){
+
+function queueGenerateDockRender4151(){
+  if(generateDockFrame4151) return;
+  generateDockFrame4151 = requestAnimationFrame(renderGenerateDockOffset4151);
+}
+
+function handleGenerateDockScroll4151(source){
+  const dock = document.getElementById("stickybar");
+  if(!dock || dock.hidden) return;
+
+  const current = generateDockScrollPos4151(source);
+  const previous = generateDockLastPos4151.get(source);
+  generateDockLastPos4151.set(source, current);
+
+  // The first event only establishes a baseline for this scroller.
+  if(Number.isFinite(previous)) {
+    const distance = Math.abs(current - previous);
+    if(distance > 0.25){
+      // Move only ~28% as far as the page scrolls, so the dock drifts away
+      // gradually instead of disappearing on the first touch/flick.
+      const maxOffset = Math.max(120, dock.offsetHeight + 70);
+      generateDockOffset4151 = Math.min(maxOffset, generateDockOffset4151 + distance * 0.28);
+      dock.classList.add("generate-scroll-tracking");
+      queueGenerateDockRender4151();
+    }
+  }
+
+  clearTimeout(generateDockReturnTimer4151);
+  generateDockReturnTimer4151 = setTimeout(()=>{
+    const currentDock = document.getElementById("stickybar");
+    if(!currentDock) return;
+    currentDock.classList.remove("generate-scroll-tracking");
+    // Commit the tracking position before asking CSS to ease back to zero.
+    void currentDock.offsetHeight;
+    generateDockOffset4151 = 0;
+    currentDock.style.setProperty("--generate-scroll-offset", "0px");
+  }, 190);
+}
+
+function resetGenerateDockScroll4151(){
+  clearTimeout(generateDockReturnTimer4151);
+  if(generateDockFrame4151){
+    cancelAnimationFrame(generateDockFrame4151);
+    generateDockFrame4151 = 0;
+  }
+  generateDockOffset4151 = 0;
+  const dock = document.getElementById("stickybar");
+  if(dock){
+    dock.classList.remove("generate-scroll-tracking");
+    dock.style.setProperty("--generate-scroll-offset", "0px");
+  }
+}
+
+function setupGenerateDockScroll4151(){
   const app = document.querySelector(".app");
-  window.addEventListener("scroll", setGenerateDockScrolling4150, {passive:true});
-  if(app) app.addEventListener("scroll", setGenerateDockScrolling4150, {passive:true});
-  window.addEventListener("pagehide", ()=>{
-    clearTimeout(generateDockReturnTimer4150);
-    document.getElementById("stickybar")?.classList.remove("generate-scroll-away");
-  });
+  generateDockLastPos4151.set(window, generateDockScrollPos4151(window));
+  window.addEventListener("scroll", ()=>handleGenerateDockScroll4151(window), {passive:true});
+  if(app){
+    generateDockLastPos4151.set(app, generateDockScrollPos4151(app));
+    app.addEventListener("scroll", ()=>handleGenerateDockScroll4151(app), {passive:true});
+  }
+  window.addEventListener("pagehide", resetGenerateDockScroll4151);
 }
-setupGenerateDockScroll4150();
+setupGenerateDockScroll4151();

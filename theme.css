@@ -415,7 +415,8 @@ button:active{
   left:50%!important;
   right:auto!important;
   bottom:calc(9px + env(safe-area-inset-bottom))!important;
-  transform:translateX(-50%)!important;
+  --generate-scroll-offset:0px;
+  transform:translate3d(-50%,var(--generate-scroll-offset),0)!important;
   z-index:6500!important;
   width:min(calc(100% - 20px),760px)!important;
   padding:9px!important;
@@ -425,14 +426,16 @@ button:active{
   -webkit-backdrop-filter:blur(20px) saturate(100%)!important;
   backdrop-filter:blur(20px) saturate(100%)!important;
   box-shadow:var(--ut-shadow)!important;
-  transition:transform .28s cubic-bezier(.22,1,.36,1), opacity .20s ease!important;
+  transition:transform .62s cubic-bezier(.22,1,.36,1), opacity .20s ease!important;
   will-change:transform;
 }
 
-/* 4.15.0: slide the Generate Teams dock below the viewport while scrolling. */
-.stickybar.generate-scroll-away{
-  transform:translate3d(-50%,calc(100% + 90px),0)!important;
-  opacity:.96!important;
+/* 4.15.1: the dock follows scroll distance instead of jumping fully off-screen.
+   While a scroll is active we use a very short linear interpolation so iOS
+   scroll events remain visually smooth. When scrolling stops the normal
+   transition above eases the dock back to its resting position. */
+.stickybar.generate-scroll-tracking{
+  transition:transform .10s linear, opacity .20s ease!important;
 }
 
 @media (prefers-reduced-motion:reduce){
