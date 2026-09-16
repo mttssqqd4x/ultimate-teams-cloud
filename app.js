@@ -1504,12 +1504,12 @@ document.addEventListener('visibilitychange', ()=>{if(!document.hidden) checkAtt
 checkAttendanceDay4148();
 
 
-/* ===== 4.15.4 Generate Teams dock — scroll-linked Search Players transition ===== */
+/* ===== 4.15.5 Generate Teams dock — 200px scroll-linked Search Players transition ===== */
 let generateDockReturnTimer4152 = 0;
 let generateDockOffset4152 = 0;
 let generateDockFrame4152 = 0;
 const generateDockLastPos4152 = new WeakMap();
-const GENERATE_DOCK_SEARCH_TRANSITION_PX_4154 = 420;
+const GENERATE_DOCK_SEARCH_TRANSITION_PX_4154 = 200;
 
 function generateDockScrollPos4152(source){
   if(source === window){
@@ -1551,11 +1551,11 @@ function generateDockAttendanceConstraint4152(dock){
     return {offset:maxOffset, forceVisible:false, lockedHidden:true, maxOffset, progress:1};
   }
 
-  // 4.15.4: Search Players is the start of a long, position-linked transition.
+  // 4.15.5: Search Players starts a 200px position-linked transition.
   // Until Search Players reaches the bottom of the sticky header, the dock is
   // fully visible. As Search Players moves behind the header, the dock moves
   // down by the same normalized scroll progress. Reversing the scroll reverses
-  // the motion exactly. It takes ~420 px past Search Players to fully hide.
+  // the motion exactly. It takes ~200 px past Search Players to fully hide.
   const threshold = headerRect.bottom + 2;
   const pixelsPastSearch = Math.max(0, threshold - anchorRect.top);
   const progress = Math.max(0, Math.min(1, pixelsPastSearch / GENERATE_DOCK_SEARCH_TRANSITION_PX_4154));

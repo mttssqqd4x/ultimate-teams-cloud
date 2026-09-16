@@ -1,9 +1,10 @@
-# Ultimate Teams — 4.15.4
+# Ultimate Teams — 4.15.5
 
-## 4.15.4
+## 4.15.5
 
-- Generate Teams now stays fully visible until Search Players reaches the sticky header, then slowly slides off-screen in direct proportion to how far Search Players has moved behind the header. Scrolling back up reverses the same motion.
-- Main and Data tab presses now smoothly animate back to the top instead of snapping there.
+- Generate Teams now transitions from fully visible to fully hidden over about **200 px** of scrolling after Search Players reaches the sticky header.
+- Scrolling back up reverses the same distance-linked motion.
+- Smooth Main/Data scroll-to-top behavior from v4.15.4 remains unchanged.
 
 This is the complete cleaned project. It preserves the uploaded app behavior,
 Supabase configuration, custom domain, database scripts, and backend functions.
@@ -14,7 +15,7 @@ No SQL changes or backend redeployment are needed for this cleanup.
 
 - **Search Players** is now the exact Generate Teams visibility threshold.
 - If anything above Search Players is visible below the sticky header, the Generate Teams dock returns all the way.
-- When Search Players reaches/scrolls behind the header and the page is effectively in attendance-list-only mode, the dock stays fully hidden even after scrolling stops.
+- After Search Players moves about 200 px behind the header, the dock is fully hidden and stays hidden while you remain deeper in the attendance list.
 - Tapping **Main** always returns the Main page to the top, even if Main is already selected.
 - Tapping **Data** always returns the Data page to the top, even if Data is already selected.
 - The scroll-to-top behavior works with both normal Safari/desktop scrolling and the iOS Home Screen app's internal scroller.
@@ -71,9 +72,9 @@ files are macOS ZIP metadata and are also omitted.
 Replace the existing files with the files in each update ZIP. Filenames stay
 stable, and each ZIP contains one current copy of each file. Cache versions
 are changed inside URLs and the service worker, rather than in filenames.
-For example, `app.js?v=4.15.4` still refers to the single file `app.js`.
+For example, `app.js?v=4.15.5` still refers to the single file `app.js`.
 No tests, audit reports, dated release notes, backup copies, or obsolete asset
 versions will be added to ordinary update packages.
 
-After upload, reopen the app online and check the Data footer shows 4.15.4.
+After upload, reopen the app online and check the Data footer shows 4.15.5.
 The first successful online load prepares the new version for offline use.
