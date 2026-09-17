@@ -185,6 +185,8 @@
       document.body.classList.add('ut-sandbox-runtime');
       hideSignInBox();hideAllModals();
       changeView(seed.role||'admin',seed.playerId);
+      document.documentElement.classList.add("app-ready4156");
+      setStartupStatus4156();
       await refreshGameNightStats4120();
       // Prevent recursively opening another sandbox from this app copy.
       if(window.parent!==window)document.getElementById('dataSandboxLauncher')?.remove();

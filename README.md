@@ -1,27 +1,42 @@
-# Ultimate Teams — 4.15.5
-
-## 4.15.5
-
-- Generate Teams now transitions from fully visible to fully hidden over about **200 px** of scrolling after Search Players reaches the sticky header.
-- Scrolling back up reverses the same distance-linked motion.
-- Smooth Main/Data scroll-to-top behavior from v4.15.4 remains unchanged.
-
-This is the complete cleaned project. It preserves the uploaded app behavior,
-Supabase configuration, custom domain, database scripts, and backend functions.
-No SQL changes or backend redeployment are needed for this cleanup.
-
+# Ultimate Teams — 4.15.6
 
 ## This update
 
-- **Search Players** is now the exact Generate Teams visibility threshold.
-- If anything above Search Players is visible below the sticky header, the Generate Teams dock returns all the way.
-- After Search Players moves about 200 px behind the header, the dock is fully hidden and stays hidden while you remain deeper in the attendance list.
-- Tapping **Main** always returns the Main page to the top, even if Main is already selected.
-- Tapping **Data** always returns the Data page to the top, even if Data is already selected.
-- The scroll-to-top behavior works with both normal Safari/desktop scrolling and the iOS Home Screen app's internal scroller.
-- The more opaque/vibrant Generate Teams styling from v4.15.0 remains unchanged.
+- Add Player is now **Add New Player**. The permanent and one-time actions
+  remain separate, with the same player ratings and permissions.
+- Current teams expire at device-local midnight alongside attendance and the
+  daily dashboard. Expiration applies while open, on resume, on cloud refresh,
+  and when reopening cached data. Saved game history and statistics are retained.
+  Database rows are left intact; expired current teams are excluded by the app.
+- Cached launches use the installed page, configuration, and library without
+  waiting for the network. New releases are installed through the service worker.
+- Safe cached content renders before session lookup finishes. Short status/retry
+  feedback appears if the connection fails, and bootstrap reads time out after
+  ten seconds instead of leaving startup stuck indefinitely.
+- Repeated sign-in/token refresh events no longer restart the whole app or send
+  you back to Main. Foreground and profile refreshes use the current daily-reset
+  and pending-attendance logic. Old-account responses cannot replace new data.
+- Scrolling batches dock layout calculations into animation frames. Unchanged
+  attendance lists and dropdown options no longer rebuild on every refresh;
+  active filters persist and settings being edited are not overwritten.
+- Team generation keeps the same 120 searches, scoring rules, and constraints.
+  It reuses player metrics and yields during the search to keep the UI responsive.
+  Duplicate Generate presses are ignored while a generation is running.
+- Keyboard attendance controls, visible focus, reduced-motion support, and role
+  hiding before startup improve navigation and prevent admin controls flashing.
+- Sandbox uses this release's exact assets. Its position at the bottom of Data,
+  Edit Player at the bottom of the hold menu, Undo/Void inside Admin Audit Logs,
+  and the vibrant Generate button are retained from the supplied release.
 
-No SQL changes or backend redeployment are needed. Replace the same files.
+## Verification
+
+Local checks cover scoring equivalence across all three reshuffle modes, yielding
+while generating, rapid attendance gestures, pre-results balance, daily rollover,
+offline snapshots, auth event deduplication, stale-account reads, cached launches,
+service-worker upgrades, scroll batching, markup, and script syntax. Actual
+Safari/iPhone visual checks and real-network speed measurements were unavailable.
+
+The auth callback pattern follows the [Supabase auth event guidance](https://supabase.com/docs/reference/javascript/auth-onauthstatechange).
 
 ## Keep these website files
 
@@ -48,33 +63,13 @@ No SQL changes or backend redeployment are needed. Replace the same files.
   These are retained setup history, not disposable copies of website assets.
 - `README.md` — these instructions.
 
-## One-time cleanup
+## Installing updates
 
-Use this ZIP's contents as the complete website/project file list. Merely copying
-it over the old folder will not remove files already there. Remove old app assets
-that are absent from this package, then upload these contents. Preserve repository
-settings and deployment workflows if your repository has any.
+Replace the existing project files with this ZIP's contents. No SQL changes or
+backend redeployment are needed. This package contains the same 19 stable files;
+there are no tests, backup copies, or obsolete assets to remove.
 
-The uploaded site's active assets were the six 4.14.5 JavaScript/CSS families:
-`app`, `legacy-core`, `version`, `sandbox-host`, `sandbox-runtime`, and `theme`,
-plus `styles-4120.css`. These are now replaced by the stable names above.
-After installing this package, remove ALL old numbered copies of those assets,
-including 4.14.5, and `styles-4120.css`.
-
-The old `tests/`, `CODE_AUDIT_4_11_21.md`, `REFACTOR_4_12_0.md`, and
-`VERSION_HISTORY.md` are not needed to run the app. They are omitted here.
-The stray root `index.ts` was a duplicate of `supabase/config.toml`, not a
-website entry point, and is omitted. The `__MACOSX` folder and `._` companion
-files are macOS ZIP metadata and are also omitted.
-
-## Future updates
-
-Replace the existing files with the files in each update ZIP. Filenames stay
-stable, and each ZIP contains one current copy of each file. Cache versions
-are changed inside URLs and the service worker, rather than in filenames.
-For example, `app.js?v=4.15.5` still refers to the single file `app.js`.
-No tests, audit reports, dated release notes, backup copies, or obsolete asset
-versions will be added to ordinary update packages.
-
-After upload, reopen the app online and check the Data footer shows 4.15.5.
-The first successful online load prepares the new version for offline use.
+Reopen online to let the updated service worker finish installing, then reopen
+once more if needed. The Data footer should show **4.15.6**. Later cached launches
+use the installed release immediately. First-ever use still requires a connection.
+Keep database scripts and Supabase function sources as project maintenance files.

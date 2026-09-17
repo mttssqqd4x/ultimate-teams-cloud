@@ -1219,3 +1219,24 @@ label,#tempPlayerBox label,#pairRulesBox label{
 #attendanceCard #playerList .player.inactive .player-name{color:var(--ut-muted)}
 #dataSandboxLauncher{padding:0!important;border:0!important;background:transparent!important}
 #dataSandboxLauncher button{min-height:48px!important}
+
+
+/* 4.15.6: clear loading/retry feedback and keyboard focus without extra panels. */
+#startupStatus4156{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;color:var(--ut-muted);font-size:var(--ut-font-meta)}
+#startupStatus4156 button{width:auto;min-height:36px;padding:6px 12px}
+[hidden]{display:none!important}
+button:focus-visible,summary:focus-visible,[role="button"]:focus-visible{
+  outline:2px solid #86efac!important;outline-offset:3px;
+}
+#stickybar button:disabled{opacity:.65;cursor:wait}
+@media(prefers-reduced-motion:reduce){
+  html,.app{scroll-behavior:auto!important}
+  #stickybar,.toggle-knob,.toggle-knob::after{transition:none!important}
+}
+
+/* Prevent admin controls flashing before the first role-aware render. */
+html:not(.app-ready4156) .admin-only,
+html:not(.app-ready4156) .captain-admin-only,
+html:not(.app-ready4156) .signed-in-only,
+html:not(.app-ready4156) #dataTabBtn,
+html:not(.app-ready4156) #stickybar{display:none!important}

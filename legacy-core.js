@@ -590,14 +590,17 @@ function vapidConfigured(){
   return VAPID_PUBLIC_KEY && !VAPID_PUBLIC_KEY.includes("PASTE_");
 }
 
+let serviceWorkerRegistration4156 = null;
 async function getServiceWorkerRegistration(){
   if(!("serviceWorker" in navigator)) return null;
-  try{
-    return await navigator.serviceWorker.register("./service-worker.js");
-  }catch(e){
-    console.warn("Service worker registration failed", e);
-    return await navigator.serviceWorker.ready.catch(() => null);
+  if(!serviceWorkerRegistration4156){
+    serviceWorkerRegistration4156 = navigator.serviceWorker.register("./service-worker.js").catch(e=>{
+      serviceWorkerRegistration4156 = null;
+      console.warn("Service worker registration failed",e);
+      return null;
+    });
   }
+  return serviceWorkerRegistration4156;
 }
 
 async function enablePushNotifications(){
@@ -1353,6 +1356,9 @@ function updateSelectOptions(){
 function setSelectOptions(id, players){
   const sel = document.getElementById(id);
   if(!sel) return;
+  const signature = JSON.stringify(players.map(p=>[p.id,p.fullName]));
+  if(sel.dataset.optionsSignature4156 === signature) return;
+  sel.dataset.optionsSignature4156 = signature;
   const current = sel.value;
   sel.innerHTML = '<option value="">Select...</option>';
   players.forEach(p => {
@@ -2735,7 +2741,9 @@ async function voidLastSavedGame(){
     const { data, error } = await db.rpc("void_last_saved_game");
     if(error) throw error;
     await loadCloudData();
+    await refreshGameNightStats4120();
     renderAll();
+    if(document.getElementById("auditLogsModal")?.classList.contains("modal-open")) await openAuditLogsModal();
     alert(`Last saved game voided. Restored ${data?.restored_players ?? 0} players.`);
   }catch(e){
     alert("Could not void last saved game: " + (e?.message || e));
@@ -8949,10 +8957,10 @@ function restoreSafeStartupSnapshot41121(){
       injuryPct:1
     }));
 
-    state.currentGame = raw.currentGameTeams?.length ? hydrateGame(raw.currentGameTeams) : null;
-    state.currentGameGeneratedAt = raw.currentGameGeneratedAt || null;
-    state.selectedWinnerIndex = raw.selectedWinnerIndex ?? null;
-    state.resultsSavedForCurrentGame = !!raw.resultsSavedForCurrentGame;
+    state.currentGame = raw.currentGameTeams?.length && attendanceIsToday4148(raw.currentGameGeneratedAt) ? hydrateGame(raw.currentGameTeams) : null;
+    state.currentGameGeneratedAt = state.currentGame ? raw.currentGameGeneratedAt : null;
+    state.selectedWinnerIndex = state.currentGame ? raw.selectedWinnerIndex ?? null : null;
+    state.resultsSavedForCurrentGame = !!state.currentGame && !!raw.resultsSavedForCurrentGame;
     state.showInactive = false;
 
     if(currentUser){
@@ -8972,7 +8980,7 @@ function restoreSafeStartupSnapshot41121(){
   }
 }
 
-async function fallbackBootstrap41121(includeProfile = true){
+async function fallbackBootstrap41121(includeProfile = true, attendanceResult = null){
   const profilePromise = currentUser && includeProfile
     ? db.from("profiles").select("id,email,role,first_name,last_name,full_name,player_id").eq("id", currentUser.id).maybeSingle()
     : Promise.resolve({ data:null, error:null });
@@ -8980,7 +8988,7 @@ async function fallbackBootstrap41121(includeProfile = true){
   const [profileRes, playersRes, attendanceRes, pairRes, historyRes, settingsRes, gameRes] = await Promise.all([
     profilePromise,
     db.from("players").select("id,first_name,last_name,full_name,handling,cutting,defense,win_loss,active,injury_pct,temporary,games_played,wins,losses").order("first_name"),
-    db.from("attendance").select("player_id,present"),
+    attendanceResult || db.from("attendance").select("player_id,present,updated_at"),
     db.from("pair_rules").select("id,player1_id,player2_id,rule_type,strength,created_by,created_by_role,created_at").order("created_at"),
     db.from("teammate_history").select("player_a,player_b,count"),
     db.from("settings").select("id,weight_handling,weight_cutting,weight_defense,k_factor,repeat_weight,prioritize_handler_separation,handler_separation_boost,prioritize_elite_balance,elite_balance_boost").eq("id","main").maybeSingle(),
@@ -9100,7 +9108,7 @@ function installLightweightProfileRefresh41121(){
 
   let running = false;
   const refresh = async () => {
-    if(!currentUser || running) return;
+    if(!currentUser || running || navigator.onLine === false || Date.now()-cloudLoadedAt4156 < 1500) return;
     running = true;
     try{
       await loadCloudData41121({ includeProfile:true, applyLocal:true });

@@ -1,22 +1,34 @@
-const CACHE='ultimate-teams-cloud-4-15-5';
+const CACHE='ultimate-teams-cloud-4-15-6';
+const AUTH_SDK='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
 const STATIC_ASSETS=[
   './',
   './index.html',
-  './theme.css?v=4.15.5',
-  './styles.css?v=4.15.5',
-  './legacy-core.js?v=4.15.5',
-  './app.js?v=4.15.5',
+  './theme.css?v=4.15.6',
+  './styles.css?v=4.15.6',
+  './legacy-core.js?v=4.15.6',
+  './app.js?v=4.15.6',
   './config.js',
-  './version.js?v=4.15.5',
-  './sandbox-host.js?v=4.15.5',
-  './sandbox-runtime.js?v=4.15.5',
+  './version.js?v=4.15.6',
+  './sandbox-host.js?v=4.15.6',
+  './sandbox-runtime.js?v=4.15.6',
   './manifest.json'
 ];
 
 self.addEventListener('install',event=>{
   event.waitUntil(
     caches.open(CACHE)
-      .then(cache=>cache.addAll(STATIC_ASSETS.map(asset=>new Request(new URL(asset,self.location.href),{cache:'reload'}))))
+      .then(async cache=>{
+        await cache.addAll(STATIC_ASSETS.map(asset=>new Request(new URL(asset,self.location.href),{cache:'reload'})));
+        // Carry the already-downloaded SDK into the new release before old caches
+        // are removed. Offline startup must not depend on a CDN round trip.
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),10000);
+        try{
+          const sdk=(await caches.match(AUTH_SDK)) || await fetch(AUTH_SDK,{signal:controller.signal});
+          if(!sdk?.ok) throw new Error('Auth library could not be cached');
+          await cache.put(AUTH_SDK,sdk);
+        }finally{clearTimeout(timer);}
+      })
   );
   self.skipWaiting();
 });
@@ -37,6 +49,7 @@ async function networkFirst(request,fallbackPath){
       const cacheKey=fallbackPath || request;
       cache.put(cacheKey,response.clone()).catch(()=>null);
     }
+    if(!response?.ok) return (await cache.match(fallbackPath || request)) || response || Response.error();
     return response;
   }catch(e){
     return (await cache.match(fallbackPath || request)) || Response.error();
@@ -66,18 +79,21 @@ self.addEventListener('fetch',event=>{
   // Database/auth/realtime/function traffic is always live.
   if(url.hostname.endsWith('.supabase.co')) return;
 
-  // Always fetch the HTML shell from the network when online.
-  if(event.request.mode==='navigate'){
-    event.respondWith(networkFirst(event.request,'./index.html'));
+  // The release shell is installed atomically with its versioned local assets.
+  // Reopening never waits for the network; worker updates install the next shell.
+  if(event.request.mode==='navigate' && url.origin===self.location.origin){
+    event.respondWith(caches.open(CACHE).then(async cache=>
+      (await cache.match('./index.html')) || networkFirst(event.request,'./index.html')));
     return;
   }
 
-  // Stable shell/configuration paths must refresh online, including Sandbox's
-  // HTML fetch. Release query strings keep JS/CSS caches separate without
-  // creating additional files in the repository.
+  // Sandbox requests a release-specific page; stable configuration comes from
+  // the same installed release to avoid blocking startup or mixing versions.
   if(url.origin===self.location.origin && ['/index.html','/config.js','/manifest.json'].some(path=>url.pathname.endsWith(path))){
-    const fallback=url.pathname.endsWith('/index.html') ? './index.html' : undefined;
-    event.respondWith(networkFirst(event.request,fallback));
+    const path=url.pathname.endsWith('/index.html') ? './index.html'
+      : url.pathname.endsWith('/config.js') ? './config.js' : './manifest.json';
+    event.respondWith(caches.open(CACHE).then(async cache=>
+      (await cache.match(path)) || networkFirst(event.request,path)));
     return;
   }
 

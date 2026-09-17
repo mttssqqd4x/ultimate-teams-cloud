@@ -14,6 +14,12 @@ let gameNightStats4120 = { completed:0, lastWinner:null, lastPlayedAt:null, last
 let previousOfficialGameForReshuffle4120 = null;
 let offlineFlushRunning4120 = false;
 let sandboxState4120 = null;
+let authRun4156 = 0;
+let authEventTimer4156 = null;
+let cloudLoadedAt4156 = 0;
+let bootstrapRpcAvailable4156 = true;
+let generationRunning4156 = false;
+let startupRestored4156 = false;
 let attendanceDay4148 = localDayStartIso4120();
 
 function deepClone4120(value){
@@ -64,6 +70,8 @@ function scoreContext4120(overrides = {}){
     previousGameTeams: Object.prototype.hasOwnProperty.call(overrides,"previousGameTeams") ? overrides.previousGameTeams : previousOfficialGameForReshuffle4120,
     reshuffleMode: overrides.reshuffleMode || activeReshuffleMode4120(overrides.settings || state.settings),
     repeatWeight: Number(overrides.repeatWeight ?? (overrides.settings || state.settings).repeatWeight ?? 4),
+    playerMetrics:overrides.playerMetrics || null,
+    previousPairs:overrides.previousPairs || null,
     sandbox: !!overrides.sandbox
   };
 }
@@ -71,7 +79,12 @@ function scoreContext4120(overrides = {}){
 function scoreBreakdown4120(teams, overrides = {}){
   const ctx = scoreContext4120(overrides);
   const s = ctx.settings;
-  const stats = teams.map(teamStats);
+  const stats = ctx.playerMetrics ? teams.map(team=>team.reduce((sum,p)=>{
+    const value = ctx.playerMetrics.get(String(p.id)) || teamStats([p]);
+    sum.count++;sum.overall+=value.overall;sum.handling+=value.handling;
+    sum.cutting+=value.cutting;sum.defense+=value.defense;
+    return sum;
+  },{count:0,overall:0,handling:0,cutting:0,defense:0})) : teams.map(teamStats);
   const mode = ctx.reshuffleMode;
   const repeatWeight = Number(ctx.repeatWeight || 0);
   const breakdown = {
@@ -88,7 +101,7 @@ function scoreBreakdown4120(teams, overrides = {}){
 
   if(s.prioritizeEliteBalance){
     const eliteBoost = Number(s.eliteBalanceBoost || 2);
-    const topOveralls = teams.map(team => team.length ? Math.max(...team.map(p => overall(p))) : 0);
+    const topOveralls = teams.map(team => team.length ? Math.max(...team.map(p => ctx.playerMetrics?.get(String(p.id))?.overall ?? overall(p))) : 0);
     breakdown.elite = spread(topOveralls) * (10 * eliteBoost);
   }
 
@@ -120,7 +133,7 @@ function scoreBreakdown4120(teams, overrides = {}){
   }
 
   if(mode === "maximum" && ctx.previousGameTeams?.length){
-    const previousPairs = teamPairSet4120(ctx.previousGameTeams);
+    const previousPairs = ctx.previousPairs || teamPairSet4120(ctx.previousGameTeams);
     teams.forEach(team => {
       for(let i=0;i<team.length;i++){
         for(let j=i+1;j<team.length;j++){
@@ -156,7 +169,8 @@ function teamCountSpread4120(teams){
   const counts = teams.map(t => t.length);
   return counts.length ? Math.max(...counts) - Math.min(...counts) : 0;
 }
-function optimizeTeams4120(initial, repeatWeight = state.settings.repeatWeight, context = {}){
+function* optimizationSteps4156(initial, repeatWeight = state.settings.repeatWeight, context = {}){
+  let evaluations = 0;
   let best = cloneTeams(initial);
   let bestScore = scoreTeams4120(best, repeatWeight, context);
   let improved = true;
@@ -175,6 +189,7 @@ function optimizeTeams4120(initial, repeatWeight = state.settings.repeatWeight, 
             const candidate = cloneTeams(best);
             [candidate[a][i],candidate[b][j]] = [candidate[b][j],candidate[a][i]];
             const candidateScore = scoreTeams4120(candidate, repeatWeight, context);
+            if(++evaluations % 64 === 0) yield;
             if(candidateScore < bestScore - 0.000001){
               best = candidate; bestScore = candidateScore; improved = true;
             }
@@ -193,6 +208,7 @@ function optimizeTeams4120(initial, repeatWeight = state.settings.repeatWeight, 
           candidate[to].push(moved);
           if(teamCountSpread4120(candidate) > maxSpread) continue;
           const candidateScore = scoreTeams4120(candidate, repeatWeight, context);
+            if(++evaluations % 64 === 0) yield;
           if(candidateScore < bestScore - 0.000001){
             best = candidate; bestScore = candidateScore; improved = true;
           }
@@ -201,6 +217,24 @@ function optimizeTeams4120(initial, repeatWeight = state.settings.repeatWeight, 
     }
   }
   return { teams:best, score:bestScore };
+}
+function optimizeTeams4120(initial, repeatWeight = state.settings.repeatWeight, context = {}){
+  const steps = optimizationSteps4156(initial, repeatWeight, context);
+  let result;
+  do{ result = steps.next(); }while(!result.done);
+  return result.value;
+}
+async function optimizeTeamsResponsive4156(initial, repeatWeight, context){
+  const steps = optimizationSteps4156(initial, repeatWeight, context);
+  let frameStarted = performance.now();
+  while(true){
+    const result = steps.next();
+    if(result.done) return result.value;
+    if(performance.now() - frameStarted >= 8){
+      await new Promise(resolve => setTimeout(resolve, 0));
+      frameStarted = performance.now();
+    }
+  }
 }
 optimizeTeams = optimizeTeams4120;
 window.optimizeTeams = optimizeTeams4120;
@@ -315,6 +349,7 @@ window.serializableTeams = serializableTeams;
 
 /* ---------- Settings / reshuffle mode ---------- */
 function syncSettingsForm4120(){
+  if(document.activeElement?.closest("#dataAdminLoadEdit")) return;
   const s = state.settings;
   setValue("weightHandling", s.weightHandling);
   setValue("weightCutting", s.weightCutting);
@@ -382,29 +417,44 @@ window.saveSettings = saveSettings4120;
 
 /* ---------- Bootstrap / fast startup ---------- */
 async function fetchBootstrap4120(includeProfile = true){
-  // Older bootstrap RPCs omit timestamps; read attendance with its day explicitly.
-  const [bootstrap, attendance] = await Promise.all([
-    db.rpc("get_app_bootstrap_4120"),
-    db.from("attendance").select("player_id,present,updated_at")
-  ]);
-  if(attendance.error) throw attendance.error;
-  const usedRpc = !bootstrap.error && !!bootstrap.data;
-  const payload = usedRpc ? bootstrap.data : await fallbackBootstrap41121(includeProfile);
-  payload.attendance = attendance.data || [];
-  payload.settings = payload.settings || {};
-  return {payload, usedRpc};
+  const controller = new AbortController();
+  const bounded = query => typeof query.abortSignal === 'function' ? query.abortSignal(controller.signal) : query;
+  let timer;
+  const request = (async()=>{
+    const [bootstrap, attendance] = await Promise.all([
+      bootstrapRpcAvailable4156 ? bounded(db.rpc("get_app_bootstrap_4120")) : {data:null},
+      bounded(db.from("attendance").select("player_id,present,updated_at"))
+    ]);
+    if(attendance.error) throw attendance.error;
+    if(bootstrap.error?.code === 'PGRST202') bootstrapRpcAvailable4156 = false;
+    const usedRpc = !bootstrap.error && !!bootstrap.data;
+    const payload = usedRpc ? bootstrap.data : await fallbackBootstrap41121(includeProfile,attendance);
+    payload.attendance = attendance.data || [];
+    payload.settings = payload.settings || {};
+    return {payload,usedRpc};
+  })();
+  const timeout = new Promise((_,reject)=>{
+    timer=setTimeout(()=>{controller.abort();reject(new Error('Connection timed out. Try again.'));},10000);
+  });
+  try{return await Promise.race([request,timeout]);}
+  finally{clearTimeout(timer);}
 }
+
 function applyBootstrapPayload4120(payload, includeProfile = true){
   rolloverAttendanceDay4148();
   const attendance = (payload?.attendance || []).map(row => ({
     ...row, present:!!row.present && attendanceIsToday4148(row.updated_at)
   }));
-  applyBootstrapPayload41121({...payload, attendance}, includeProfile);
+  const showInactive = state.showInactive;
+  const currentGame = payload?.current_game;
+  applyBootstrapPayload41121({...payload, attendance,
+    current_game:attendanceIsToday4148(currentGame?.generated_at) ? currentGame : null
+  }, includeProfile);
+  state.showInactive = showInactive;
   const timestamps = new Map(attendance.map(row => [String(row.player_id), row.updated_at]));
   state.players.forEach(p => { p.attendanceUpdatedAt = timestamps.get(String(p.id)) || null; });
   balanceDataReady4147 = true;
   state.settings.reshuffleMode = payload?.settings?.reshuffle_mode || state.settings.reshuffleMode || "normal";
-  state.showInactive = false;
   applyOfflineAttendanceQueueToState4120();
   syncSettingsForm4120();
 }
@@ -415,9 +465,10 @@ async function loadCloudData4120(options = {}){
   const force = options.force === true;
   if(cloudLoadPromise4120 && !force) return cloudLoadPromise4120;
   const requestId = ++cloudRequest4145;
+  const requestUser = currentUser?.id || null;
   const task = (async()=>{
     const { payload } = await fetchBootstrap4120(includeProfile);
-    if(requestId < cloudApplied4145) return payload;
+    if(requestId < cloudApplied4145 || requestUser !== (currentUser?.id || null)) return null;
     cloudApplied4145 = requestId;
     applyBootstrapPayload4120(payload, includeProfile);
     applyPendingAttendance4142(requestId);
@@ -425,6 +476,8 @@ async function loadCloudData4120(options = {}){
     if(applyLocal && typeof applyLocalTeammateGame41117 === "function") applyLocalTeammateGame41117();
     applyOfflineAttendanceQueueToState4120();
     applyPendingAttendance4142();
+    expireCurrentTeams4156();
+    cloudLoadedAt4156 = Date.now();
     saveSafeStartupSnapshot41121?.();
     return payload;
   })();
@@ -434,11 +487,14 @@ async function loadCloudData4120(options = {}){
 }
 loadCloudData = loadCloudData4120;
 window.loadCloudData = loadCloudData4120;
+// Route historical callers through the same daily filtering and pending-tap logic.
+loadCloudData41121 = loadCloudData4120;
+window.loadCloudData41121 = loadCloudData4120;
 
 function scheduleLiveRefresh4120(){
   if(liveRefreshTimer) clearTimeout(liveRefreshTimer);
   liveRefreshTimer = setTimeout(async()=>{
-    try{ await loadCloudData4120({ includeProfile:true, applyLocal:true }); renderAll(); refreshGameNightStats4120(false); }
+    try{ await loadCloudData4120({ includeProfile:true, applyLocal:true }); renderAll(); refreshGameNightStats4120(); }
     catch(e){ console.warn("Live refresh failed", e); }
   },180);
 }
@@ -583,13 +639,14 @@ function renderGameNightDashboard4120(){
   const nextGame = gameNightStats4120.completed + (state.currentGame && !state.resultsSavedForCurrentGame ? 1 : 0);
   const start = state.currentGameGeneratedAt ? formatGameStartTime(state.currentGameGeneratedAt) : "—";
   const last = gameNightStats4120.lastWinner === null ? "—" : `Team ${Number(gameNightStats4120.lastWinner)+1}`;
-  out.innerHTML = `
+  const dashboardHtml = `
     <div class="dashboard-tile"><div class="dashboard-label">Present</div><div class="dashboard-value">${present}</div></div>
     <div class="dashboard-tile"><div class="dashboard-label">Game</div><div class="dashboard-value">${nextGame || "—"}<span class="dashboard-context4147">${gameNightStats4120.completed} done</span></div></div>
     <button class="dashboard-tile dashboard-action dashboard-balance ${quality?.className || "balance-empty"}" type="button" onclick="openBalanceDetails4128()" aria-label="Open balance rating details"><div class="dashboard-label">Balance</div><div class="dashboard-value">${quality ? `<span>${quality.score}</span><span class="dashboard-balance-name4147">${quality.label}</span>` : "—"}</div></button>
     <div class="dashboard-tile"><div class="dashboard-label">Team sizes</div><div class="dashboard-value">${sizes}</div></div>
     <div class="dashboard-tile"><div class="dashboard-label">Started</div><div class="dashboard-value">${start}</div></div>
     <button class="dashboard-tile dashboard-action dashboard-last-winner" type="button" onclick="openLastWinnerDetails4128()" aria-label="Show players on the last winning team"><div class="dashboard-label">Last winner</div><div class="dashboard-value">${last}</div></button>`;
+  if(out.__dashboardHtml4156 !== dashboardHtml){out.innerHTML = dashboardHtml;out.__dashboardHtml4156 = dashboardHtml;}
   const badge = document.getElementById("dashboardConnectionBadge");
   if(badge){
     const c = connectionLabel4120(); badge.textContent = c.text; badge.className = `status-pill ${c.cls}`;
@@ -655,7 +712,7 @@ function renderTeams4120(){
   const resultMessage = document.getElementById("resultMessage");
   if(resultMessage) resultMessage.textContent = "";
   if(!out) return;
-  if(!state.currentGame){ out.innerHTML='<div class="small">No game generated yet.</div>'; renderGameNightDashboard4120(); return; }
+  if(!state.currentGame){ out.innerHTML=canGenerateTeams() ? '<div class="small">Select attendees, then tap Generate Teams.</div>' : '<div class="small">No current teams.</div>'; renderGameNightDashboard4120(); return; }
 
   const wrap = document.createElement("div");
   wrap.className = "grid grid-3";
@@ -686,14 +743,22 @@ window.renderTeams = renderTeams4120;
 async function generateGame4120(sendPushNotification = false){
   if(!canGenerateTeams()){ alert("Only Teammates, Captains, and Admins can generate teams."); return; }
   await loadCloudData4120({ includeProfile:true, applyLocal:false, force:true });
+  const generationUser = currentUser?.id;
+  const generationDay = localDayStartIso4120();
   const players = presentPlayers();
   const numTeams = Math.max(2, Number(document.getElementById("numTeams")?.value || 2));
   if(players.length < numTeams){ alert("Not enough attending players for that many teams."); return; }
   const context = scoreContext4120({ previousGameTeams:previousOfficialGameForReshuffle4120 });
+  context.playerMetrics = new Map(players.map(p=>[String(p.id),teamStats([p])]));
+  context.previousPairs = teamPairSet4120(context.previousGameTeams);
   let best=null;
+  await new Promise(resolve => setTimeout(resolve, 0));
   for(let i=0;i<120;i++){
-    const candidate = optimizeTeams4120(makeInitialTeams(players,numTeams), Number(state.settings.repeatWeight || 4), context);
+    const candidate = await optimizeTeamsResponsive4156(makeInitialTeams(players,numTeams), Number(context.settings.repeatWeight || 4), context);
     if(!best || candidate.score < best.score) best=candidate;
+  }
+  if(generationUser !== currentUser?.id || generationDay !== localDayStartIso4120()){
+    throw new Error('The session or day changed. Select today’s attendees and generate again.');
   }
   state.currentGameGeneratedAt = new Date().toISOString();
   state.currentGame = { teams:best.teams };
@@ -711,13 +776,18 @@ async function generateGame4120(sendPushNotification = false){
   }
   saveSafeStartupSnapshot41121?.();
   renderAll(); updateTeamsDetailsOpenState();
-  scrollAppTo4144({top:0,behavior:"smooth"});
+  scrollAppTo4144({top:0,behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
 }
 generateGame = generateGame4120;
 window.generateGame = generateGame4120;
 
 async function generateTeamsButton4120(){
+  if(generationRunning4156) return;
+  expireCurrentTeams4156();
   if(!canGenerateTeams()){ alert("Only Teammates, Captains, and Admins can generate teams."); return; }
+  generationRunning4156 = true;
+  const button = document.querySelector("#stickybar button");
+  if(button){button.disabled = true;button.setAttribute("aria-busy","true");}
   try{
     if(isTeammate()){
       await withLoading("Generating new local teams...", async()=>{
@@ -738,6 +808,10 @@ async function generateTeamsButton4120(){
       await generateGame4120(sendPush);
     });
   }catch(e){ clearLoading(); console.error(e); alert("Generate teams failed: " + (e?.message || e)); }
+  finally{
+    generationRunning4156 = false;
+    if(button){button.disabled = false;button.removeAttribute("aria-busy");}
+  }
 }
 generateTeamsButton = generateTeamsButton4120;
 window.generateTeamsButton = generateTeamsButton4120;
@@ -869,6 +943,7 @@ window.smartLateAddPlayer4120=smartLateAddPlayer4120;
 /* Keep dashboard totals current immediately after an official result save. */
 const saveResultsLegacy4120 = saveResults;
 saveResults = async function(){
+  if(expireCurrentTeams4156()){renderAll();return;}
   dashboardBalanceSnapshot4147();
   const result = await saveResultsLegacy4120();
   await refreshGameNightStats4120();
@@ -879,7 +954,7 @@ window.saveResults = saveResults;
 
 /* ---------- Canonical render / page integration ---------- */
 const renderAllLegacy4120 = renderAll;
-function renderAll4120(){ renderAllLegacy4120(); renderGameNightDashboard4120(); }
+function renderAll4120(){ renderAllLegacy4120(); }
 renderAll = renderAll4120;
 window.renderAll = renderAll4120;
 
@@ -891,9 +966,9 @@ function scrollActivePageToTop4154(){
   // Generate Teams dock) follows the movement instead of snapping.
   try{
     if(document.documentElement.classList.contains("ios-home-screen") && app){
-      app.scrollTo({top:0,left:0,behavior:"smooth"});
+      app.scrollTo({top:0,left:0,behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
     }else{
-      window.scrollTo({top:0,left:0,behavior:"smooth"});
+      window.scrollTo({top:0,left:0,behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
     }
   }catch(e){
     if(app) app.scrollTop=0;
@@ -911,26 +986,91 @@ showPage = showPage4120;
 window.showPage = showPage4120;
 
 /* ---------- Auth/init ---------- */
+function setStartupStatus4156(message = "", retry = false){
+  const box = document.getElementById("startupStatus4156");
+  if(!box) return;
+  box.hidden = !message;
+  const label = box.querySelector("span");
+  if(label) label.textContent = message;
+  const button = box.querySelector("button");
+  if(button) button.hidden = !retry;
+}
 async function afterAuthChange4120(){
-  state.showInactive=false;
-  const restored=restoreSafeStartupSnapshot41121?.() || false;
-  updateAuthButtons(); if(restored){applyOfflineAttendanceQueueToState4120();renderAll4120();showPage4120("main");}
-  try{await loadCloudData4120({includeProfile:true,applyLocal:true,force:true});}
-  catch(e){console.error("Initial load failed",e);if(!restored)setAuthMessage("Could not load app data. Check your connection and try again.");}
-  updateAuthButtons(); applyOfflineAttendanceQueueToState4120(); renderAll4120(); showPage4120("main");
-  idle41121?.(()=>{subscribeToLiveDataUpdates();if(currentUser)subscribeToProfileUpdates41121();else unsubscribeFromProfileUpdates();installLightweightProfileRefresh41121?.();handleRoleMilestones();refreshGameNightStats4120();flushOfflineAttendanceQueue4120();},900);
+  const run = ++authRun4156;
+  state.showInactive = false;
+  const restored = restoreSafeStartupSnapshot41121?.() || startupRestored4156;
+  expireCurrentTeams4156();
+  updateAuthButtons();
+  if(restored){applyOfflineAttendanceQueueToState4120();renderAll4120();}
+  setStartupStatus4156(restored ? "Updating…" : "Loading players…");
+  state.showInactive = false;
+  try{
+    await loadCloudData4120({includeProfile:true,applyLocal:true,force:true});
+    if(run !== authRun4156) return;
+    setStartupStatus4156();
+  }catch(e){
+    if(run !== authRun4156) return;
+    console.warn("Initial load failed",e);
+    setStartupStatus4156(restored ? "Showing saved data. Reconnect to update." : "Could not load players. Check your connection.",true);
+  }
+  updateAuthButtons();applyOfflineAttendanceQueueToState4120();renderAll4120();
+  if(!canAccessDataPage() && document.getElementById('dataPage')?.style.display !== 'none') showPage4120('main');
+  idle41121?.(()=>{
+    if(run !== authRun4156) return;
+    subscribeToLiveDataUpdates();
+    if(currentUser)subscribeToProfileUpdates41121();else unsubscribeFromProfileUpdates();
+    installLightweightProfileRefresh41121?.();handleRoleMilestones();
+    refreshGameNightStats4120();flushOfflineAttendanceQueue4120();
+  },900);
 }
 afterAuthChange = afterAuthChange4120;
 window.afterAuthChange = afterAuthChange4120;
 
+function handleAuthEvent4156(event, session){
+  if(event === "INITIAL_SESSION") return;
+  const user = session?.user || null;
+  const sameUser = (currentUser?.id || null) === (user?.id || null);
+  currentUser = user;
+  if(sameUser && (event === "TOKEN_REFRESHED" || event === "SIGNED_IN")) return;
+  if(!sameUser){
+    ++authRun4156;
+    cloudLoadPromise4120 = null;
+    cloudApplied4145 = ++cloudRequest4145;
+    attendancePending4142.clear();
+    profile = {role:user ? "user" : "guest",email:user?.email || "Guest"};
+  }
+  clearTimeout(authEventTimer4156);
+  // Auth callbacks must return before starting queries on the same client.
+  authEventTimer4156 = setTimeout(()=>afterAuthChange4120(),0);
+}
 async function init4120(){
-  hideSignInBox(); hideAllModals(); state.showInactive=false;
-  if(!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_KEY.includes("PASTE_")){setAuthMessage("Config missing. Open config.js and paste your Supabase publishable/anon key.");renderAll4120();showPage4120("main");return;}
-  db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); listenForAuthConfirmedFromOtherTab();
-  const hasAuthRedirect=new URLSearchParams(location.search).has("code") || /(?:^|[&#])(access_token|refresh_token|type)=/.test(location.hash || ""); if(hasAuthRedirect)await completeAuthRedirectIfNeeded();
-  const {data}=await db.auth.getSession(); currentUser=data?.session?.user || null;
-  db.auth.onAuthStateChange(async(event,session)=>{if(event==="INITIAL_SESSION")return;currentUser=session?.user || null;await afterAuthChange4120();});
-  await afterAuthChange4120();
+  hideSignInBox();hideAllModals();state.showInactive = false;
+  startupRestored4156 = restoreSafeStartupSnapshot41121?.() || false;
+  expireCurrentTeams4156();
+  updateAuthButtons();renderAll4120();
+  document.documentElement.classList.add("app-ready4156");
+  setStartupStatus4156("Connecting…");
+  if(!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_KEY.includes("PASTE_")){
+    setStartupStatus4156("Connection settings are missing.");return;
+  }
+  if(!window.supabase?.createClient){
+    setStartupStatus4156("App connection could not load. Reopen while online.");return;
+  }
+  // Register once independently of notifications, including browsers without Push.
+  idle41121(()=>getServiceWorkerRegistration(),1500);
+  try{
+    db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);listenForAuthConfirmedFromOtherTab();
+    const hasAuthRedirect=new URLSearchParams(location.search).has("code") || /(?:^|[&#])(access_token|refresh_token|type)=/.test(location.hash || "");
+    if(hasAuthRedirect)await completeAuthRedirectIfNeeded();
+    const {data,error}=await db.auth.getSession();
+    if(error) throw error;
+    currentUser=data?.session?.user || null;
+    db.auth.onAuthStateChange(handleAuthEvent4156);
+    await afterAuthChange4120();
+  }catch(e){
+    console.warn("Startup connection failed",e);
+    setStartupStatus4156("Could not connect. Reopen while online.");
+  }
 }
 
 try{ document.removeEventListener("DOMContentLoaded", init41121); }catch(e){}
@@ -938,7 +1078,10 @@ try{ document.removeEventListener("DOMContentLoaded", init); }catch(e){}
 init = init4120;
 document.addEventListener("DOMContentLoaded", init4120);
 
-window.addEventListener("online",()=>{flushOfflineAttendanceQueue4120();renderGameNightDashboard4120();});
+window.addEventListener("online",()=>{
+  flushOfflineAttendanceQueue4120();
+  loadCloudData4120({force:true}).then(()=>{setStartupStatus4156();renderAll();refreshGameNightStats4120();}).catch(()=>{});
+});
 window.addEventListener("offline",()=>renderGameNightDashboard4120());
 
 Object.assign(window,{
@@ -1308,7 +1451,7 @@ function scheduleAttendanceConfirmation4145(){
 
 function paintAttendanceImmediately4142(playerId, present){
   const row = document.querySelector(`.player[data-attendance-player-id="${CSS.escape(String(playerId))}"]`);
-  if(row) row.classList.toggle("attend-on", !!present);
+  if(row){row.classList.toggle("attend-on", !!present);row.setAttribute("aria-pressed",String(!!present));}
 
   const count = state.players.filter(p => p.attending).length;
   const headerCount = document.getElementById("attendanceHeaderCount");
@@ -1323,6 +1466,7 @@ function paintAttendanceImmediately4142(playerId, present){
 }
 
 async function syncAttendancePlayer4142(playerId){
+  const owner = currentUser?.id;
   const key = String(playerId);
   if(attendanceSyncing4142.has(key)) return;
   attendanceSyncing4142.add(key);
@@ -1336,6 +1480,7 @@ async function syncAttendancePlayer4142(playerId){
       const desired = !!pending.desired;
       try{
         const { error } = await saveAttendanceFromApp(playerId, desired);
+        if(owner !== currentUser?.id) break;
         rolloverAttendanceDay4148();
         if(error){
           if(isNetworkError4120?.(error)){
@@ -1358,6 +1503,7 @@ async function syncAttendancePlayer4142(playerId){
         // The user tapped again while this request was in flight. Loop and send
         // only the newest desired state next.
       }catch(e){
+        if(owner !== currentUser?.id) break;
         rolloverAttendanceDay4148();
         const latest = attendancePending4142.get(key);
         if(isNetworkError4120?.(e)){
@@ -1430,7 +1576,18 @@ window.toggleAttendance4120 = toggleAttendance4142;
 const renderAttendancePlayerRowBefore4142 = renderAttendancePlayerRow;
 renderAttendancePlayerRow = function(p){
   const row = renderAttendancePlayerRowBefore4142(p);
-  if(row) row.dataset.attendancePlayerId = String(p.id);
+  if(row){
+    row.dataset.attendancePlayerId = String(p.id);
+    if(canMarkAttendanceForPlayer(p)){
+      row.tabIndex = 0;row.setAttribute('role','button');
+      row.setAttribute('aria-pressed',String(!!p.attending));
+      row.addEventListener('keydown',event=>{
+        if(event.target === row && (event.key === 'Enter' || event.key === ' ')){
+          event.preventDefault();toggleAttendance(p.id);
+        }
+      });
+    }
+  }
   return row;
 };
 window.renderAttendancePlayerRow = renderAttendancePlayerRow;
@@ -1443,6 +1600,7 @@ Object.assign(window, {
 });
 
 /* Keep cloud/realtime renders from replacing a row under a finger. */
+let attendanceRenderSignature4156 = "";
 const renderPlayersBefore4144 = renderPlayers;
 renderPlayers = function(){
   if(attendanceGesture4144 || Date.now() < attendanceRenderAfter4144){
@@ -1451,7 +1609,15 @@ renderPlayers = function(){
     return;
   }
   attendanceRenderPending4144 = false;
-  return renderPlayersBefore4144();
+  const signature = JSON.stringify([
+    currentUser?.id,profile,state.showInactive,state.showOnlyAttending,
+    document.getElementById('playerSearch')?.value || '',
+    state.players.map(p=>[p.id,p.fullName,p.firstName,p.lastName,p.attending,p.active,p.injuryPct,p.temporary])
+  ]);
+  if(signature === attendanceRenderSignature4156 && document.getElementById('playerList')?.childNodes.length) return;
+  const result = renderPlayersBefore4144();
+  attendanceRenderSignature4156 = signature;
+  return result;
 };
 window.renderPlayers = renderPlayers;
 
@@ -1462,6 +1628,19 @@ function scrollAppTo4144(options){
   }else{
     window.scrollTo(options);
   }
+}
+
+function expireCurrentTeams4156(){
+  if(!state.currentGame || attendanceIsToday4148(state.currentGameGeneratedAt)) return false;
+  state.currentGame = null;
+  state.currentGameGeneratedAt = null;
+  state.selectedWinnerIndex = null;
+  state.resultsSavedForCurrentGame = false;
+  state.currentGameIsLocalTeammate41117 = false;
+  previousOfficialGameForReshuffle4120 = null;
+  try{localStorage.removeItem(BALANCE_STORAGE_KEY_4147);}catch(e){}
+  clearLocalTeammateGame41117?.();
+  return true;
 }
 
 /* Attendance is a daily check-in, using the dashboard's local-midnight cutoff.
@@ -1481,6 +1660,8 @@ function rolloverAttendanceDay4148(){
     attendancePending4142.set(id, {desired:false,seq:++attendanceSeq4142,confirmed:false,day});
   }
   gameNightStats4120 = {completed:0,lastWinner:null,lastPlayedAt:null,lastWinnerPlayers:[]};
+  expireCurrentTeams4156();
+  previousOfficialGameForReshuffle4120 = null;
   saveSafeStartupSnapshot41121?.();
   return true;
 }
@@ -1573,7 +1754,11 @@ function generateDockAttendanceConstraint4152(dock){
 function renderGenerateDockOffset4152(){
   generateDockFrame4152 = 0;
   const dock = document.getElementById('stickybar');
-  if(!dock) return;
+  if(!dock || dock.hidden || document.getElementById('mainPage')?.style.display === 'none') return;
+  const constraint = generateDockAttendanceConstraint4152(dock);
+  dock.classList.add('generate-scroll-tracking');
+  if(Math.abs(generateDockOffset4152-constraint.offset) <= .05) return;
+  generateDockOffset4152 = constraint.offset;
   dock.style.setProperty('--generate-scroll-offset', `${generateDockOffset4152.toFixed(2)}px`);
 }
 
@@ -1595,30 +1780,11 @@ function settleGenerateDock4152(animate=true){
 }
 
 function handleGenerateDockScroll4152(source){
-  const dock = document.getElementById('stickybar');
-  if(!dock || dock.hidden) return;
-
-  generateDockLastPos4152.set(source, generateDockScrollPos4152(source));
-  const constraint = generateDockAttendanceConstraint4152(dock);
-
-  // Track the page position directly while scrolling. A very short linear
-  // transition smooths event spacing without turning this back into a timed
-  // hide/show animation.
-  dock.classList.add('generate-scroll-tracking');
-  if(Math.abs(generateDockOffset4152 - constraint.offset) > 0.05){
-    generateDockOffset4152 = constraint.offset;
-    queueGenerateDockRender4152();
-  }
-
+  queueGenerateDockRender4152();
   clearTimeout(generateDockReturnTimer4152);
   generateDockReturnTimer4152 = setTimeout(()=>{
-    const currentDock = document.getElementById('stickybar');
-    if(!currentDock || currentDock.hidden) return;
-    const resting = generateDockAttendanceConstraint4152(currentDock);
-    generateDockOffset4152 = resting.offset;
-    currentDock.style.setProperty('--generate-scroll-offset', `${generateDockOffset4152.toFixed(2)}px`);
-    currentDock.classList.remove('generate-scroll-tracking');
-  }, 140);
+    document.getElementById('stickybar')?.classList.remove('generate-scroll-tracking');
+  },140);
 }
 
 function resetGenerateDockScroll4152(){

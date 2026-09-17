@@ -75,7 +75,8 @@
     doc.head.prepend(guard);
     doc.head.prepend(policy);
     const runtime=doc.createElement('script');
-    runtime.src=new URL('sandbox-runtime.js?v=4.14.9',base).href;
+    runtime.defer=true;
+    runtime.src=new URL('sandbox-runtime.js?v=4.15.6',base).href;
     doc.body.appendChild(runtime);
     return '<!doctype html>\n'+doc.documentElement.outerHTML;
   }
@@ -92,7 +93,7 @@
     measure();
     try{
       const [source,snapshot]=await Promise.all([
-        fetch(new URL('index.html?v=4.14.9',location.href)).then(r=>{if(!r.ok)throw new Error('Could not load the app page');return r.text()}),
+        fetch(new URL('index.html?v=4.15.6',location.href)).then(r=>{if(!r.ok)throw new Error('Could not load the app page');return r.text()}),
         capture()
       ]);
       if(ticket!==opening)return false;
