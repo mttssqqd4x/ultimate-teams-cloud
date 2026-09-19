@@ -510,7 +510,7 @@ async function loadCloudData(){
     defense: Number(r.defense || 0),
     winLossRating: Number(r.win_loss || 0),
     active: !!r.active,
-    injuryPct: Number(r.injury_pct || 1),
+    injuryPct: Number(r.injury_pct ?? 1),
     temporary: !!r.temporary,
     gamesPlayed: Number(r.games_played || 0),
     wins: Number(r.wins || 0),
@@ -1587,15 +1587,15 @@ async function clearPairRules(){
 }
 
 function effectiveHandling(p){
-  const inj = Number(p.injuryPct) || 1;
+  const inj = Number(p.injuryPct ?? 1);
   return (Number(p.handling) || 0) * (0.5 + 0.5 * inj);
 }
 function effectiveCutting(p){
-  const inj = Number(p.injuryPct) || 1;
+  const inj = Number(p.injuryPct ?? 1);
   return (Number(p.cutting) || 0) * inj;
 }
 function effectiveDefense(p){
-  const inj = Number(p.injuryPct) || 1;
+  const inj = Number(p.injuryPct ?? 1);
   return (Number(p.defense) || 0) * inj;
 }
 function baseOverall(p){
@@ -3232,8 +3232,7 @@ function openEditPlayerModal(show = true){
               </select>
             </div>
             <div>
-              <label>Injury / Availability %</label>
-              <input id="${safe}-injury" type="number" min="0" max="100" step="1" value="${Math.round(Number(p.injuryPct || 1) * 100)}">
+              <label class="compact-number4157" for="${safe}-injury"><span>Injury / Availability</span><span class="compact-number-value4157"><input id="${safe}-injury" type="number" inputmode="numeric" min="0" max="100" step="1" value="${Math.round(Number(p.injuryPct ?? 1) * 100)}"><span aria-hidden="true">%</span></span></label>
             </div>
           </div>
           <div class="grid grid-4 admin-rating-fields" style="margin-top:10px">

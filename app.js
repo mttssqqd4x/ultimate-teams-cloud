@@ -1149,9 +1149,14 @@ function openPlayerActions4132(playerId){
         <button class="btn-secondary player-actions-close4132" type="button" aria-label="Close player actions">Close</button>
       </div>
       <div class="player-actions-grid4132">
-        <button class="btn-secondary" type="button" data-player-action4132="injury">
-          Injury / Availability <span>${injury}%</span>
-        </button>
+        <div>
+          <label class="compact-number4157" for="playerInjury4157">
+            <span>Injury / Availability</span>
+            <span class="compact-number-value4157"><input id="playerInjury4157" type="number" inputmode="numeric" enterkeyhint="done" min="0" max="100" step="1" value="${injury}" aria-describedby="playerInjuryStatus4157"><span aria-hidden="true">%</span></span>
+          </label>
+          <div id="playerInjuryStatus4157" class="small injury-save-status4157" role="status" aria-live="polite"></div>
+          <button class="btn-secondary" type="button" id="retryInjury4157" hidden>Retry</button>
+        </div>
         <button class="btn-secondary" type="button" data-player-action4132="active">
           ${p.active ? "Make Inactive" : "Make Active"}
         </button>
@@ -1169,10 +1174,15 @@ function openPlayerActions4132(playerId){
     closePlayerActions4132();
     openPlayerEditor4147(p.id);
   });
-  wrap.querySelector('[data-player-action4132="injury"]')?.addEventListener("click", () => {
-    closePlayerActions4132();
-    setInjuryPrompt(p.id);
+  const injuryInput = wrap.querySelector('#playerInjury4157');
+  const injuryStatus = wrap.querySelector('#playerInjuryStatus4157');
+  const injuryRetry = wrap.querySelector('#retryInjury4157');
+  const saveInjury = () => saveInjuryControl4157(p.id,injuryInput,injuryStatus,injuryRetry);
+  injuryInput.addEventListener('change',saveInjury);
+  injuryInput.addEventListener('keydown',event=>{
+    if(event.key === 'Enter'){event.preventDefault();saveInjury();}
   });
+  injuryRetry.addEventListener('click',saveInjury);
   wrap.querySelector('[data-player-action4132="active"]')?.addEventListener("click", () => {
     closePlayerActions4132();
     toggleActive(p.id);
@@ -1816,3 +1826,99 @@ function setupGenerateDockScroll4152(){
   setTimeout(()=>settleGenerateDock4152(false), 250);
 }
 setupGenerateDockScroll4152();
+
+
+/* Compact injury input: commit on change/Enter, with feedback in the same menu. */
+async function saveInjuryControl4157(playerId,input,status,retry){
+  if(input.disabled) return;
+  retry.hidden = true;
+  if(!canManageGames()){status.textContent = 'Captain or Admin only.';return;}
+  const player = playerById(playerId);
+  if(!player){status.textContent = 'Player no longer exists.';return;}
+  const value = input.value.trim();
+  const percent = Number(value);
+  if(!value || !Number.isFinite(percent) || !Number.isInteger(percent) || percent < 0 || percent > 100){
+    input.setAttribute('aria-invalid','true');
+    status.textContent = 'Enter a whole number from 0 to 100.';
+    return;
+  }
+  input.removeAttribute('aria-invalid');
+  if(percent === Math.round(Number(player.injuryPct ?? 1)*100)){status.textContent = '';return;}
+  const owner = currentUser?.id;
+  input.disabled = true;status.textContent = 'Saving…';
+  try{
+    const {error} = await db.from('players').update({injury_pct:percent/100,updated_at:new Date().toISOString()}).eq('id',player.id);
+    if(error) throw error;
+    if(owner !== currentUser?.id) return;
+    const current = playerById(playerId);
+    if(current) current.injuryPct = percent/100;
+    for(const team of state.currentGame?.teams || []){
+      for(const member of team) if(String(member.id) === String(playerId)) member.injuryPct = percent/100;
+    }
+    // A successful write remains successful even if the follow-up read is offline.
+    try{await loadCloudData4120({force:true});}catch(e){console.warn('Injury refresh delayed',e);}
+    if(owner !== currentUser?.id) return;
+    renderAll();status.textContent = 'Saved';
+  }catch(e){
+    status.textContent = 'Could not save. Try again.';
+    retry.hidden = false;
+  }finally{input.disabled = false;}
+}
+// Compatibility callers now open the inline control instead of a browser prompt.
+setInjuryPrompt = function(id){
+  openPlayerActions4132(id);
+  document.getElementById('playerInjury4157')?.focus({preventScroll:true});
+};
+window.setInjuryPrompt = setInjuryPrompt;
+
+/* Phone-only portrait preference; the parent covers Sandbox as well. */
+function isPhone4157(){
+  const mobile = navigator.userAgentData?.mobile || /iPhone|iPod|Android.*Mobile/i.test(navigator.userAgent || '');
+  return !!mobile || (window.matchMedia?.('(pointer: coarse)').matches && Math.min(screen.width,screen.height) < 600);
+}
+function phoneLandscape4157(){
+  if(!isPhone4157()) return false;
+  // Use physical orientation, not the visual viewport: a keyboard must never
+  // be mistaken for rotating a portrait phone into landscape.
+  if(screen.orientation?.type) return screen.orientation.type.startsWith('landscape');
+  if(typeof window.orientation === 'number') return Math.abs(window.orientation) === 90;
+  return screen.width > screen.height;
+}
+let portraitLockPending4157 = false;
+let portraitFocus4157 = null;
+async function requestPortrait4157(){
+  if(window.parent !== window || !isPhone4157() || !screen.orientation?.lock || portraitLockPending4157) return;
+  portraitLockPending4157 = true;
+  try{await screen.orientation.lock('portrait-primary');}catch(e){/* Use the visible portrait fallback. */}
+  finally{portraitLockPending4157 = false;}
+}
+function updatePortrait4157(){
+  if(window.parent !== window) return;
+  const guard = document.getElementById('portraitGuard4157');
+  if(!guard) return;
+  const landscape = phoneLandscape4157();
+  const wasOpen = !guard.hidden;
+  document.documentElement.classList.toggle('phone-landscape4157',landscape);
+  guard.hidden = !landscape;
+  if(landscape && !wasOpen){
+    cancelAttendanceGesture4144();
+    portraitFocus4157 = document.activeElement;
+    document.activeElement?.blur?.();
+    guard.focus({preventScroll:true});
+  }else if(!landscape && wasOpen){
+    if(portraitFocus4157?.isConnected) portraitFocus4157.focus?.({preventScroll:true});
+    portraitFocus4157 = null;
+  }
+}
+function setupPortrait4157(){
+  if(window.parent !== window) return;
+  const changed = ()=>{updatePortrait4157();requestPortrait4157();};
+  screen.orientation?.addEventListener?.('change',changed);
+  window.addEventListener('orientationchange',changed);
+  window.addEventListener('pageshow',changed);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden) changed();});
+  // Some supporting browsers permit lock only after a user gesture.
+  window.addEventListener('pointerup',requestPortrait4157,{once:true,passive:true});
+  changed();
+}
+setupPortrait4157();

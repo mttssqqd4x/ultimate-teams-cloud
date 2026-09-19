@@ -1240,3 +1240,30 @@ html:not(.app-ready4156) .captain-admin-only,
 html:not(.app-ready4156) .signed-in-only,
 html:not(.app-ready4156) #dataTabBtn,
 html:not(.app-ready4156) #stickybar{display:none!important}
+
+
+/* Injury percentage uses the same label-and-number shape as Number of Teams. */
+.compact-number4157{
+  display:flex!important;align-items:center;justify-content:space-between;gap:12px;
+  margin:0!important;padding:6px 12px!important;min-height:48px;
+  background:#181818!important;border:1px solid var(--ut-line);border-radius:var(--ut-radius);
+  color:var(--ut-text)!important;font-size:var(--ut-font-body)!important;font-weight:650;
+}
+.compact-number-value4157{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.compact-number4157 input{
+  width:68px!important;min-height:34px!important;margin:0!important;padding:4px 8px!important;
+  text-align:center;font-size:16px!important;border:0!important;
+  border-radius:var(--ut-radius)!important;background:rgba(255,255,255,.06)!important;
+}
+.injury-save-status4157:not(:empty){padding:4px 12px 0}
+#retryInjury4157{margin-top:6px}
+#portraitGuard4157{
+  position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;
+  padding:24px;text-align:center;background:#000;color:var(--ut-text);touch-action:none;
+}
+#portraitGuard4157 strong{font-size:1.125rem}
+#portraitGuard4157 p{font-size:var(--ut-font-body);color:var(--ut-muted);margin:8px 0 0}
+html.phone-landscape4157 body>:not(#portraitGuard4157),
+html.phone-landscape4157 body>:not(#portraitGuard4157) *{visibility:hidden!important;pointer-events:none!important}
+
+.compact-number4157>span:first-child{min-width:0;overflow-wrap:anywhere}

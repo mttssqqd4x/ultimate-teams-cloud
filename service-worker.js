@@ -1,16 +1,16 @@
-const CACHE='ultimate-teams-cloud-4-15-6';
+const CACHE='ultimate-teams-cloud-4-15-7';
 const AUTH_SDK='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
 const STATIC_ASSETS=[
   './',
   './index.html',
-  './theme.css?v=4.15.6',
-  './styles.css?v=4.15.6',
-  './legacy-core.js?v=4.15.6',
-  './app.js?v=4.15.6',
+  './theme.css?v=4.15.7',
+  './styles.css?v=4.15.7',
+  './legacy-core.js?v=4.15.7',
+  './app.js?v=4.15.7',
   './config.js',
-  './version.js?v=4.15.6',
-  './sandbox-host.js?v=4.15.6',
-  './sandbox-runtime.js?v=4.15.6',
+  './version.js?v=4.15.7',
+  './sandbox-host.js?v=4.15.7',
+  './sandbox-runtime.js?v=4.15.7',
   './manifest.json'
 ];
 
